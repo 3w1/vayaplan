@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { renderAdminHtml } from './admin';
 
 const app = new Hono();
 
@@ -7,6 +8,25 @@ const app = new Hono();
 // ==============================================================================
 app.get('/health', (c) => {
   return c.json({ status: 'ok', service: 'vayaplan-web' });
+});
+
+// ==============================================================================
+// Redirección y Tracking de Códigos QR desde Web (puerto 3030)
+// ==============================================================================
+app.get('/qr/:qrCode', async (c) => {
+  const qrCode = c.req.param('qrCode');
+  try {
+    // Registra el escaneo en la API interna de forma asíncrona
+    await fetch(`http://api:4000/api/v1/qr/${encodeURIComponent(qrCode)}`, { method: 'POST' }).catch(() => {});
+  } catch (err) {}
+  return c.redirect('/?origin=qr_hotel', 302);
+});
+
+// ==============================================================================
+// Panel de Curación Administrativo (/admin)
+// ==============================================================================
+app.get('/admin', (c) => {
+  return c.html(renderAdminHtml());
 });
 
 // ==============================================================================

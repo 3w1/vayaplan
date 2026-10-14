@@ -164,7 +164,7 @@ docker compose -f infra/docker-compose.yml down
 
 ```bash
 # Crear o cambiar a la rama de sprint
-git checkout -b feature/sprint-1
+git checkout -b feature/sprint-3
 
 # Comprobar estado
 git status
@@ -173,8 +173,42 @@ git status
 git add .
 
 # Confirmar cambios
-git commit -m "feat(sprint-1): infraestructura inicial, esquema postgres ddl v1.1 y api bun+hono"
+git commit -m "feat(sprint-3): panel de curacion, webhook whatsapp y codigos qr"
 
 # Enviar al repositorio remoto
-git push -u origin feature/sprint-1
+git push -u origin main
 ```
+
+---
+
+## 7. Sprint 3 — Panel de Curación, WhatsApp Business y Códigos QR
+
+### 7.1 Acceso al Panel de Curación Administrativo
+- **URL**: `https://vayaplan.com/admin` (o en local `http://127.0.0.1:3030/admin`)
+- **Email por defecto**: `admin@vayaplan.com`
+- **Contraseña por defecto**: `vayaplan2026!`
+- **Funcionalidades**:
+  - Listado de eventos con filtrado rápido por estado (destacando borradores `tentative`).
+  - Acciones en un clic: Publicar borrador, marcar duplicado, cancelar evento y archivar.
+  - CRUD completo para **Locales (Venues)**, **Recurrencias semanales**, **Excepciones por fecha**, **Lugares permanentes (Places)** y **Códigos QR**.
+  - Visualización del reporte de métricas y conversiones por evento.
+
+### 7.2 Configuración del Webhook de WhatsApp en Meta for Developers
+1. Acceder al panel de Meta for Developers (`https://developers.facebook.com/apps/`).
+2. Seleccionar la aplicación de WhatsApp Business y navegar a **WhatsApp > Configuración > Configuración del Webhook**.
+3. Configurar los siguientes parámetros:
+   - **URL de devolución de llamada (Callback URL)**: `https://vayaplan.com/api/v1/webhooks/whatsapp`
+   - **Token de verificación (Verify Token)**: El valor configurado en `WHATSAPP_WEBHOOK_SECRET` (por defecto: `vayaplan_whatsapp_verify_token_2026`).
+4. Pulsar en **Verificar y Guardar**.
+5. En la sección **Campos del Webhook**, suscribirse al evento **`messages`**.
+6. **Protocolo de Ingesta**:
+   - Cada mensaje o imagen recibido en el número corporativo de WhatsApp crea de forma inmediata y automática un evento borrador en estado `tentative` asociado al local correspondiente o al local de contingencia (`#9999 Local por verificar`).
+   - **Regla estricta**: Ningún evento recibido por WhatsApp se publica automáticamente sin revisión humana. El curador debe acceder a `/admin` y pulsar **Publicar** tras validar los datos.
+
+### 7.3 Códigos QR de Alojamientos (Captación Turística)
+- **URL pública de escaneo**: `https://vayaplan.com/qr/:qrCode` (ej: `https://vayaplan.com/qr/hotel-san-antolin`)
+- **Comportamiento**:
+  - Registra de forma anónima una métrica de tipo `qr_scan` en `event_metrics` asociada al alojamiento emisor.
+  - Redirige mediante código 302 a `https://vayaplan.com/?origin=qr_hotel`.
+  - La interfaz administrativa en `/admin` permite descargar directamente la tarjeta vectorial SVG (`/api/v1/admin/qr-sources/:id/svg?format=card`) lista para imprimir y colocar en recepción.
+

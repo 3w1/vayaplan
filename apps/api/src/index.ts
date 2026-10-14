@@ -8,6 +8,16 @@ import { weekendRoutes } from './routes/weekend';
 import { placesRoutes } from './routes/places';
 import { singleEventRoutes } from './routes/single-event';
 import { metricsRoutes } from './routes/metrics';
+import { adminAuthRoutes } from './routes/admin/auth';
+import { adminEventsRoutes } from './routes/admin/events';
+import { adminVenuesRoutes } from './routes/admin/venues';
+import { adminRecurrencesRoutes } from './routes/admin/recurrences';
+import { adminPlacesRoutes } from './routes/admin/places';
+import { adminMetricsRoutes } from './routes/admin/metrics';
+import { adminQrRoutes } from './routes/admin/qr';
+import { whatsappWebhookRoutes } from './routes/webhooks/whatsapp';
+import { qrRedirectRoutes } from './routes/qr-redirect';
+import { startExpirationWorker, stopExpirationWorker } from './services/expiration';
 import { closePool } from '@vayaplan/db';
 
 const app = new Hono();
@@ -40,12 +50,31 @@ app.notFound(notFoundHandler);
 // Rutas de salud y monitoreo
 app.route('/api', healthRoutes);
 
-// Rutas versión 1 de la API
+// Rutas versión 1 de la API (Públicas)
 app.route('/api/v1', eventsRoutes);
 app.route('/api/v1', weekendRoutes);
 app.route('/api/v1', placesRoutes);
 app.route('/api/v1', singleEventRoutes);
 app.route('/api/v1', metricsRoutes);
+
+// Webhook de WhatsApp Business
+app.route('/api/v1/webhooks', whatsappWebhookRoutes);
+
+// Resolución y registro de códigos QR (accesibles por /api/v1/qr y /qr)
+app.route('/api/v1/qr', qrRedirectRoutes);
+app.route('/qr', qrRedirectRoutes);
+
+// Panel Administrativo y de Curación (Protegidos)
+app.route('/api/v1/admin', adminAuthRoutes);
+app.route('/api/v1/admin', adminEventsRoutes);
+app.route('/api/v1/admin', adminVenuesRoutes);
+app.route('/api/v1/admin', adminRecurrencesRoutes);
+app.route('/api/v1/admin', adminPlacesRoutes);
+app.route('/api/v1/admin', adminMetricsRoutes);
+app.route('/api/v1/admin', adminQrRoutes);
+
+// Iniciar worker de caducidad automática de eventos pasados
+startExpirationWorker();
 
 // Puerto de ejecución
 const port = Number(process.env.PORT || 4000);
@@ -65,6 +94,7 @@ const gracefulShutdown = async (signal: string) => {
     level: 'info',
     message: `Señal ${signal} recibida, cerrando conexiones ordenadamente...`,
   }));
+  stopExpirationWorker();
   await closePool();
   process.exit(0);
 };

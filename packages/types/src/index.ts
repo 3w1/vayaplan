@@ -335,3 +335,63 @@ export interface MetricCreateResponse {
   metric_id: number;
 }
 
+// ==============================================================================
+// Contratos y Tipos Sprint 3 (Administración, Curación, Webhooks y QR)
+// ==============================================================================
+
+export interface AdminUser {
+  email: string;
+  role: 'admin';
+}
+
+export interface AdminLoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface AdminLoginResponse {
+  status: 'ok';
+  token: string;
+  user: AdminUser;
+}
+
+export interface AdminMeResponse {
+  user: AdminUser;
+}
+
+export interface AdminEventItem extends Event {
+  venue_name: string;
+  venue_slug: string;
+  promotion_id?: number | null;
+}
+
+export interface EventMetricsSummary {
+  event_id: number;
+  title: string;
+  total_impressions: number;
+  total_map_clicks: number;
+  total_ticket_clicks: number;
+  total_booking_clicks: number;
+  total_whatsapp_clicks: number;
+  total_profile_clicks: number;
+  unique_sessions: number;
+}
+
+export interface QrSourceItem {
+  id: number;
+  city_id: number;
+  accommodation_name: string;
+  accommodation_type: string | null;
+  qr_code: string;
+  is_active: boolean;
+  created_at: string;
+  total_scans?: number;
+}
+
+export interface CreateDraftFromWhatsAppInput {
+  text: string;
+  senderNumber: string;
+  imageUrl?: string | null;
+}
+
+
