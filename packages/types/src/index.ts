@@ -228,6 +228,7 @@ export interface PromotionInfo {
 export interface PublicEventItem {
   id: number;
   title: string;
+  description?: string | null;
   category: EventCategory;
   start_time: string;
   end_time: string | null;
@@ -300,3 +301,37 @@ export interface ApiErrorResponse {
   message: string;
   details?: Record<string, unknown> | null;
 }
+
+// ==============================================================================
+// Contratos de Respuesta Sprint 2
+// ==============================================================================
+
+export interface WeekendDayAgenda {
+  editorial_date: string;
+  editorial_label: string;
+  events: PublicEventItem[];
+  recurrences: RecurrenceItem[];
+}
+
+export interface WeekendResponseContract {
+  city: CitySummary;
+  start: string;
+  days: WeekendDayAgenda[];
+  places: PlaceItem[];
+}
+
+export interface PlacesResponseContract {
+  city: CitySummary;
+  category: string | null;
+  places: PlaceItem[];
+}
+
+export interface SingleEventResponseContract {
+  event: PublicEventItem;
+}
+
+export interface MetricCreateResponse {
+  status: 'ok';
+  metric_id: number;
+}
+

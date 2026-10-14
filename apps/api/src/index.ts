@@ -4,6 +4,10 @@ import { structuredLogger } from './middleware/logger';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { healthRoutes } from './routes/health';
 import { eventsRoutes } from './routes/events';
+import { weekendRoutes } from './routes/weekend';
+import { placesRoutes } from './routes/places';
+import { singleEventRoutes } from './routes/single-event';
+import { metricsRoutes } from './routes/metrics';
 import { closePool } from '@vayaplan/db';
 
 const app = new Hono();
@@ -38,6 +42,10 @@ app.route('/api', healthRoutes);
 
 // Rutas versión 1 de la API
 app.route('/api/v1', eventsRoutes);
+app.route('/api/v1', weekendRoutes);
+app.route('/api/v1', placesRoutes);
+app.route('/api/v1', singleEventRoutes);
+app.route('/api/v1', metricsRoutes);
 
 // Puerto de ejecución
 const port = Number(process.env.PORT || 4000);
