@@ -2,61 +2,61 @@
 
 **Proyecto:** VayaPlan  
 **Sprint:** Semana 1 — Fundamentos  
+**Modelo:** Gemini Flash 3.8 High en Antigravity CLI  
 **Contexto obligatorio:** `04-architecture.md` v1.1, `02-data-model.md` v1.1, `05-sprint-backlog.md`  
-**Objetivo:** generar en local el andamiaje del monorepo, la base de datos y una API mínima operativa, para subirlo después por Git al VPS.
+**Objetivo:** generar directamente en el VPS el andamiaje del monorepo, la base de datos y una API mínima operativa, versionada en GitHub.
+
+**Regla anti-síntesis:** el modelo debe escribir archivos completos, sin elipsis, placeholders ni comentarios del tipo “resto del código aquí”.
 
 ---
 
-## Recomendación de flujo
+## Flujo de trabajo
 
-Trabajar en **local con Antigravity** y sincronizar mediante **Git**.
-
-Motivos:
-
-- Evitas editar código de producción directamente por SSH.
-- Puedes revisar diffs antes de desplegar.
-- Puedes revertir errores con un commit anterior.
-- El VPS solo recibe código probado.
-- Mantienes el repositorio como fuente única de verdad.
-
-Flujo:
+Trabajar directamente en el VPS con Antigravity CLI y versionar en GitHub.
 
 ```text
-Antigravity en local
+Antigravity CLI en VPS: ~/vayaplan
+        │
+        ▼
+Genera archivos completos
+        │
+        ▼
+Revisión y pruebas en VPS
         │
         ▼
 Commit en rama feature/sprint-1
         │
         ▼
 Push a GitHub privado
-        │
-        ▼
-Pull en VPS: ~/vayaplan
-        │
-        ▼
-docker compose up -d
 ```
 
 ---
 
-## Prompt para Antigravity
+## Prompt para Antigravity CLI
 
 ```text
-Actúa como desarrollador backend senior. Vamos a ejecutar las tareas de la Semana 1 definidas en 05-sprint-backlog.md para VayaPlan.
+Actúa como desarrollador backend senior. Vamos a ejecutar las tareas de la Semana 1 definidas en docs/05-sprint-backlog.md para VayaPlan.
+
+Lee primero estos documentos:
+- docs/04-architecture.md
+- docs/02-data-model.md
+- docs/05-sprint-backlog.md
+- docs/prompts-sprint-01.md
 
 Restricciones técnicas obligatorias:
-- Sigue estrictamente la arquitectura de 04-architecture.md v1.1: monorepo, Bun + Hono, PostgreSQL 16 y Docker Compose.
-- No incluyas Caddy. Nginx ya existe en el host del VPS y gestiona SSL y proxy inverso.
+- Trabaja directamente en este repositorio.
+- Usa monorepo, Bun + Hono, PostgreSQL 16 y Docker Compose.
+- No incluyas Caddy. Nginx ya existe en el host y gestiona SSL y proxy inverso.
 - La API debe exponerse únicamente en 127.0.0.1:4000.
 - La web debe exponerse únicamente en 127.0.0.1:3030.
-- Implementa el DDL exacto de 02-data-model.md v1.1 en PostgreSQL, incluyendo:
-  - uq_promotions_city_editorial_date
-  - session_hash en event_metrics
-  - google_maps_url en venues y places
-  - índices de agenda, deduplicación y métricas
-- No añadas ORM, colas, Redis, autenticación compleja, pagos, ticketing ni funcionalidades fuera del Sprint 1.
-- Usa TypeScript, código modular y variables de entorno. No incluyas secretos reales.
+- Implementa exactamente el DDL de docs/02-data-model.md v1.1.
+- No añadas ORM, Redis, colas, pagos, ticketing ni autenticación compleja.
+- Usa TypeScript, variables de entorno y no incluyas secretos reales.
+- No modifiques Nginx ni la configuración SSL existente sin pedírmelo antes.
 - Si detectas una inconsistencia entre documentos, detente e indícala antes de modificar el esquema.
+- Escribe el código íntegro y completo en cada archivo: PROHIBIDO usar elipsis (...), marcadores de posición ("// resto del código aquí") o simplificaciones.
+- El archivo infra/migrations/001_initial_schema.sql debe contener el DDL completo, exhaustivo y sin omitir ninguna de las tablas, relaciones, triggers o índices compuestos de docs/02-data-model.md.
+- Genera y guarda directamente cada archivo en su ruta correspondiente dentro del proyecto.
 
 Entregables requeridos:
 
@@ -80,6 +80,9 @@ Entregables requeridos:
 3. Migración SQL reproducible:
    - infra/migrations/001_initial_schema.sql
    - Debe contener todas las tablas, foreign keys, índices y restricciones del DDL de 02-data-model.md v1.1.
+   - Debe incluir el índice único parcial uq_promotions_city_editorial_date.
+   - Debe incluir session_hash en event_metrics.
+   - Debe incluir google_maps_url en venues y places.
 
 4. Script de datos iniciales:
    - infra/seed.sql
@@ -110,6 +113,7 @@ Entregables requeridos:
    - Comando para ejecutar seed.sql.
    - Comandos para comprobar health checks.
    - Comandos para parar y reiniciar servicios.
+   - Comandos para hacer commit y push a GitHub.
 
 Criterios de aceptación:
 - docker compose -f infra/docker-compose.yml up -d db api levanta PostgreSQL y API sin errores.
@@ -124,19 +128,12 @@ Criterios de aceptación:
 
 ---
 
-## Comandos de despliegue en VPS
+## Comandos de verificación en VPS
 
-### 1. Preparar directorio
+### 1. Entrar al proyecto
 
 ```bash
-mkdir -p ~/vayaplan
 cd ~/vayaplan
-```
-
-Si usas Git:
-
-```bash
-git clone git@github.com:tu-usuario/vayaplan.git .
 ```
 
 ### 2. Configurar entorno
@@ -201,7 +198,7 @@ El resultado esperado es:
 ## Checklist antes de pasar al Sprint 2
 
 - [ ] Repositorio Git privado creado.
-- [ ] Código generado en local y revisado.
+- [ ] Antigravity CLI trabaja sobre `~/vayaplan`.
 - [ ] `.env` no está en Git.
 - [ ] Migraciones ejecutadas sin errores.
 - [ ] Seed ejecutado correctamente.
@@ -211,3 +208,4 @@ El resultado esperado es:
 - [ ] `GET /api/v1/cities/palencia/events` devuelve JSON válido.
 - [ ] No hay Caddy en Docker.
 - [ ] No hay secretos reales en el repositorio.
+- [ ] No hay elipsis ni placeholders en el código generado.

@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: vayaplan_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vayaplan
+      POSTGRES_USER: ${POSTGRES_USER:-vayaplan_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - vayaplan_db_data:/var/lib/postgresql/data
+    networks:
+      - vayaplan_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vayaplan_user} -d vayaplan"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: vayaplan_api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vayaplan_user}:${POSTGRES_PASSWORD}@db:5432/vayaplan
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - vayaplan_net
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: vayaplan_web
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3030:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      API_URL: ${API_URL:-https://vayaplan.com/api}
+    depends_on:
+      - api
+    networks:
+      - vayaplan_net
+
+volumes:
+  vayaplan_db_data:
+
+networks:
+  vayaplan_net:
+    driver: bridge

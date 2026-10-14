@@ -1,0 +1,3 @@
+venue_slug,title,description,category,start_time,end_time,editorial_date,price_cents,is_free,source_type,source_url,status
+"universonoro","Concierto acústico: Los Invencibles","Directo íntimo con versiones de pop-rock español en la sala principal.","musica_directo","2026-10-17 22:30:00+02","2026-10-18 01:00:00+02","2026-10-17",0,true,"whatsapp","https://wa.me/34600112233","published"
+"teatro-principal","Obra de Teatro: El Viaje a Ninguna Parte","Representación clásica de la compañía de teatro castellanoleonesa. Entradas numeradas en taquilla y web.","teatro","2026-10-18 19:30:00+02","2026-10-18 21:30:00+02","2026-10-18",1200,false,"web","https://teatroprincipaldepalencia.es/entradas/el-viaje","published"

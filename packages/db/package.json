@@ -1,0 +1,17 @@
+{
+  "name": "@vayaplan/db",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@vayaplan/types": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

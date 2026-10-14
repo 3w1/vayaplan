@@ -1,0 +1,24 @@
+{
+  "name": "vayaplan-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VayaPlan — Plataforma ultra-ágil de ocio hiperlocal para ciudades intermedias",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "dev:api": "bun run --filter @vayaplan/api dev",
+    "dev:web": "bun run --filter @vayaplan/web dev",
+    "docker:up": "docker compose -f infra/docker-compose.yml up -d db api",
+    "docker:down": "docker compose -f infra/docker-compose.yml down",
+    "docker:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "migrate": "docker exec -i vayaplan_postgres psql -U ${POSTGRES_USER:-vayaplan_user} -d vayaplan < infra/migrations/001_initial_schema.sql",
+    "seed": "docker exec -i vayaplan_postgres psql -U ${POSTGRES_USER:-vayaplan_user} -d vayaplan < infra/seed.sql"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
+  }
+}

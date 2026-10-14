@@ -1,0 +1,23 @@
+{
+  "name": "@vayaplan/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vayaplan/db": "workspace:*",
+    "@vayaplan/shared": "workspace:*",
+    "@vayaplan/types": "workspace:*",
+    "hono": "^4.6.14",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.2"
+  }
+}
