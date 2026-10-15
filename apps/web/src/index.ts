@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import * as path from 'path';
+import * as fs from 'fs';
 import { renderAdminHtml } from './admin';
 
 const app = new Hono();
@@ -15,9 +17,10 @@ app.get('/health', (c) => {
 // ==============================================================================
 app.get('/qr/:qrCode', async (c) => {
   const qrCode = c.req.param('qrCode');
+  const internalApi = process.env.INTERNAL_API_URL || 'http://api:4000';
   try {
     // Registra el escaneo en la API interna de forma asíncrona
-    await fetch(`http://api:4000/api/v1/qr/${encodeURIComponent(qrCode)}`, { method: 'POST' }).catch(() => {});
+    await fetch(`${internalApi.replace(/\/$/, '')}/api/v1/qr/${encodeURIComponent(qrCode)}`, { method: 'POST' }).catch(() => {});
   } catch (err) {}
   return c.redirect('/?origin=qr_hotel', 302);
 });
@@ -30,6 +33,35 @@ app.get('/admin', (c) => {
 });
 
 // ==============================================================================
+// Proxy inverso explícito para previsualización aislada
+// Exige INTERNAL_API_URL cuando ENABLE_API_PROXY=true (sin fallback automático a producción)
+// ==============================================================================
+if (process.env.ENABLE_API_PROXY === 'true') {
+  const internalApiUrl = process.env.INTERNAL_API_URL;
+  if (!internalApiUrl || internalApiUrl.trim() === '') {
+    throw new Error('CONFIG_ERROR: ENABLE_API_PROXY=true requiere INTERNAL_API_URL explícito. No se permite fallback automático.');
+  }
+
+  app.all('/api/*', async (c) => {
+    const targetUrl = new URL(c.req.raw.url);
+    const upstreamUrl = `${internalApiUrl.replace(/\/$/, '')}${targetUrl.pathname}${targetUrl.search}`;
+    try {
+      const response = await fetch(upstreamUrl, {
+        method: c.req.method,
+        headers: c.req.raw.headers,
+        body: ['GET', 'HEAD'].includes(c.req.method) ? undefined : await c.req.raw.clone().arrayBuffer(),
+      });
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
+    } catch (err) {
+      return c.json({ error: 'upstream_unavailable', message: 'Servicio API de pruebas no disponible' }, 502);
+    }
+  });
+}
+
+// ==============================================================================
 // Web App Manifest
 // ==============================================================================
 app.get('/manifest.json', (c) => {
@@ -40,15 +72,39 @@ app.get('/manifest.json', (c) => {
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait-primary',
-    background_color: '#090d16',
-    theme_color: '#090d16',
+    background_color: '#FFFFFF',
+    theme_color: '#6C3BFF',
     categories: ['lifestyle', 'entertainment', 'travel'],
     icons: [
       {
-        src: '/icons/icon.svg',
+        src: '/icons/favicon.svg',
         sizes: 'any',
         type: 'image/svg+xml',
-        purpose: 'any maskable',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-512x512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-maskable-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      {
+        src: '/icons/icon-maskable-512x512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
       },
     ],
   };
@@ -63,12 +119,14 @@ app.get('/manifest.json', (c) => {
 // Service Worker (Shell Offline & Cache)
 // ==============================================================================
 app.get('/sw.js', (c) => {
-  const swCode = `// VayaPlan Service Worker v1.2
-const CACHE_NAME = 'vayaplan-pwa-v1';
+  const swCode = `// VayaPlan Service Worker v1.4
+const CACHE_NAME = 'vayaplan-pwa-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
-  '/icons/icon.svg'
+  '/icons/favicon.svg',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -127,52 +185,48 @@ self.addEventListener('fetch', (event) => {
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
       'Service-Worker-Allowed': '/',
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
     },
   });
 });
 
 // ==============================================================================
-// Icono SVG Vectorial PWA
+// Assets e Iconos PWA y Favicon
 // ==============================================================================
-app.get('/icons/icon.svg', (c) => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f172a"/>
-      <stop offset="50%" stop-color="#1e293b"/>
-      <stop offset="100%" stop-color="#090d16"/>
-    </linearGradient>
-    <linearGradient id="pinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#2563eb"/>
-    </linearGradient>
-    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#ea580c"/>
-    </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="12" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-    </filter>
-  </defs>
-  <!-- Base redondeada PWA -->
-  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
-  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#334155" stroke-width="6"/>
-  <!-- Pin de localización -->
-  <path d="M256 100 C185 100 128 157 128 228 C128 316 236 404 251 416 C254 418 258 418 261 416 C276 404 384 316 384 228 C384 157 327 100 256 100 Z" fill="url(#pinGrad)" filter="url(#glow)"/>
-  <!-- Centro del pin -->
-  <circle cx="256" cy="224" r="54" fill="#090d16"/>
-  <!-- Rayo / Chispa central de plan -->
-  <path d="M260 188 L236 226 L254 226 L248 264 L276 222 L258 222 Z" fill="url(#sparkGrad)"/>
-  <!-- Destello de energía superior derecho -->
-  <circle cx="360" cy="140" r="16" fill="#38bdf8" filter="url(#glow)"/>
-  <circle cx="395" cy="175" r="8" fill="#38bdf8"/>
-</svg>`;
+const ICONS_DIR = path.resolve(__dirname, '../public/icons');
 
-  return new Response(svg, {
+app.get('/favicon.ico', (c) => {
+  return c.redirect('/icons/favicon.svg', 302);
+});
+
+app.get('/favicon.svg', (c) => {
+  return c.redirect('/icons/favicon.svg', 301);
+});
+
+app.get('/icons/:filename', (c) => {
+  const filename = c.req.param('filename');
+  const allowed = [
+    'favicon.svg',
+    'icon.svg',
+    'icon-192x192.png',
+    'icon-512x512.png',
+    'icon-maskable-192x192.png',
+    'icon-maskable-512x512.png',
+    'logo-light.svg',
+    'logo-dark.svg',
+  ];
+  if (!allowed.includes(filename)) {
+    return c.text('Not found', 404);
+  }
+  const filePath = path.join(ICONS_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    return c.text('Not found', 404);
+  }
+  const file = fs.readFileSync(filePath);
+  const contentType = filename.endsWith('.svg') ? 'image/svg+xml; charset=utf-8' : 'image/png';
+  return new Response(file, {
     headers: {
-      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Content-Type': contentType,
       'Cache-Control': 'public, max-age=86400',
     },
   });
@@ -194,37 +248,43 @@ app.get('/', (c) => {
   <meta property="og:type" content="website">
   <meta property="og:title" content="VayaPlan — ¿Qué hacer hoy en Palencia?">
   <meta property="og:description" content="Agenda hiperlocal sin filtros ni registro. Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.">
-  <meta property="og:image" content="https://vayaplan.com/icons/icon.svg">
+  <meta property="og:image" content="https://vayaplan.com/icons/icon-512x512.png">
   <meta property="og:url" content="https://vayaplan.com/">
   
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="VayaPlan — Agenda Palencia">
   <meta name="twitter:description" content="Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.">
-  <meta name="twitter:image" content="https://vayaplan.com/icons/icon.svg">
+  <meta name="twitter:image" content="https://vayaplan.com/icons/icon-512x512.png">
 
   <!-- PWA & Mobile Meta -->
-  <meta name="theme-color" content="#090d16">
+  <meta name="theme-color" content="#6C3BFF">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="VayaPlan">
   <link rel="manifest" href="/manifest.json">
-  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
-  <link rel="apple-touch-icon" href="/icons/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
+  <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 
   <style>
     :root {
-      --bg-dark: #090d16;
-      --bg-card: #131b2e;
-      --bg-card-hover: #18223a;
-      --border-card: #222f4c;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --accent-blue: #38bdf8;
-      --accent-primary: #2563eb;
-      --accent-emerald: #10b981;
-      --accent-amber: #f59e0b;
-      --accent-red: #ef4444;
+      --color-night: #0B0F3B;
+      --color-primary: #6C3BFF;
+      --color-primary-light: #9D7BFF;
+      --color-primary-soft: #F0EBFF;
+      --color-amber: #FFC107;
+      --color-bg-page: #EEF2F6;
+      --color-bg-app: #FFFFFF;
+      --color-bg-subtle: #F8FAFC;
+      --color-border: #E2E8F0;
+      --color-border-subtle: #F1F5F9;
+      --color-text-main: #0B0F3B;
+      --color-text-muted: #64748B;
+      --color-text-subtle: #94A3B8;
+      --color-free-green: #059669;
+      --color-free-green-bg: #ECFDF5;
+      --color-red: #EF4444;
+      --color-red-bg: #FEE2E2;
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
@@ -238,142 +298,126 @@ app.get('/', (c) => {
       -webkit-tap-highlight-color: transparent;
     }
 
+    *:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg-dark);
-      color: var(--text-main);
+      background-color: var(--color-bg-page);
+      color: var(--color-text-main);
       line-height: 1.5;
-      min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding-bottom: 5rem;
+    }
+
+    body.modal-open {
+      overflow: hidden;
+      touch-action: none;
     }
 
     .app-container {
       width: 100%;
-      max-width: 600px;
-      padding: 0 1rem;
+      max-width: 480px;
+      min-height: 100dvh;
+      background-color: var(--color-bg-app);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 0 32px rgba(11, 15, 59, 0.06);
+      padding-bottom: 4rem;
     }
 
     /* Header y Ciudad */
     header {
       position: sticky;
       top: 0;
-      z-index: 40;
-      background: rgba(9, 13, 22, 0.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-card);
-      padding: 0.875rem 1rem;
+      z-index: 30;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--color-border);
+      padding: 0.75rem 1rem;
       width: 100%;
-      display: flex;
-      justify-content: center;
-    }
-
-    .header-inner {
-      width: 100%;
-      max-width: 600px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
 
-    .brand {
+    .brand-logo-container {
+      height: 36px;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
       text-decoration: none;
-      color: var(--text-main);
     }
 
-    .brand-logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #2563eb, #38bdf8);
-      box-shadow: 0 2px 8px rgba(56, 189, 248, 0.35);
-    }
-
-    .brand-logo svg {
-      width: 20px;
-      height: 20px;
-      fill: #ffffff;
-    }
-
-    .brand-title {
-      font-size: 1.25rem;
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      background: linear-gradient(to right, #ffffff, #cbd5e1);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+    .brand-logo-svg {
+      height: 30px;
+      width: auto;
+      display: block;
     }
 
     .city-pill {
       display: flex;
       align-items: center;
-      gap: 0.375rem;
-      background-color: #1e293b;
-      border: 1px solid var(--border-card);
-      padding: 0.35rem 0.75rem;
+      gap: 0.4rem;
+      background-color: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
+      padding: 0.4rem 0.8rem;
       border-radius: var(--radius-pill);
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: #cbd5e1;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--color-night);
     }
 
-    .city-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background-color: var(--accent-emerald);
-      box-shadow: 0 0 6px var(--accent-emerald);
+    .city-pill svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--color-primary);
+      flex-shrink: 0;
     }
 
-    /* Selector temporal (Hoy / Fin de semana / Calendario) */
+    /* Selector temporal (Hoy / Mañana / Este finde / Calendario) */
     .time-selector-bar {
-      margin-top: 1.25rem;
-      display: grid;
-      grid-template-columns: 1fr 1.2fr 1fr;
+      padding: 0.875rem 1rem 0 1rem;
+      display: flex;
       gap: 0.5rem;
-      background-color: #111827;
-      padding: 0.35rem;
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-card);
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    .time-selector-bar::-webkit-scrollbar { display: none; }
 
     .time-tab {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.35rem;
-      padding: 0.625rem 0.25rem;
-      background: transparent;
-      border: none;
-      border-radius: var(--radius-sm);
-      color: var(--text-muted);
-      font-size: 0.875rem;
-      font-weight: 600;
+      padding: 0.5rem 0.95rem;
+      background: #FFFFFF;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-pill);
+      color: var(--color-text-muted);
+      font-size: 0.8125rem;
+      font-weight: 700;
       cursor: pointer;
       transition: all 0.15s ease;
       white-space: nowrap;
     }
 
     .time-tab.active {
-      background-color: var(--accent-primary);
-      color: #ffffff;
-      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+      background-color: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #FFFFFF;
+      box-shadow: 0 2px 8px rgba(108, 59, 255, 0.3);
     }
 
     .calendar-picker-wrapper {
       position: relative;
       display: flex;
       align-items: center;
-      justify-content: center;
+      flex-shrink: 0;
     }
 
     .calendar-input {
@@ -386,519 +430,678 @@ app.get('/', (c) => {
       cursor: pointer;
     }
 
-    /* Chips de Intención / Categoría */
-    .filter-chips-container {
-      margin-top: 1rem;
+    /* Fila de Categorías Circulares */
+    .categories-row {
+      padding: 1rem 1rem 0.5rem 1rem;
       display: flex;
-      gap: 0.5rem;
-      overflow-x: auto;
-      padding-bottom: 0.25rem;
-      scrollbar-width: none;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.25rem;
     }
 
-    .filter-chips-container::-webkit-scrollbar {
-      display: none;
-    }
-
-    .filter-chip {
-      padding: 0.45rem 0.95rem;
-      background-color: #162035;
-      border: 1px solid var(--border-card);
-      border-radius: var(--radius-pill);
-      color: #94a3b8;
-      font-size: 0.8125rem;
-      font-weight: 600;
+    .cat-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      background: none;
+      border: none;
       cursor: pointer;
-      white-space: nowrap;
+      min-width: 52px;
+      padding: 0.25rem;
+    }
+
+    .cat-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
       transition: all 0.15s ease;
     }
 
-    .filter-chip:hover {
-      border-color: #3b82f6;
-      color: #ffffff;
+    .cat-circle svg {
+      width: 22px;
+      height: 22px;
+      fill: var(--color-text-muted);
     }
 
-    .filter-chip.active {
-      background-color: #1e3a8a;
-      border-color: var(--accent-blue);
-      color: #38bdf8;
+    .cat-btn.active .cat-circle {
+      background-color: var(--color-primary);
+      border-color: var(--color-primary);
+      box-shadow: 0 4px 12px rgba(108, 59, 255, 0.35);
+    }
+    .cat-btn.active .cat-circle svg {
+      fill: #FFFFFF;
     }
 
-    /* Título de sección activa */
-    .section-header {
-      margin-top: 1.25rem;
-      margin-bottom: 0.75rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .section-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: #f1f5f9;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .section-badge {
+    .cat-label {
       font-size: 0.75rem;
-      padding: 0.15rem 0.5rem;
-      border-radius: var(--radius-pill);
-      background-color: #1e293b;
-      color: #94a3b8;
+      font-weight: 600;
+      color: var(--color-text-muted);
     }
-
-    /* Lista y Tarjetas de Eventos */
-    .events-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.875rem;
-    }
-
-    .event-card {
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-card);
-      border-radius: var(--radius-md);
-      padding: 1.125rem;
-      cursor: pointer;
-      position: relative;
-      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    .event-card:hover {
-      background-color: var(--bg-card-hover);
-      border-color: #334870;
-      transform: translateY(-1px);
-    }
-
-    /* Resalte destacado para evento Promocionado */
-    .event-card.promoted {
-      border: 1.5px solid var(--accent-amber);
-      background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, #131b2e 100%);
-      box-shadow: 0 4px 18px rgba(245, 158, 11, 0.15);
-    }
-
-    .promoted-tag {
-      position: absolute;
-      top: 0.875rem;
-      right: 0.875rem;
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-      background: linear-gradient(135deg, #f59e0b, #d97706);
-      color: #0f172a;
-      font-size: 0.6875rem;
+    .cat-btn.active .cat-label {
+      color: var(--color-night);
       font-weight: 800;
-      text-transform: uppercase;
-      padding: 0.2rem 0.55rem;
-      border-radius: var(--radius-pill);
-      letter-spacing: 0.04em;
     }
 
-    /* Estado visual para evento Cancelado */
-    .event-card.cancelled {
-      border-color: rgba(239, 68, 68, 0.4);
-      background-color: rgba(239, 68, 68, 0.04);
-      opacity: 0.85;
-    }
-
-    .cancelled-tag {
-      position: absolute;
-      top: 0.875rem;
-      right: 0.875rem;
-      background-color: var(--accent-red);
-      color: #ffffff;
-      font-size: 0.6875rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      padding: 0.2rem 0.5rem;
-      border-radius: var(--radius-pill);
-    }
-
-    .event-card.cancelled .event-title {
-      text-decoration: line-through;
-      color: #cbd5e1;
-    }
-
-    /* Encabezado tarjeta */
-    .card-top {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .time-badge {
-      font-size: 0.8125rem;
-      font-weight: 700;
-      color: var(--accent-blue);
-      background-color: #0f2744;
-      padding: 0.2rem 0.5rem;
-      border-radius: 6px;
-    }
-
-    .label-badge {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #cbd5e1;
-    }
-
-    .category-badge {
-      font-size: 0.7188rem;
-      font-weight: 600;
-      color: #94a3b8;
-      background-color: #1e293b;
-      padding: 0.15rem 0.45rem;
-      border-radius: 4px;
-    }
-
-    .event-title {
-      font-size: 1.125rem;
-      font-weight: 700;
-      line-height: 1.35;
-      color: #ffffff;
-      margin-bottom: 0.35rem;
-      padding-right: 2rem;
-    }
-
-    .event-venue {
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-      color: #94a3b8;
-      font-size: 0.875rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .event-venue svg {
-      width: 14px;
-      height: 14px;
-      fill: var(--accent-blue);
-      flex-shrink: 0;
-    }
-
-    .card-footer {
-      display: flex;
+    /* Barra de Filtros Activos */
+    .active-filters-bar {
+      display: none;
+      padding: 0.6rem 1rem;
+      background: #F8FAFC;
+      border-top: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border);
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;
-      margin-top: 0.75rem;
-      padding-top: 0.65rem;
-      border-top: 1px solid #1c2742;
-      flex-wrap: wrap;
+      margin-top: 0.5rem;
     }
+    .active-filters-bar.visible { display: flex; }
 
-    .price-pill {
-      font-size: 0.8125rem;
-      font-weight: 700;
-      color: var(--accent-emerald);
-      background-color: rgba(16, 185, 129, 0.12);
-      padding: 0.25rem 0.625rem;
-      border-radius: var(--radius-pill);
-    }
-
-    .price-pill.paid {
-      color: #cbd5e1;
-      background-color: #1e293b;
-    }
-
-    .card-actions {
+    .active-chips-wrap {
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      flex-wrap: wrap;
+      font-size: 0.7813rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
     }
 
-    .btn-action {
+    .filter-chip-removable {
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
-      font-size: 0.7813rem;
-      font-weight: 600;
-      padding: 0.4rem 0.75rem;
-      border-radius: var(--radius-sm);
-      text-decoration: none;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-pill);
+      font-weight: 700;
+      font-size: 0.75rem;
       cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.15s ease;
+      border: none;
     }
 
-    .btn-maps {
-      background-color: #1e293b;
-      color: #38bdf8;
-      border-color: #334870;
+    .btn-clear-filters {
+      background: none;
+      border: none;
+      color: var(--color-primary);
+      font-size: 0.7813rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0.25rem;
     }
 
-    .btn-maps:hover {
-      background-color: #27354d;
+    /* Tarjeta Destacada (Hero Promocionado) */
+    .promoted-hero-card {
+      margin: 0.75rem 1rem 1rem 1rem;
+      border-radius: var(--radius-lg);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(11, 15, 59, 0.12);
+      background-color: var(--color-night);
+      aspect-ratio: 16 / 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      border: none;
+      text-align: left;
+      padding: 0;
+      width: calc(100% - 2rem);
     }
 
-    .btn-tickets {
-      background-color: var(--accent-primary);
+    .promoted-hero-card.no-image {
+      aspect-ratio: auto;
+      min-height: auto;
+      padding: 1.25rem;
+      background: linear-gradient(135deg, #0B0F3B 0%, #1A216B 60%, #2A1B5E 100%);
+      border: 1px solid rgba(157, 123, 255, 0.25);
+      box-shadow: 0 4px 14px rgba(11, 15, 59, 0.12);
+      justify-content: flex-start;
+      gap: 0.75rem;
+    }
+
+    .promoted-hero-card.no-image .hero-badge-tag {
+      position: static;
+      align-self: flex-start;
+      margin-bottom: 0.25rem;
+    }
+
+    .promoted-hero-card.no-image .hero-content {
+      padding: 0;
+    }
+
+    .promoted-hero-card.no-image .hero-title {
+      font-size: 1.15rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .promoted-hero-card.no-image .hero-overlay {
+      display: none;
+    }
+
+    .hero-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(11, 15, 59, 0.05) 0%, rgba(11, 15, 59, 0.8) 70%, #0B0F3B 100%);
+      z-index: 1;
+    }
+
+    .hero-badge-tag {
+      position: absolute;
+      top: 0.875rem;
+      left: 0.875rem;
+      z-index: 2;
+      background-color: var(--color-amber);
+      color: var(--color-night);
+      font-size: 0.6875rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.6rem;
+      border-radius: var(--radius-pill);
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      padding: 1rem;
+      color: #ffffff;
+      width: 100%;
+    }
+
+    .hero-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 0.4rem;
       color: #ffffff;
     }
 
-    .btn-tickets:hover {
-      background-color: #1d4ed8;
+    .hero-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      color: rgba(255, 255, 255, 0.9);
+      flex-wrap: wrap;
     }
 
-    .btn-whatsapp {
-      background-color: #065f46;
-      color: #6ee7b7;
+    .hero-price-pill {
+      background-color: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-weight: 800;
+      font-size: 0.8125rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: var(--radius-pill);
     }
 
-    .btn-whatsapp:hover {
-      background-color: #047857;
+    /* Lista y Tarjetas Compactas */
+    .section-header-compact {
+      padding: 0.5rem 1rem 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .section-title-compact {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--color-night);
     }
 
-    /* Recurrencias: "Cada [día]" */
+    .events-list-compact {
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .card-compact {
+      display: flex;
+      gap: 0.875rem;
+      padding: 0.625rem;
+      background: #FFFFFF;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      text-align: left;
+      width: 100%;
+      border: 1px solid var(--color-border);
+    }
+    .card-compact:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(11, 15, 59, 0.05);
+    }
+
+    .card-compact.is-cancelled {
+      border-color: rgba(239, 68, 68, 0.4);
+      background-color: rgba(239, 68, 68, 0.03);
+      opacity: 0.85;
+    }
+
+    .card-thumb {
+      width: 76px;
+      height: 76px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      flex-shrink: 0;
+      background-color: var(--color-bg-subtle);
+    }
+
+    .card-thumb-fallback {
+      width: 76px;
+      height: 76px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--color-primary-soft), #FFFFFF);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+    .card-thumb-fallback svg {
+      width: 30px;
+      height: 30px;
+      fill: var(--color-primary-light);
+    }
+
+    .card-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+    }
+
+    .card-title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--color-night);
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-title.title-cancelled {
+      text-decoration: line-through;
+      color: var(--color-text-muted);
+    }
+
+    .card-venue {
+      font-size: 0.7813rem;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 0.15rem;
+    }
+
+    .card-bottom-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+    }
+
+    .card-time {
+      font-size: 0.7813rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+    }
+
+    .card-price-pill {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-pill);
+    }
+    .card-price-pill.free {
+      background: var(--color-free-green-bg);
+      color: var(--color-free-green);
+    }
+    .card-price-pill.paid {
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    /* Badges de Estado, Recurrencias y Lugares */
+    .promoted-tag-mini {
+      display: inline-block;
+      background: #FFF9E6;
+      color: #B45309;
+      font-size: 0.6875rem;
+      font-weight: 800;
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--radius-pill);
+      margin-bottom: 0.2rem;
+    }
+
+    .cancelled-tag {
+      display: inline-block;
+      background: var(--color-red-bg);
+      color: var(--color-red);
+      font-size: 0.6875rem;
+      font-weight: 800;
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--radius-pill);
+      margin-bottom: 0.2rem;
+    }
+
     .recurrence-badge {
       display: inline-flex;
       align-items: center;
       gap: 0.3rem;
-      background-color: #1e1b4b;
-      color: #c7d2fe;
-      border: 1px solid #3730a3;
+      background-color: var(--color-primary-soft);
+      color: var(--color-primary);
       padding: 0.2rem 0.55rem;
       border-radius: var(--radius-pill);
-      font-size: 0.75rem;
+      font-size: 0.7188rem;
       font-weight: 700;
-      margin-bottom: 0.35rem;
+      margin-bottom: 0.25rem;
     }
 
-    /* Places: "Siempre disponible" */
     .place-badge {
       display: inline-flex;
       align-items: center;
       gap: 0.3rem;
-      background-color: #142a24;
-      color: #6ee7b7;
-      border: 1px solid #065f46;
+      background-color: var(--color-free-green-bg);
+      color: var(--color-free-green);
       padding: 0.2rem 0.55rem;
       border-radius: var(--radius-pill);
-      font-size: 0.75rem;
+      font-size: 0.7188rem;
       font-weight: 700;
-      margin-bottom: 0.35rem;
-    }
-
-    .place-highlight {
-      font-size: 0.8438rem;
-      color: #cbd5e1;
-      margin-bottom: 0.5rem;
-    }
-
-    .place-hours {
-      font-size: 0.8125rem;
-      color: #94a3b8;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
     }
 
     /* Agrupador de Fin de Semana */
     .weekend-day-group {
       margin-bottom: 1.5rem;
+      padding: 0 1rem;
     }
 
     .weekend-day-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.625rem 0.875rem;
-      background-color: #111a2e;
-      border: 1px solid var(--border-card);
-      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.85rem;
+      background-color: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
       margin-bottom: 0.75rem;
     }
 
     .weekend-day-title {
-      font-size: 0.9375rem;
-      font-weight: 700;
-      color: var(--accent-blue);
+      font-size: 0.875rem;
+      font-weight: 800;
+      color: var(--color-primary);
     }
 
     .weekend-day-date {
-      font-size: 0.8125rem;
-      color: #94a3b8;
+      font-size: 0.7813rem;
+      color: var(--color-text-muted);
     }
 
-    /* Modal / Ficha Detallada */
+    /* Modal Ficha Completa */
     .modal-overlay {
       display: none;
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(4, 7, 13, 0.82);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      inset: 0;
+      background: rgba(11, 15, 59, 0.7);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
       z-index: 100;
       align-items: flex-end;
       justify-content: center;
+      overflow: hidden;
     }
-
-    .modal-overlay.active {
-      display: flex;
-    }
-
-    @media (min-width: 640px) {
-      .modal-overlay {
-        align-items: center;
-      }
+    .modal-overlay.active { display: flex; }
+    @media (min-width: 480px) {
+      .modal-overlay { align-items: center; }
     }
 
     .modal-sheet {
-      background-color: #111827;
-      border: 1px solid #2d3748;
+      background: #FFFFFF;
       width: 100%;
-      max-width: 580px;
-      max-height: 85vh;
-      border-radius: 20px 20px 0 0;
+      max-width: 480px;
+      max-height: 90dvh;
+      border-radius: 24px 24px 0 0;
       overflow-y: auto;
-      padding: 1.5rem;
-      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
-      animation: slideUp 0.25s ease-out;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+      box-shadow: 0 -10px 40px rgba(11, 15, 59, 0.2);
+      display: flex;
+      flex-direction: column;
     }
-
-    @media (min-width: 640px) {
+    @media (min-width: 480px) {
       .modal-sheet {
-        border-radius: 20px;
-        max-height: 80vh;
+        border-radius: 24px;
+        max-height: 85dvh;
       }
     }
 
-    @keyframes slideUp {
-      from { transform: translateY(100%); }
-      to { transform: translateY(0); }
+    .modal-hero-cover {
+      position: relative;
+      width: 100%;
+      height: clamp(160px, 26vh, 230px);
+      background-color: var(--color-night);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .modal-hero-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
 
-    .modal-top-bar {
+    .modal-sticky-header {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: 48px;
+      background: #FFFFFF;
+      border-bottom: 1px solid rgba(11, 15, 59, 0.08);
+      border-radius: 24px 24px 0 0;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-
-    .modal-close-btn {
-      background: #1e293b;
-      border: none;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      color: #cbd5e1;
-      font-size: 1.125rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal-title {
-      font-size: 1.35rem;
-      font-weight: 800;
-      line-height: 1.3;
-      margin-bottom: 0.5rem;
-      color: #ffffff;
-    }
-
-    .modal-meta-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 0.625rem;
-      background-color: #172033;
-      padding: 0.875rem;
-      border-radius: var(--radius-sm);
-      margin: 1rem 0;
-      font-size: 0.875rem;
-    }
-
-    .modal-meta-item {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: #cbd5e1;
-    }
-
-    .modal-meta-item svg {
-      width: 16px;
-      height: 16px;
-      fill: var(--accent-blue);
+      padding: 0 0.875rem;
+      z-index: 50;
       flex-shrink: 0;
     }
 
-    .modal-description {
-      font-size: 0.9375rem;
-      color: #cbd5e1;
-      line-height: 1.6;
-      margin-bottom: 1.25rem;
-    }
-
-    .modal-verification {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-size: 0.7813rem;
-      color: #10b981;
-      background: rgba(16, 185, 129, 0.08);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      padding: 0.4rem 0.75rem;
-      border-radius: var(--radius-sm);
-      margin-bottom: 1.25rem;
-    }
-
-    .modal-actions-container {
-      display: flex;
-      flex-direction: column;
-      gap: 0.625rem;
-    }
-
-    .btn-full {
+    .modal-close-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #F1F5F9;
+      border: 1px solid rgba(11, 15, 59, 0.08);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
-      width: 100%;
-      padding: 0.85rem;
-      border-radius: var(--radius-sm);
-      font-size: 0.9375rem;
+      cursor: pointer;
+      color: var(--color-night);
+      transition: background-color 0.15s ease;
+      padding: 0;
+      margin: 0;
+    }
+    .modal-close-btn:hover,
+    .modal-close-btn:focus-visible {
+      background: #E2E8F0;
+      outline: 2px solid var(--color-primary);
+      outline-offset: 1px;
+    }
+
+    .modal-body {
+      padding: 1.25rem;
+    }
+    .modal-title-main {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--color-night);
+      line-height: 1.25;
+      margin-bottom: 1rem;
+    }
+
+    .modal-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.6rem;
+      font-size: 0.875rem;
+      color: var(--color-night);
+    }
+    .modal-meta-row svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--color-primary);
+      flex-shrink: 0;
+    }
+
+    .modal-action-box {
+      margin: 1.25rem 0;
+      padding: 1rem;
+      background: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .modal-action-main-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .modal-price-display {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--color-night);
+    }
+
+    .btn-primary-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      background-color: var(--color-primary);
+      color: #FFFFFF;
       font-weight: 700;
+      font-size: 0.9375rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-md);
       text-decoration: none;
       cursor: pointer;
       border: none;
-      transition: opacity 0.15s ease;
+      transition: background 0.15s ease;
+    }
+    .btn-primary-action:hover {
+      background-color: #582bd4;
     }
 
-    .btn-full:hover {
-      opacity: 0.92;
+    .btn-secondary-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: var(--color-primary);
+      border: 1px solid var(--color-border);
+      font-weight: 700;
+      font-size: 0.875rem;
+      padding: 0.65rem 1.15rem;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .btn-secondary-link:hover {
+      background: rgba(108, 59, 255, 0.06);
+      border-color: var(--color-primary);
     }
 
-    /* Estado vacío y carga */
+    .madrugada-tag {
+      display: inline-block;
+      background: rgba(108, 59, 255, 0.12);
+      color: var(--color-primary);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-pill);
+      margin-left: 0.35rem;
+      vertical-align: middle;
+    }
+
+    .card-madrugada-badge {
+      display: inline-block;
+      background: rgba(108, 59, 255, 0.08);
+      color: var(--color-primary);
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 0.1rem 0.35rem;
+      border-radius: var(--radius-pill);
+      margin-left: 0.25rem;
+    }
+
+    .action-disclaimer {
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+      text-align: right;
+    }
+
+    /* Estados vacíos y carga */
     .empty-state {
       text-align: center;
       padding: 3rem 1rem;
-      background-color: var(--bg-card);
-      border: 1px solid var(--border-card);
+      background-color: var(--color-bg-subtle);
+      border: 1px dashed var(--color-border);
       border-radius: var(--radius-md);
-      margin-top: 1rem;
+      margin: 1rem;
     }
 
     .empty-state h3 {
       font-size: 1.15rem;
+      font-weight: 800;
       margin-bottom: 0.5rem;
-      color: #f1f5f9;
+      color: var(--color-night);
     }
 
     .empty-state p {
       font-size: 0.875rem;
-      color: var(--text-muted);
+      color: var(--color-text-muted);
       max-width: 380px;
       margin: 0 auto 1.25rem auto;
     }
 
     .loader-spinner {
-      border: 3px solid rgba(56, 189, 248, 0.15);
-      border-top: 3px solid var(--accent-blue);
+      border: 3px solid var(--color-primary-soft);
+      border-top: 3px solid var(--color-primary);
       border-radius: 50%;
       width: 32px;
       height: 32px;
@@ -913,68 +1116,110 @@ app.get('/', (c) => {
   </style>
 </head>
 <body>
-
-  <!-- Header Superior -->
-  <header>
-    <div class="header-inner">
-      <a href="/" class="brand">
-        <div class="brand-logo">
-          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-        </div>
-        <span class="brand-title">VayaPlan</span>
+  <div class="app-container">
+    <!-- Header Superior -->
+    <header>
+      <a href="/" class="brand-logo-container" aria-label="VayaPlan">
+        <!-- Logo Horizontal Oficial VayaPlan (Light) -->
+        <svg class="brand-logo-svg" viewBox="0.00 0.00 570.00 148.00" aria-hidden="true" role="img">
+          <path fill="#6c3bff" d="M 390.33 116.94 C 387.16 122.30 381.70 123.91 376.50 120.24 C 368.98 114.93 370.13 102.14 370.56 93.83 Q 372.26 60.43 371.96 31.51 Q 371.88 23.05 373.22 16.26 C 374.62 9.20 377.70 2.17 386.32 2.89 C 390.35 3.22 395.83 5.54 397.27 9.74 C 398.37 12.97 398.34 15.96 397.88 20.10 Q 392.81 65.31 392.13 75.77 Q 391.34 87.90 393.08 102.02 Q 394.12 110.54 390.33 116.94 Z"/>
+          <path fill="#ffc107" d="M 552.77 80.50 C 549.14 87.61 539.85 88.30 536.84 80.09 C 534.77 74.45 535.19 68.31 536.13 62.38 Q 538.39 47.98 538.32 46.00 C 537.93 35.98 536.38 2.73 555.42 7.00 Q 560.68 8.18 564.54 12.80 C 569.79 19.09 567.66 26.83 564.87 33.75 Q 562.06 40.70 560.59 45.96 C 557.52 56.87 558.40 69.44 552.77 80.50 Z"/>
+          <path fill="#6c3bff" d="M 311.83 128.74 C 296.52 130.56 299.46 113.26 300.07 103.94 C 300.58 95.97 300.09 87.21 300.10 78.20 C 300.10 68.94 301.07 61.47 302.02 53.50 C 302.49 49.55 302.39 44.58 298.96 42.05 C 295.35 39.38 291.29 37.81 291.16 32.25 C 290.73 13.40 315.50 8.02 329.75 8.00 C 349.79 7.99 366.82 16.68 367.88 38.81 Q 368.95 60.89 351.25 73.25 C 344.47 77.99 335.76 82.31 327.93 87.70 C 316.59 95.51 320.74 105.81 321.18 117.11 C 321.44 123.63 318.53 127.94 311.83 128.74 Z M 322.92 54.10 C 321.29 75.29 339.76 57.34 343.40 52.04 C 348.15 45.13 349.46 37.42 341.46 32.58 C 335.01 28.68 324.39 26.92 324.01 38.00 Q 323.90 41.43 322.92 54.10 Z"/>
+          <path fill="#0b0f3b" d="M 72.88 100.78 Q 72.93 100.76 73.49 100.24 Q 75.10 98.75 77.20 94.21 C 83.95 79.59 87.08 71.19 93.24 61.59 Q 101.45 48.80 109.04 34.87 Q 110.47 32.23 114.40 28.46 Q 118.73 24.30 125.29 25.12 C 129.15 25.60 135.24 28.63 134.03 33.43 Q 133.31 36.30 131.69 38.94 Q 130.49 40.89 119.27 58.77 C 107.72 77.18 97.42 96.65 89.01 116.88 C 85.51 125.29 81.34 134.07 73.84 139.52 Q 66.48 144.87 59.81 138.69 C 52.83 132.22 49.04 122.31 47.58 112.94 C 46.47 105.86 45.62 93.62 43.15 83.38 C 40.19 71.08 29.71 58.01 39.39 45.62 C 42.90 41.12 49.80 36.64 54.64 41.49 Q 57.38 44.23 58.78 47.80 C 63.58 59.99 64.77 72.78 66.40 84.85 Q 67.45 92.65 70.11 99.63 A 2.06 2.05 67.4 0 0 72.88 100.78 Z"/>
+          <path fill="#6c3bff" d="M 485.10 54.15 C 486.79 52.51 488.46 49.97 491.80 45.60 Q 495.39 40.91 501.85 37.39 C 509.43 33.25 516.32 35.84 520.59 42.92 C 527.05 53.64 521.31 65.91 522.43 76.25 C 523.43 85.37 525.54 96.62 523.20 106.92 Q 522.90 108.24 520.81 110.57 A 3.48 3.42 16.5 0 1 518.74 111.67 C 515.04 112.19 511.99 110.17 508.92 107.59 C 500.42 100.45 502.63 91.61 503.71 80.75 C 504.07 77.11 504.24 70.66 501.76 68.00 A 3.20 2.65 -36.0 0 0 498.04 67.76 Q 496.09 68.94 494.44 71.47 C 489.64 78.82 487.66 86.51 485.57 95.81 C 483.76 103.84 472.71 115.69 466.26 103.01 C 461.14 92.92 463.54 81.72 465.09 68.76 Q 465.57 64.71 464.90 53.26 Q 464.30 42.92 473.57 39.96 C 480.68 37.69 484.73 46.59 485.10 54.15 Z"/>
+          <path fill="#6c3bff" d="M 443.14 99.64 C 441.76 97.73 439.32 96.40 437.75 98.73 C 433.66 104.78 430.09 109.45 422.64 111.41 C 415.87 113.18 406.51 112.46 401.96 106.48 Q 397.59 100.74 397.24 93.00 Q 396.21 70.91 410.44 54.17 C 417.94 45.34 429.51 40.07 440.95 42.31 C 450.95 44.27 456.95 52.76 456.85 62.71 Q 456.74 73.43 456.71 77.25 Q 456.67 83.18 458.29 87.46 C 461.02 94.67 463.16 101.26 456.51 107.20 C 450.96 112.15 445.83 103.37 443.14 99.64 Z M 435.18 62.80 Q 434.42 61.79 433.28 62.26 Q 424.12 66.02 420.09 74.81 Q 417.29 80.91 415.94 85.98 C 414.90 89.86 418.34 90.93 421.30 89.72 C 428.75 86.68 434.71 71.38 435.61 65.15 Q 435.83 63.65 435.18 62.80 Z"/>
+          <path fill="#0b0f3b" d="M 270.54 94.51 A 2.29 2.28 -59.2 0 0 267.66 95.24 Q 262.88 102.01 256.86 106.34 C 251.74 110.02 243.87 113.83 237.97 112.19 C 225.94 108.87 224.93 89.80 227.24 80.39 Q 229.13 72.63 235.60 63.96 C 243.70 53.11 257.76 37.53 272.97 46.37 Q 283.17 52.30 286.01 63.61 C 287.45 69.33 286.85 76.82 287.12 83.33 Q 287.38 89.85 290.72 97.82 C 292.93 103.10 292.75 108.50 285.49 108.67 C 278.11 108.85 275.49 102.29 271.00 95.10 Q 270.67 94.58 270.54 94.51 Z M 249.98 73.49 Q 245.03 81.05 244.24 89.30 A 1.97 1.78 -84.3 0 0 245.81 91.42 C 250.04 91.87 255.42 82.57 257.95 78.70 C 260.48 74.84 266.85 66.18 264.75 62.48 A 1.97 1.78 -29.3 0 0 262.17 61.89 Q 254.93 65.92 249.98 73.49 Z"/>
+          <path fill="#ffc107" d="M 15.29 47.45 C 21.43 47.30 27.24 56.04 25.34 61.71 C 23.93 65.90 20.09 68.71 15.81 68.81 C 11.54 68.91 7.57 66.29 5.96 62.17 C 3.79 56.61 9.18 47.60 15.29 47.45 Z"/>
+          <path fill="#0b0f3b" d="M 199.00 102.55 Q 197.13 101.10 194.70 102.47 Q 188.50 105.97 183.90 108.09 C 171.50 113.80 167.14 98.95 166.12 89.93 Q 164.36 74.30 172.16 60.24 C 174.41 56.17 178.82 54.11 182.86 57.01 C 185.81 59.11 187.31 60.71 186.99 64.82 Q 186.66 68.98 186.32 70.03 C 185.39 72.96 183.21 79.28 184.07 84.35 A 2.20 2.19 -17.3 0 0 187.16 85.97 C 190.99 84.19 192.96 82.05 194.54 79.77 Q 200.21 71.58 202.09 64.66 C 203.88 58.05 206.14 53.91 211.38 50.91 C 225.87 42.61 224.37 70.72 223.46 76.53 Q 220.81 93.54 218.14 108.17 C 215.96 120.13 210.00 138.43 198.39 143.95 C 193.77 146.14 187.43 144.86 183.41 141.94 C 176.16 136.69 183.16 132.16 187.80 128.54 C 190.55 126.39 192.68 123.44 194.18 120.23 C 196.64 114.99 199.46 108.54 199.00 102.55 Z"/>
+          <path fill="#0b0f3b" d="M 146.24 109.22 C 144.12 107.76 141.90 109.38 140.59 111.11 C 137.22 115.55 133.73 120.56 128.72 123.46 C 122.11 127.29 112.08 129.36 106.19 123.69 C 100.78 118.48 101.16 107.67 102.70 100.47 C 105.63 86.67 116.72 74.80 127.45 66.45 C 134.92 60.63 143.67 57.96 151.79 64.73 Q 161.56 72.89 161.28 86.77 C 161.11 95.81 160.04 102.63 164.30 109.30 Q 165.90 111.81 165.86 113.21 C 165.74 117.37 161.59 119.78 157.86 119.34 C 152.10 118.65 150.38 112.06 146.24 109.22 Z M 140.83 78.72 C 133.54 80.75 128.38 86.84 125.20 92.72 C 123.77 95.36 120.39 100.72 120.58 105.17 A 1.54 1.53 78.3 0 0 122.66 106.54 C 126.29 105.15 128.06 103.63 129.97 101.26 C 132.58 98.04 143.30 83.00 140.83 78.72 Z"/>
+          <path fill="#ffc107" d="M 8.92 81.23 C 11.35 76.87 15.33 76.09 19.30 79.00 Q 26.90 84.58 26.59 94.52 C 26.46 98.81 25.53 105.58 26.13 110.21 C 27.07 117.49 29.35 125.32 25.36 132.06 C 21.57 138.45 14.80 141.58 8.06 137.17 C 1.69 133.02 0.83 126.82 1.87 119.57 C 2.48 115.35 3.43 110.84 3.78 105.79 C 4.39 97.14 4.97 88.33 8.92 81.23 Z"/>
+          <path fill="#ffc107" d="M 547.37 116.72 C 543.08 118.06 538.32 116.56 535.51 112.87 C 531.70 107.88 534.54 97.23 540.69 95.31 C 546.82 93.40 555.21 100.54 554.92 106.80 C 554.71 111.44 551.65 115.38 547.37 116.72 Z"/>
+        </svg>
       </a>
 
-      <div class="city-pill">
-        <span class="city-dot"></span>
+      <div class="city-pill" title="Ciudad seleccionada">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
         <span>Palencia</span>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <main class="app-container">
-
-    <!-- Selector Temporal: Hoy / Fin de semana / Calendario -->
-    <section class="time-selector-bar">
-      <button class="time-tab active" id="tab-today" onclick="switchView('today')">
-        Hoy
-      </button>
-      <button class="time-tab" id="tab-weekend" onclick="switchView('weekend')">
-        Fin de semana
-      </button>
+    <!-- Selector Temporal: Hoy / Mañana / Este finde / Calendario -->
+    <nav class="time-selector-bar" aria-label="Filtro de fecha">
+      <button class="time-tab active" id="tab-today" data-action="switch-view" data-view="today">Hoy</button>
+      <button class="time-tab" id="tab-tomorrow" data-action="switch-view" data-view="tomorrow">Mañana</button>
+      <button class="time-tab" id="tab-weekend" data-action="switch-view" data-view="weekend">Este finde</button>
       <div class="calendar-picker-wrapper">
-        <button class="time-tab" id="tab-calendar">
-          <span>📅</span> <span id="calendar-label">Fecha</span>
+        <button class="time-tab" id="tab-calendar" type="button">
+          <span id="calendar-label">Calendario</span>
         </button>
-        <input type="date" class="calendar-input" id="date-input" onchange="onDatePicked(this.value)">
+        <input type="date" class="calendar-input" id="date-input" aria-label="Seleccionar fecha">
       </div>
+    </nav>
+
+    <!-- Fila de Categorías Circulares -->
+    <section class="categories-row" aria-label="Filtro de categorías">
+      <button class="cat-btn active" data-action="set-cat" data-cat="all" aria-label="Todas las categorías">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>
+        </div>
+        <span class="cat-label">Todas</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="musica" aria-label="Categoría Música">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </div>
+        <span class="cat-label">Música</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="tardeo" aria-label="Categoría Tardeo">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M21 5V3H3v2l8 9v5H6v2h12v-2h-5v-5l8-9zM7.43 7L5.66 5h12.69l-1.78 2H7.43z"/></svg>
+        </div>
+        <span class="cat-label">Tardeo</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="cine" aria-label="Categoría Cine">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
+        </div>
+        <span class="cat-label">Cine</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="cultura" aria-label="Categoría Cultura">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M12 2L1 7v2h22V7L12 2zm-8 7v10h3V9H4zm6 0v10h3V9h-3zm6 0v10h3V9h-3zM2 20v2h20v-2H2z"/></svg>
+        </div>
+        <span class="cat-label">Cultura</span>
+      </button>
     </section>
 
-    <!-- Chips de Intención / Filtros Rápidos -->
-    <section class="filter-chips-container" id="chips-container">
-      <button class="filter-chip active" data-filter="all" onclick="setFilter('all')">Todos</button>
-      <button class="filter-chip" data-filter="now" onclick="setFilter('now')">Ahora / Esta noche</button>
-      <button class="filter-chip" data-filter="tardeo" onclick="setFilter('tardeo')">Tardeo</button>
-      <button class="filter-chip" data-filter="musica" onclick="setFilter('musica')">Música</button>
-      <button class="filter-chip" data-filter="cultura" onclick="setFilter('cultura')">Cine / Cultura</button>
-    </section>
-
-    <!-- Encabezado de la vista activa -->
-    <div class="section-header">
-      <div class="section-title">
-        <span id="view-title">Agenda de hoy</span>
+    <!-- Barra de Filtros Activos (Visible solo con filtros aplicados) -->
+    <div class="active-filters-bar" id="active-filters-bar">
+      <div class="active-chips-wrap" id="active-chips-wrap">
+        <span>Filtros activos:</span>
+        <div id="chips-list" style="display:flex;gap:0.4rem;align-items:center;"></div>
       </div>
-      <span class="section-badge" id="events-count">Cargando...</span>
+      <button class="btn-clear-filters" data-action="clear-filters">Limpiar</button>
     </div>
 
-    <!-- Contenedor dinámico de eventos y recurrencias -->
-    <div id="content-container">
+    <!-- Contenedor Destacado Promocionado (Condicional) -->
+    <div id="promoted-container"></div>
+
+    <!-- Encabezado de la Agenda Compacta -->
+    <div class="section-header-compact">
+      <h2 class="section-title-compact" id="view-title">Agenda de hoy</h2>
+      <span id="events-count" style="font-size:0.8125rem;color:var(--color-text-muted);font-weight:600;">Cargando...</span>
+    </div>
+
+    <!-- Listado Compacto de Eventos, Recurrencias y Lugares -->
+    <main id="content-container">
       <div class="loader-spinner"></div>
-    </div>
+    </main>
+  </div>
 
-  </main>
-
-  <!-- Modal Ficha de Evento y Lugar -->
-  <div class="modal-overlay" id="detail-modal" onclick="closeModalOnBackdrop(event)">
+  <!-- Modal Ficha Unificada (Evento, Recurrencia o Lugar) -->
+  <div class="modal-overlay" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title-main">
     <div class="modal-sheet" id="modal-content">
       <!-- Se inyecta dinámicamente -->
     </div>
@@ -984,13 +1229,20 @@ app.get('/', (c) => {
     // ==============================================================================
     // Estado y variables globales
     // ==============================================================================
+    const CITY_TIMEZONE = 'Europe/Madrid';
+    const EDITORIAL_CUTOFF_HOUR = 6; // Eventos antes de las 06:00 pertenecen a la noche anterior
+
     let currentView = 'today';
     let currentFilter = 'all';
     let selectedDate = getTodayDateString();
     let currentData = null; // Almacena respuesta de API
+    let activeModalEventId = null; // Previene impresiones duplicadas accidentales
+    let lastFocusedElement = null; // Guarda el elemento que abrió el modal
+    let savedScrollY = 0; // Guarda la posición de scroll del fondo para restaurarla al cerrar modal
+    let currentRequestId = 0; // Previene condiciones de carrera en respuestas asíncronas
 
     // ==============================================================================
-    // Métricas y Session Hash efímero (sessionStorage, sin cookies, RGPD)
+    // Métricas y Session Hash efímero (sessionStorage)
     // ==============================================================================
     function getSessionHash() {
       try {
@@ -1007,7 +1259,7 @@ app.get('/', (c) => {
       }
     }
 
-    window.trackMetric = function(eventId, metricType, promotionId = null) {
+    function trackMetric(eventId, metricType, promotionId = null) {
       if (!eventId) return;
       try {
         fetch('/api/v1/metrics', {
@@ -1023,17 +1275,51 @@ app.get('/', (c) => {
           keepalive: true,
         }).catch(() => {});
       } catch (err) {}
-    };
+    }
+    window.trackMetric = trackMetric;
 
     // ==============================================================================
-    // Fechas auxiliares
+    // Fechas y Lógica Editorial (Zona horaria Europe/Madrid y corte de 06:00)
     // ==============================================================================
+    function getEditorialDateInTimezone(now = new Date(), timeZone = CITY_TIMEZONE) {
+      // Hora en Palencia (Europe/Madrid)
+      const hourFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: 'numeric',
+        hour12: false,
+      });
+      const hour = parseInt(hourFormatter.format(now), 10);
+
+      const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+
+      // Si es madrugada (antes de las 06:00), pertenece a la noche editorial anterior
+      if (hour < EDITORIAL_CUTOFF_HOUR) {
+        const prev = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        return dateFormatter.format(prev);
+      }
+      return dateFormatter.format(now);
+    }
+
     function getTodayDateString() {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
-      return \`\${y}-\${m}-\${d}\`;
+      return getEditorialDateInTimezone(new Date(), CITY_TIMEZONE);
+    }
+
+    function getTomorrowDateString() {
+      const todayStr = getTodayDateString();
+      const [y, m, d] = todayStr.split('-').map(Number);
+      const next = new Date(Date.UTC(y, m - 1, d + 1, 12, 0, 0));
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: CITY_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      return formatter.format(next);
     }
 
     function formatDateSpanish(dateStr) {
@@ -1041,6 +1327,7 @@ app.get('/', (c) => {
       const [year, month, day] = dateStr.split('-').map(Number);
       const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
       return date.toLocaleDateString('es-ES', {
+        timeZone: CITY_TIMEZONE,
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -1051,10 +1338,30 @@ app.get('/', (c) => {
       if (!isoString) return '';
       const date = new Date(isoString);
       return date.toLocaleTimeString('es-ES', {
+        timeZone: CITY_TIMEZONE,
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
       });
+    }
+
+    function formatEventRealDateTime(isoString) {
+      if (!isoString) return { dateText: '', isMadrugada: false };
+      const date = new Date(isoString);
+      const hourFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: CITY_TIMEZONE,
+        hour: 'numeric',
+        hourCycle: 'h23',
+      });
+      const hour = parseInt(hourFormatter.format(date), 10) % 24;
+      const isMadrugada = hour < EDITORIAL_CUTOFF_HOUR;
+      const dateText = date.toLocaleDateString('es-ES', {
+        timeZone: CITY_TIMEZONE,
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+      return { dateText, isMadrugada };
     }
 
     function escapeHtml(str) {
@@ -1080,207 +1387,339 @@ app.get('/', (c) => {
     }
 
     // ==============================================================================
-    // Carga de datos mediante rutas relativas /api/v1/...
+    // Carga de datos mediante rutas relativas /api/v1/... (con control de concurrencia)
     // ==============================================================================
     async function loadData() {
       const container = document.getElementById('content-container');
+      const promotedContainer = document.getElementById('promoted-container');
+
+      // Limpieza inmediata del destacado y spinner de carga
+      promotedContainer.innerHTML = '';
       container.innerHTML = '<div class="loader-spinner"></div>';
 
+      const requestId = ++currentRequestId;
+
       try {
-        if (currentView === 'today' || currentView === 'calendar') {
-          const res = await fetch(\`/api/v1/cities/palencia/events?date=\${selectedDate}\`);
-          if (!res.ok) throw new Error('Error al cargar agenda');
-          currentData = await res.json();
-          renderDayAgenda();
+        let url = '';
+        if (currentView === 'today' || currentView === 'tomorrow' || currentView === 'calendar') {
+          url = \`/api/v1/cities/palencia/events?date=\${selectedDate}\`;
         } else if (currentView === 'weekend') {
-          const res = await fetch('/api/v1/cities/palencia/weekend');
-          if (!res.ok) throw new Error('Error al cargar fin de semana');
-          currentData = await res.json();
+          url = '/api/v1/cities/palencia/weekend';
+        }
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Error al cargar agenda');
+        const data = await res.json();
+
+        // Descartar si el usuario ya cambió a otra vista antes de que terminara la petición
+        if (requestId !== currentRequestId) return;
+
+        currentData = data;
+        if (currentView === 'weekend') {
           renderWeekendAgenda();
+        } else {
+          renderDayAgenda();
         }
       } catch (err) {
+        if (requestId !== currentRequestId) return;
+        promotedContainer.innerHTML = '';
         container.innerHTML = \`
           <div class="empty-state">
             <h3>No se pudo cargar la agenda</h3>
             <p>Comprueba tu conexión o vuelve a intentarlo en unos instantes.</p>
-            <button class="btn-action btn-tickets" onclick="loadData()">Reintentar</button>
+            <button class="btn-primary-action" data-action="reload-data">Reintentar</button>
           </div>
         \`;
       }
     }
+    window.loadData = loadData;
 
     // ==============================================================================
-    // Filtros de intención
+    // Filtrado estricto por contratos de categoría
     // ==============================================================================
     function filterEvents(events) {
       if (!events || events.length === 0) return [];
       if (currentFilter === 'all') return events;
-
-      return events.filter((ev) => {
-        if (currentFilter === 'now') {
-          const now = new Date();
-          const eventTime = new Date(ev.start_time);
-          const hour = eventTime.getHours();
-          return hour >= 20 || (hour >= now.getHours() - 1 && hour <= now.getHours() + 3);
-        }
-        if (currentFilter === 'tardeo') {
-          const hour = new Date(ev.start_time).getHours();
-          return ev.category === 'dj_tardeo' || (hour >= 16 && hour < 21);
-        }
-        if (currentFilter === 'musica') {
-          return ev.category === 'musica_directo' || ev.category === 'dj_tardeo';
-        }
-        if (currentFilter === 'cultura') {
-          return ['cine', 'teatro', 'exposicion', 'cultura', 'monologo'].includes(ev.category);
-        }
-        return true;
-      });
+      if (currentFilter === 'musica') {
+        return events.filter((ev) => ev.category === 'musica_directo');
+      }
+      if (currentFilter === 'tardeo') {
+        return events.filter((ev) => ev.category === 'dj_tardeo');
+      }
+      if (currentFilter === 'cine') {
+        return events.filter((ev) => ev.category === 'cine');
+      }
+      if (currentFilter === 'cultura') {
+        return events.filter((ev) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(ev.category));
+      }
+      return events;
     }
+
+    function filterRecurrences(recurrences) {
+      if (!recurrences || recurrences.length === 0) return [];
+      if (currentFilter === 'all') return recurrences;
+      if (currentFilter === 'musica') {
+        return recurrences.filter((r) => r.category === 'musica_directo');
+      }
+      if (currentFilter === 'tardeo') {
+        return recurrences.filter((r) => r.category === 'dj_tardeo');
+      }
+      if (currentFilter === 'cine') {
+        return recurrences.filter((r) => r.category === 'cine');
+      }
+      if (currentFilter === 'cultura') {
+        return recurrences.filter((r) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(r.category));
+      }
+      return recurrences;
+    }
+
+    // ==============================================================================
+    // Barra de Filtros Activos
+    // ==============================================================================
+    function updateActiveFiltersBar() {
+      const bar = document.getElementById('active-filters-bar');
+      const list = document.getElementById('chips-list');
+      let chipsHtml = '';
+
+      const catNames = {
+        musica: 'Música',
+        tardeo: 'Tardeo',
+        cine: 'Cine',
+        cultura: 'Cultura',
+      };
+
+      if (currentFilter !== 'all') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="remove-cat-filter" aria-label="Eliminar filtro \${catNames[currentFilter]}">
+            \${catNames[currentFilter] || currentFilter} ✕
+          </button>
+        \`;
+      }
+
+      if (currentView === 'tomorrow') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="switch-view" data-view="today" aria-label="Volver a Hoy">
+            Mañana ✕
+          </button>
+        \`;
+      } else if (currentView === 'weekend') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="switch-view" data-view="today" aria-label="Volver a Hoy">
+            Fin de semana ✕
+          </button>
+        \`;
+      } else if (currentView === 'calendar') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="switch-view" data-view="today" aria-label="Volver a Hoy">
+            \${selectedDate} ✕
+          </button>
+        \`;
+      }
+
+      if (chipsHtml) {
+        list.innerHTML = chipsHtml;
+        bar.classList.add('visible');
+      } else {
+        bar.classList.remove('visible');
+      }
+    }
+
+    function clearAllFilters() {
+      currentFilter = 'all';
+      document.querySelectorAll('.cat-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.cat === 'all');
+      });
+      switchView('today');
+    }
+    window.clearAllFilters = clearAllFilters;
+
+    // ==============================================================================
+    // Helper de Portada / Fallback
+    // ==============================================================================
+    function renderEventThumbnail(imageUrl, title) {
+      if (imageUrl) {
+        return \`<img class="card-thumb" src="\${escapeHtml(imageUrl)}" alt="\${escapeHtml(title)}" loading="lazy" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(false));">\`;
+      }
+      return \`
+        <div class="card-thumb-fallback" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        </div>
+      \`;
+    }
+
+    function createSvgFallbackNode(isHero = false) {
+      const wrap = document.createElement('div');
+      wrap.className = isHero ? 'modal-hero-cover' : 'card-thumb-fallback';
+      wrap.style.cssText = isHero ? 'width:100%;height:100%;border-radius:0;display:flex;align-items:center;justify-content:center;background:#0B0F3B;' : '';
+      wrap.innerHTML = \`<svg style="\${isHero ? 'width:64px;height:64px;fill:#9D7BFF;' : 'width:30px;height:30px;fill:#9D7BFF;'}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>\`;
+      return wrap;
+    }
+    window.createSvgFallbackNode = createSvgFallbackNode;
 
     // ==============================================================================
     // Renderizado: Agenda de Hoy / Día Seleccionado
     // ==============================================================================
     function renderDayAgenda() {
       const container = document.getElementById('content-container');
+      const promotedContainer = document.getElementById('promoted-container');
       const countEl = document.getElementById('events-count');
       const viewTitleEl = document.getElementById('view-title');
 
       if (!currentData) return;
 
+      updateActiveFiltersBar();
+
       const filteredEvents = filterEvents(currentData.events || []);
-      const recurrences = currentData.recurrences || [];
-      const places = currentData.places || [];
+      const recurrences = filterRecurrences(currentData.recurrences || []);
+      const places = currentFilter === 'all' ? (currentData.places || []) : [];
 
       const totalItems = filteredEvents.length + recurrences.length + places.length;
       countEl.innerText = \`\${totalItems} \${totalItems === 1 ? 'plan' : 'planes'}\`;
 
       if (currentView === 'today') {
-        viewTitleEl.innerText = 'Agenda de hoy';
+        viewTitleEl.innerText = currentFilter === 'all' ? 'Agenda de hoy' : \`\${getCategoryTitle(currentFilter)} en Palencia\`;
+      } else if (currentView === 'tomorrow') {
+        viewTitleEl.innerText = currentFilter === 'all' ? 'Planes para mañana' : \`\${getCategoryTitle(currentFilter)} mañana\`;
       } else {
         viewTitleEl.innerText = formatDateSpanish(selectedDate);
       }
 
+      // 1. Destacado Promocionado único (solo si Boolean(ev.promotion), sin filtro y NO cancelado)
+      let listEvents = filteredEvents;
+      promotedContainer.innerHTML = '';
+
+      if (currentFilter === 'all') {
+        const promotedEvent = filteredEvents.find((ev) => Boolean(ev.promotion) && ev.status !== 'cancelled');
+        if (promotedEvent) {
+          const hasImage = Boolean(promotedEvent.image_url);
+          promotedContainer.innerHTML = \`
+            <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${promotedEvent.id}" aria-label="Destacado promocionado: \${escapeHtml(promotedEvent.title)}">
+              \${hasImage ? \`
+                <img class="hero-img" src="\${escapeHtml(promotedEvent.image_url)}" alt="\${escapeHtml(promotedEvent.title)}" loading="eager" onerror="this.onerror=null;const card=this.closest('.promoted-hero-card');if(card){card.classList.add('no-image');}this.remove();">
+                <div class="hero-overlay"></div>
+              \` : ''}
+              <span class="hero-badge-tag">★ Promocionado</span>
+              <div class="hero-content">
+                <h3 class="hero-title">\${escapeHtml(promotedEvent.title)}</h3>
+                <div class="hero-meta">
+                  <span>📍 \${escapeHtml(promotedEvent.venue.name)} · \${formatTime(promotedEvent.start_time)}\${formatEventRealDateTime(promotedEvent.start_time).isMadrugada ? ' (madrugada)' : ''}</span>
+                  <span class="hero-price-pill">\${escapeHtml(promotedEvent.price.label)}</span>
+                </div>
+              </div>
+            </button>
+          \`;
+          // Evitar duplicado inmediato en la lista superior
+          listEvents = filteredEvents.filter((ev) => ev.id !== promotedEvent.id);
+        }
+      }
+
       if (totalItems === 0) {
+        let emptyTitle = '';
+        let emptyDesc = '';
+        let emptyActions = '';
+
+        if (currentFilter !== 'all') {
+          emptyTitle = \`Sin planes en \${getCategoryTitle(currentFilter)}\`;
+          emptyDesc = 'No encontramos eventos en esta categoría para la fecha seleccionada.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="remove-cat-filter">Quitar filtros</button>
+            <button type="button" class="btn-secondary-link" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        } else if (currentView === 'today') {
+          emptyTitle = 'No hay planes programados para hoy';
+          emptyDesc = 'Palencia descansa hoy. Descubre los planes preparados para este fin de semana.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        } else if (currentView === 'tomorrow') {
+          emptyTitle = 'No hay planes programados para mañana';
+          emptyDesc = 'Aún no hay actividades registradas para mañana. Consulta la agenda del fin de semana.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        } else {
+          emptyTitle = 'No hay planes para esta fecha';
+          emptyDesc = 'Prueba a seleccionar otro día en el calendario o consulta el fin de semana.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        }
+
         container.innerHTML = \`
           <div class="empty-state">
-            <h3>No hay eventos publicados para este día</h3>
-            <p>Puedes consultar la agenda del fin de semana o explorar los planes permanentes.</p>
-            <button class="btn-action btn-tickets" onclick="switchView('weekend')">Ver Fin de Semana</button>
+            <h3>\${escapeHtml(emptyTitle)}</h3>
+            <p>\${escapeHtml(emptyDesc)}</p>
+            <div class="empty-state-actions" style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+              \${emptyActions}
+            </div>
           </div>
         \`;
         return;
       }
 
-      let html = '<div class="events-list">';
+      let html = '<div class="events-list-compact">';
 
-      // 1. Eventos puntuales (con destacado para Promocionado)
-      for (const ev of filteredEvents) {
-        const isPromoted = Boolean(ev.promotion && ev.promotion.status === 'active');
+      // 2. Tarjetas compactas de eventos (botones semánticos accesibles)
+      for (const ev of listEvents) {
         const isCancelled = ev.status === 'cancelled';
-        const promoId = ev.promotion ? ev.promotion.id : null;
-
         html += \`
-          <div class="event-card \${isPromoted ? 'promoted' : ''} \${isCancelled ? 'cancelled' : ''}" 
-               onclick="openEventModal(\${ev.id})">
-            
-            \${isPromoted ? '<span class="promoted-tag">★ Promocionado</span>' : ''}
-            \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : ''}
-
-            <div class="card-top">
-              <span class="time-badge">\${formatTime(ev.start_time)}</span>
-              <span class="label-badge">\${escapeHtml(ev.editorial_label)}</span>
-              <span class="category-badge">\${escapeHtml(getCategoryLabel(ev.category))}</span>
-            </div>
-
-            <h3 class="event-title">\${escapeHtml(ev.title)}</h3>
-
-            <div class="event-venue">
-              <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-              <span>\${escapeHtml(ev.venue.name)}</span>
-            </div>
-
-            <div class="card-footer">
-              <span class="price-pill \${ev.price.is_free ? '' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
-              
-              <div class="card-actions" onclick="event.stopPropagation()">
-                \${ev.actions.maps_url ? \`
-                  <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" 
-                     class="btn-action btn-maps"
-                     onclick="trackMetric(\${ev.id}, 'map_click', \${promoId})">
-                     Cómo llegar
-                  </a>
-                \` : ''}
-
-                \${ev.actions.tickets_url ? \`
-                  <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" 
-                     class="btn-action btn-tickets"
-                     onclick="trackMetric(\${ev.id}, 'ticket_click', \${promoId})">
-                     Entradas
-                  </a>
-                \` : ''}
-
-                \${ev.actions.whatsapp_url ? \`
-                  <a href="\${escapeHtml(ev.actions.whatsapp_url)}" target="_blank" rel="noopener" 
-                     class="btn-action btn-whatsapp"
-                     onclick="trackMetric(\${ev.id}, 'whatsapp_click', \${promoId})">
-                     WhatsApp
-                  </a>
-                \` : ''}
+          <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+            \${renderEventThumbnail(ev.image_url, ev.title)}
+            <div class="card-info">
+              <div>
+                \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+                <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
+                <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
+              </div>
+              <div class="card-bottom-row">
+                <span class="card-time">⏰ \${formatTime(ev.start_time)}\${formatEventRealDateTime(ev.start_time).isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>
+                <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
               </div>
             </div>
-
-          </div>
+          </button>
         \`;
       }
 
-      // 2. Recurrencias: Etiquetadas como "Cada [día]"
+      // 3. Actividades periódicas (Recurrencias)
       for (const rec of recurrences) {
         const dayLabel = getDayNameFromNumber(rec.day_of_week);
         html += \`
-          <div class="event-card" onclick="openRecurrenceInfo('\${escapeHtml(rec.title)}', '\${escapeHtml(rec.venue_name)}')">
-            <div class="recurrence-badge">
-              <span>↻ Cada \${dayLabel}</span>
+          <button type="button" class="card-compact" data-action="open-recurrence" data-id="\${rec.id}" aria-label="Actividad periódica: \${escapeHtml(rec.title)} en \${escapeHtml(rec.venue_name)}">
+            \${renderEventThumbnail(null, rec.title)}
+            <div class="card-info">
+              <div>
+                <span class="recurrence-badge">↻ Cada \${dayLabel}</span>
+                <h3 class="card-title">\${escapeHtml(rec.title)}</h3>
+                <div class="card-venue">📍 \${escapeHtml(rec.venue_name)}</div>
+              </div>
+              <div class="card-bottom-row">
+                <span class="card-time">⏰ \${escapeHtml(rec.start_time.slice(0, 5))}</span>
+                <span class="card-price-pill \${rec.is_free ? 'free' : 'paid'}">
+                  \${rec.is_free ? 'Entrada libre' : ((rec.price_cents / 100).toFixed(2).replace('.', ',') + ' €')}
+                </span>
+              </div>
             </div>
-            <div class="card-top">
-              <span class="time-badge">\${escapeHtml(rec.start_time.slice(0, 5))}</span>
-              <span class="category-badge">\${escapeHtml(getCategoryLabel(rec.category))}</span>
-            </div>
-            <h3 class="event-title">\${escapeHtml(rec.title)}</h3>
-            <div class="event-venue">
-              <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-              <span>\${escapeHtml(rec.venue_name)}</span>
-            </div>
-            <div class="card-footer">
-              <span class="price-pill \${rec.is_free ? '' : 'paid'}">
-                \${rec.is_free ? 'Entrada libre' : ((rec.price_cents / 100).toFixed(2).replace('.', ',') + ' €')}
-              </span>
-              <span class="label-badge">Actividad periódica</span>
-            </div>
-          </div>
+          </button>
         \`;
       }
 
-      // 3. Lugares permanentes: Etiquetados como "Siempre disponible"
+      // 4. Lugares permanentes (Places)
       for (const place of places) {
         html += \`
-          <div class="event-card" onclick="openPlaceModal(\${place.id})">
-            <div class="place-badge">
-              <span>★ Siempre disponible</span>
-            </div>
-            <h3 class="event-title">\${escapeHtml(place.name)}</h3>
-            <p class="place-highlight">\${escapeHtml(place.highlight_text)}</p>
-            \${place.opening_hours_text ? \`<p class="place-hours">⏰ \${escapeHtml(place.opening_hours_text)}</p>\` : ''}
-            <div class="card-footer">
-              <span class="price-pill">\${escapeHtml(place.price_text || 'Consultar')}</span>
-              <div class="card-actions" onclick="event.stopPropagation()">
-                \${place.google_maps_url ? \`
-                  <a href="\${escapeHtml(place.google_maps_url)}" target="_blank" rel="noopener" class="btn-action btn-maps">
-                    Cómo llegar
-                  </a>
-                \` : ''}
+          <button type="button" class="card-compact" data-action="open-place" data-id="\${place.id}" aria-label="Lugar permanente: \${escapeHtml(place.name)}">
+            \${renderEventThumbnail(place.image_url, place.name)}
+            <div class="card-info">
+              <div>
+                <span class="place-badge">★ Siempre disponible</span>
+                <h3 class="card-title">\${escapeHtml(place.name)}</h3>
+                <div class="card-venue">\${escapeHtml(place.highlight_text)}</div>
+              </div>
+              <div class="card-bottom-row">
+                <span class="card-time">⏰ \${escapeHtml(place.opening_hours_text || 'Consultar')}</span>
+                <span class="card-price-pill paid">\${escapeHtml(place.price_text || 'Consultar')}</span>
               </div>
             </div>
-          </div>
+          </button>
         \`;
       }
 
@@ -1293,19 +1732,23 @@ app.get('/', (c) => {
     // ==============================================================================
     function renderWeekendAgenda() {
       const container = document.getElementById('content-container');
+      const promotedContainer = document.getElementById('promoted-container');
       const countEl = document.getElementById('events-count');
       const viewTitleEl = document.getElementById('view-title');
 
       if (!currentData || !currentData.days) return;
 
-      viewTitleEl.innerText = 'Fin de semana en Palencia';
+      updateActiveFiltersBar();
+      promotedContainer.innerHTML = '';
+      viewTitleEl.innerText = currentFilter === 'all' ? 'Fin de semana en Palencia' : \`\${getCategoryTitle(currentFilter)} en el finde\`;
 
       let totalWeekendEvents = 0;
       let html = '';
 
       for (const day of currentData.days) {
         const filteredEvents = filterEvents(day.events || []);
-        totalWeekendEvents += filteredEvents.length + day.recurrences.length;
+        const recurrences = filterRecurrences(day.recurrences || []);
+        totalWeekendEvents += filteredEvents.length + recurrences.length;
 
         html += \`
           <div class="weekend-day-group">
@@ -1313,90 +1756,57 @@ app.get('/', (c) => {
               <span class="weekend-day-title">\${escapeHtml(day.editorial_label)}</span>
               <span class="weekend-day-date">\${formatDateSpanish(day.editorial_date)}</span>
             </div>
-            <div class="events-list">
+            <div class="events-list-compact">
         \`;
 
-        if (filteredEvents.length === 0 && day.recurrences.length === 0) {
+        if (filteredEvents.length === 0 && recurrences.length === 0) {
           html += \`
-            <div class="event-card" style="padding: 0.875rem; text-align: center; color: #94a3b8; font-size: 0.8125rem;">
-              Sin planes específicos registrados para este día.
+            <div style="padding: 0.875rem; text-align: center; color: var(--color-text-muted); font-size: 0.8125rem;">
+              Sin planes registrados en esta categoría para este día.
             </div>
           \`;
         }
 
         // Eventos del día
         for (const ev of filteredEvents) {
-          const isPromoted = Boolean(ev.promotion && ev.promotion.status === 'active');
           const isCancelled = ev.status === 'cancelled';
-          const promoId = ev.promotion ? ev.promotion.id : null;
-
           html += \`
-            <div class="event-card \${isPromoted ? 'promoted' : ''} \${isCancelled ? 'cancelled' : ''}" 
-                 onclick="openEventModal(\${ev.id})">
-              
-              \${isPromoted ? '<span class="promoted-tag">★ Promocionado</span>' : ''}
-              \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : ''}
-
-              <div class="card-top">
-                <span class="time-badge">\${formatTime(ev.start_time)}</span>
-                <span class="category-badge">\${escapeHtml(getCategoryLabel(ev.category))}</span>
-              </div>
-
-              <h3 class="event-title">\${escapeHtml(ev.title)}</h3>
-
-              <div class="event-venue">
-                <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                <span>\${escapeHtml(ev.venue.name)}</span>
-              </div>
-
-              <div class="card-footer">
-                <span class="price-pill \${ev.price.is_free ? '' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
-                
-                <div class="card-actions" onclick="event.stopPropagation()">
-                  \${ev.actions.maps_url ? \`
-                    <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" 
-                       class="btn-action btn-maps"
-                       onclick="trackMetric(\${ev.id}, 'map_click', \${promoId})">
-                       Cómo llegar
-                    </a>
-                  \` : ''}
-
-                  \${ev.actions.tickets_url ? \`
-                    <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" 
-                       class="btn-action btn-tickets"
-                       onclick="trackMetric(\${ev.id}, 'ticket_click', \${promoId})">
-                       Entradas
-                    </a>
-                  \` : ''}
+            <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+              \${renderEventThumbnail(ev.image_url, ev.title)}
+              <div class="card-info">
+                <div>
+                  \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+                  <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
+                  <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
+                </div>
+                <div class="card-bottom-row">
+                  <span class="card-time">⏰ \${formatTime(ev.start_time)}\${formatEventRealDateTime(ev.start_time).isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>
+                  <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
                 </div>
               </div>
-            </div>
+            </button>
           \`;
         }
 
         // Recurrencias del día
-        for (const rec of day.recurrences) {
+        for (const rec of recurrences) {
           html += \`
-            <div class="event-card" onclick="openRecurrenceInfo('\${escapeHtml(rec.title)}', '\${escapeHtml(rec.venue_name)}')">
-              <div class="recurrence-badge">
-                <span>↻ Cada \${escapeHtml(day.editorial_label)}</span>
+            <button type="button" class="card-compact" data-action="open-recurrence" data-id="\${rec.id}" aria-label="Actividad periódica: \${escapeHtml(rec.title)} en \${escapeHtml(rec.venue_name)}">
+              \${renderEventThumbnail(null, rec.title)}
+              <div class="card-info">
+                <div>
+                  <span class="recurrence-badge">↻ Cada \${escapeHtml(day.editorial_label)}</span>
+                  <h3 class="card-title">\${escapeHtml(rec.title)}</h3>
+                  <div class="card-venue">📍 \${escapeHtml(rec.venue_name)}</div>
+                </div>
+                <div class="card-bottom-row">
+                  <span class="card-time">⏰ \${escapeHtml(rec.start_time.slice(0, 5))}</span>
+                  <span class="card-price-pill \${rec.is_free ? 'free' : 'paid'}">
+                    \${rec.is_free ? 'Entrada libre' : ((rec.price_cents / 100).toFixed(2).replace('.', ',') + ' €')}
+                  </span>
+                </div>
               </div>
-              <div class="card-top">
-                <span class="time-badge">\${escapeHtml(rec.start_time.slice(0, 5))}</span>
-                <span class="category-badge">\${escapeHtml(getCategoryLabel(rec.category))}</span>
-              </div>
-              <h3 class="event-title">\${escapeHtml(rec.title)}</h3>
-              <div class="event-venue">
-                <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                <span>\${escapeHtml(rec.venue_name)}</span>
-              </div>
-              <div class="card-footer">
-                <span class="price-pill \${rec.is_free ? '' : 'paid'}">
-                  \${rec.is_free ? 'Entrada libre' : ((rec.price_cents / 100).toFixed(2).replace('.', ',') + ' €')}
-                </span>
-                <span class="label-badge">Actividad periódica</span>
-              </div>
-            </div>
+            </button>
           \`;
         }
 
@@ -1404,50 +1814,84 @@ app.get('/', (c) => {
       }
 
       // Planes permanentes al final del fin de semana
-      if (currentData.places && currentData.places.length > 0) {
+      if (currentFilter === 'all' && currentData.places && currentData.places.length > 0) {
         html += \`
           <div class="weekend-day-group">
             <div class="weekend-day-header">
               <span class="weekend-day-title">Planes permanentes</span>
               <span class="weekend-day-date">Siempre disponibles</span>
             </div>
-            <div class="events-list">
+            <div class="events-list-compact">
         \`;
         for (const p of currentData.places) {
           html += \`
-            <div class="event-card" onclick="openPlaceModal(\${p.id})">
-              <div class="place-badge"><span>★ Siempre disponible</span></div>
-              <h3 class="event-title">\${escapeHtml(p.name)}</h3>
-              <p class="place-highlight">\${escapeHtml(p.highlight_text)}</p>
-              \${p.opening_hours_text ? \`<p class="place-hours">⏰ \${escapeHtml(p.opening_hours_text)}</p>\` : ''}
-              <div class="card-footer">
-                <span class="price-pill">\${escapeHtml(p.price_text || 'Consultar')}</span>
-                <div class="card-actions" onclick="event.stopPropagation()">
-                  \${p.google_maps_url ? \`
-                    <a href="\${escapeHtml(p.google_maps_url)}" target="_blank" rel="noopener" class="btn-action btn-maps">
-                      Cómo llegar
-                    </a>
-                  \` : ''}
+            <button type="button" class="card-compact" data-action="open-place" data-id="\${p.id}" aria-label="Lugar permanente: \${escapeHtml(p.name)}">
+              \${renderEventThumbnail(p.image_url, p.name)}
+              <div class="card-info">
+                <div>
+                  <span class="place-badge">★ Siempre disponible</span>
+                  <h3 class="card-title">\${escapeHtml(p.name)}</h3>
+                  <div class="card-venue">\${escapeHtml(p.highlight_text)}</div>
+                </div>
+                <div class="card-bottom-row">
+                  <span class="card-time">⏰ \${escapeHtml(p.opening_hours_text || 'Consultar')}</span>
+                  <span class="card-price-pill paid">\${escapeHtml(p.price_text || 'Consultar')}</span>
                 </div>
               </div>
-            </div>
+            </button>
           \`;
         }
         html += '</div></div>';
       }
 
-      countEl.innerText = \`\${totalWeekendEvents} planes\`;
+      const displayedPlacesCount = (currentFilter === 'all' && currentData.places) ? currentData.places.length : 0;
+      const totalWeekendItems = totalWeekendEvents + displayedPlacesCount;
+      countEl.innerText = \`\${totalWeekendItems} \${totalWeekendItems === 1 ? 'plan' : 'planes'}\`;
+
+      if (totalWeekendItems === 0) {
+        let emptyTitle = currentFilter === 'all' ? 'Sin planes para este fin de semana' : \`Sin planes en \${getCategoryTitle(currentFilter)}\`;
+        let emptyDesc = currentFilter === 'all'
+          ? 'No hay actividades registradas para este fin de semana en Palencia.'
+          : 'No encontramos eventos en esta categoría para el fin de semana.';
+        let emptyActions = currentFilter !== 'all'
+          ? '<button type="button" class="btn-primary-action" data-action="remove-cat-filter">Quitar filtros</button> <button type="button" class="btn-secondary-link" data-action="switch-view" data-view="today">Volver a hoy</button>'
+          : '<button type="button" class="btn-primary-action" data-action="switch-view" data-view="today">Volver a hoy</button>';
+
+        container.innerHTML = \`
+          <div class="empty-state">
+            <h3>\${escapeHtml(emptyTitle)}</h3>
+            <p>\${escapeHtml(emptyDesc)}</p>
+            <div class="empty-state-actions" style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+              \${emptyActions}
+            </div>
+          </div>
+        \`;
+        return;
+      }
+
       container.innerHTML = html;
+    }
+
+    function getCategoryTitle(cat) {
+      const t = {
+        musica: 'Música',
+        tardeo: 'Tardeo',
+        cine: 'Cine',
+        cultura: 'Cultura',
+      };
+      return t[cat] || 'Planes';
     }
 
     // ==============================================================================
     // Ficha Modal de Evento Individual
     // ==============================================================================
-    window.openEventModal = async function(eventId) {
+    async function openEventModal(eventId) {
+      savedScrollY = window.scrollY;
       const modal = document.getElementById('detail-modal');
       const sheet = document.getElementById('modal-content');
 
-      sheet.innerHTML = '<div class="loader-spinner"></div>';
+      document.body.classList.add('modal-open');
+      sheet.innerHTML = '<div class="loader-spinner" style="margin:4rem auto;"></div>';
       modal.classList.add('active');
 
       try {
@@ -1456,199 +1900,262 @@ app.get('/', (c) => {
         const data = await res.json();
         const ev = data.event;
         const promoId = ev.promotion ? ev.promotion.id : null;
+        const isCancelled = ev.status === 'cancelled';
+        const realDateTime = formatEventRealDateTime(ev.start_time);
 
-        // Registrar métrica de impresión de ficha
-        trackMetric(ev.id, 'impression', promoId);
-
-        const shareUrl = encodeURIComponent(window.location.origin);
-        const shareText = encodeURIComponent(\`¡Mira este plan en Palencia! "\${ev.title}" en \${ev.venue.name} (\${formatTime(ev.start_time)}). \${window.location.origin}\`);
-        const waShareUrl = \`https://wa.me/?text=\${shareText}\`;
+        // Registrar métrica de impresión de ficha (evita duplicados si es el mismo evento activo)
+        if (activeModalEventId !== ev.id) {
+          trackMetric(ev.id, 'impression', promoId);
+          activeModalEventId = ev.id;
+        }
 
         sheet.innerHTML = \`
-          <div class="modal-top-bar">
-            <div>
-              \${ev.promotion ? '<span class="promoted-tag" style="position:static">★ Promocionado</span>' : ''}
-              \${ev.status === 'cancelled' ? '<span class="cancelled-tag" style="position:static">Cancelado</span>' : ''}
-            </div>
-            <button class="modal-close-btn" onclick="closeModal()">✕</button>
+          <div class="modal-sticky-header">
+            <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+              <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            </button>
           </div>
 
-          <h2 class="modal-title">\${escapeHtml(ev.title)}</h2>
+          <div class="modal-hero-cover">
+            \${ev.image_url ? \`
+              <img class="modal-hero-img" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(true));">
+            \` : \`
+              <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
+                <svg style="width:64px;height:64px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              </div>
+            \`}
+          </div>
 
-          <div class="modal-meta-grid">
-            <div class="modal-meta-item">
+          <div class="modal-body">
+            <div style="margin-bottom:0.75rem;">
+              \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+            </div>
+
+            <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
+
+            <div class="modal-meta-row">
+              <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+              <span>\${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}</span>
+            </div>
+            <div class="modal-meta-row">
+              <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+              <span>\${formatTime(ev.start_time)} h</span>
+            </div>
+            <div class="modal-meta-row">
               <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-              <strong>\${escapeHtml(ev.venue.name)}</strong>
+              <span><strong>\${escapeHtml(ev.venue.name)}</strong> \${ev.actions.maps_url ? \`<a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" style="color:var(--color-primary);margin-left:0.5rem;font-weight:700;" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">Ver mapa ↗</a>\` : ''}</span>
             </div>
-            <div class="modal-meta-item">
-              <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 nominal 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-              <span>\${formatDateSpanish(ev.editorial_date)} a las \${formatTime(ev.start_time)}</span>
+
+            <!-- Bloque de Acción Principal y Precio -->
+            <div class="modal-action-box">
+              <div class="modal-action-main-row">
+                <span class="modal-price-display">\${escapeHtml(ev.price.label)}</span>
+                \${isCancelled ? \`
+                  <button type="button" class="btn-primary-action" disabled style="background:#94A3B8;cursor:not-allowed;">Evento cancelado</button>
+                \` : (ev.actions.tickets_url ? \`
+                  <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="ticket_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                    Comprar entradas ↗
+                  </a>
+                \` : (ev.actions.maps_url ? \`
+                  <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                    Cómo llegar ↗
+                  </a>
+                \` : ''))}
+              </div>
+              \${(!isCancelled && ev.actions.tickets_url) ? '<div class="action-disclaimer">Compra en una web externa</div>' : ''}
             </div>
-            <div class="modal-meta-item">
-              <svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
-              <strong style="color:var(--accent-emerald)">\${escapeHtml(ev.price.label)}</strong>
-            </div>
-          </div>
 
-          \${ev.description ? \`<p class="modal-description">\${escapeHtml(ev.description)}</p>\` : ''}
-
-          <div class="modal-verification">
-            <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-            <span>Verificado por equipo VayaPlan</span>
-          </div>
-
-          <div class="modal-actions-container">
-            \${ev.actions.maps_url ? \`
-              <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener"
-                 class="btn-full btn-maps"
-                 onclick="trackMetric(\${ev.id}, 'map_click', \${promoId})">
-                 📍 Cómo llegar (Google Maps)
-              </a>
+            \${(!isCancelled && ev.actions.whatsapp_url) ? \`
+              <div style="margin-bottom:1.25rem;">
+                <a href="\${escapeHtml(ev.actions.whatsapp_url)}" target="_blank" rel="noopener" class="time-tab" style="width:100%;text-decoration:none;" data-metric="whatsapp_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                  💬 Contactar por WhatsApp con el local
+                </a>
+              </div>
             \` : ''}
 
-            \${ev.actions.tickets_url ? \`
-              <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener"
-                 class="btn-full btn-tickets"
-                 onclick="trackMetric(\${ev.id}, 'ticket_click', \${promoId})">
-                 🎟 Comprar entradas / Web oficial
-              </a>
+            \${ev.description ? \`
+              <div style="margin-top:1.5rem;">
+                <h3 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h3>
+                <p style="font-size:0.9375rem;color:var(--color-text-muted);line-height:1.6;white-space:pre-line;">\${escapeHtml(ev.description)}</p>
+                \${ev.verification && ev.verification.source === 'web' && ev.actions.tickets_url ? \`
+                  <div style="margin-top:0.75rem;">
+                    <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" style="font-size:0.8125rem;color:var(--color-primary);font-weight:700;">Ver fuente original ↗</a>
+                  </div>
+                \` : ''}
+              </div>
             \` : ''}
 
-            \${ev.actions.whatsapp_url ? \`
-              <a href="\${escapeHtml(ev.actions.whatsapp_url)}" target="_blank" rel="noopener"
-                 class="btn-full btn-whatsapp"
-                 onclick="trackMetric(\${ev.id}, 'whatsapp_click', \${promoId})">
-                 💬 Contactar por WhatsApp
-              </a>
-            \` : ''}
-
-            <a href="\${waShareUrl}" target="_blank" rel="noopener" class="btn-full btn-whatsapp">
-              ↗ Compartir por WhatsApp
-            </a>
+            <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--color-border);">
+              <h3 style="font-size:0.875rem;font-weight:800;color:var(--color-text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.04em;">Organizador</h3>
+              <div style="font-size:0.9375rem;font-weight:700;color:var(--color-night);">\${escapeHtml(ev.venue.name)}</div>
+            </div>
           </div>
         \`;
+
+        // Poner foco inicial en el botón de cierre para accesibilidad
+        sheet.querySelector('.modal-close-btn')?.focus();
       } catch (err) {
         sheet.innerHTML = \`
-          <div class="modal-top-bar">
-            <h3>Error</h3>
-            <button class="modal-close-btn" onclick="closeModal()">✕</button>
+          <div class="modal-body" style="text-align:center;padding:3rem 1rem;">
+            <h3 style="font-size:1.15rem;margin-bottom:0.5rem;color:var(--color-night);">No se pudo cargar la información</h3>
+            <p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:1.25rem;">Comprueba tu conexión e inténtalo de nuevo.</p>
+            <button class="btn-primary-action" data-action="close-modal">Cerrar</button>
           </div>
-          <p class="modal-description">No se pudo cargar la ficha del evento.</p>
         \`;
+        sheet.querySelector('.btn-primary-action')?.focus();
       }
-    };
+    }
+    window.openEventModal = openEventModal;
 
     // ==============================================================================
     // Ficha Modal de Lugar Permanente
     // ==============================================================================
-    window.openPlaceModal = function(placeId) {
-      if (!currentData || !currentData.places) return;
-      const place = currentData.places.find((p) => p.id === placeId);
+    function openPlaceModal(placeId) {
+      if (!currentData) return;
+      const placesList = currentData.places || (currentData.days ? currentData.places : []);
+      const place = (placesList || []).find((p) => p.id === placeId);
       if (!place) return;
+
+      savedScrollY = window.scrollY;
+      document.body.classList.add('modal-open');
 
       const modal = document.getElementById('detail-modal');
       const sheet = document.getElementById('modal-content');
 
       sheet.innerHTML = \`
-        <div class="modal-top-bar">
-          <span class="place-badge" style="position:static">★ Siempre disponible</span>
-          <button class="modal-close-btn" onclick="closeModal()">✕</button>
+        <div class="modal-sticky-header">
+          <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+            <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          </button>
         </div>
 
-        <h2 class="modal-title">\${escapeHtml(place.name)}</h2>
-        <p class="place-highlight" style="font-size:1rem; margin-bottom:1rem;">\${escapeHtml(place.highlight_text)}</p>
+        <div class="modal-hero-cover" style="aspect-ratio:16/9;">
+          \${place.image_url ? \`
+            <img class="modal-hero-img" src="\${escapeHtml(place.image_url)}" alt="\${escapeHtml(place.name)}" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(true));">
+          \` : \`
+            <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
+              <svg style="width:48px;height:48px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            </div>
+          \`}
+        </div>
 
-        \${place.description ? \`<p class="modal-description">\${escapeHtml(place.description)}</p>\` : ''}
+        <div class="modal-body">
+          <span class="place-badge" style="margin-bottom:0.75rem;">★ Siempre disponible</span>
+          <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(place.name)}</h1>
+          <p style="font-size:0.9375rem;color:var(--color-text-muted);margin-bottom:1rem;line-height:1.6;">\${escapeHtml(place.highlight_text)}</p>
+          \${place.description ? \`<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:1.25rem;line-height:1.5;white-space:pre-line;">\${escapeHtml(place.description)}</p>\` : ''}
 
-        <div class="modal-meta-grid">
           \${place.opening_hours_text ? \`
-            <div class="modal-meta-item">
+            <div class="modal-meta-row">
               <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
               <span>Horario: \${escapeHtml(place.opening_hours_text)}</span>
             </div>
           \` : ''}
-          \${place.price_text ? \`
-            <div class="modal-meta-item">
-              <svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
-              <strong style="color:var(--accent-emerald)">Precio: \${escapeHtml(place.price_text)}</strong>
-            </div>
-          \` : ''}
-        </div>
 
-        <div class="modal-actions-container">
           \${place.google_maps_url ? \`
-            <a href="\${escapeHtml(place.google_maps_url)}" target="_blank" rel="noopener" class="btn-full btn-maps">
-              📍 Cómo llegar (Google Maps)
-            </a>
+            <div style="margin-top:1.5rem;">
+              <a href="\${escapeHtml(place.google_maps_url)}" target="_blank" rel="noopener" class="btn-primary-action" style="width:100%;text-decoration:none;">
+                Cómo llegar en Google Maps ↗
+              </a>
+            </div>
           \` : ''}
         </div>
       \`;
 
       modal.classList.add('active');
-    };
+      sheet.querySelector('.modal-close-btn')?.focus();
+    }
+    window.openPlaceModal = openPlaceModal;
 
-    window.openRecurrenceInfo = function(title, venue) {
+    // ==============================================================================
+    // Ficha Modal de Recurrencia
+    // ==============================================================================
+    function openRecurrenceModal(recId) {
+      if (!currentData) return;
+      let rec = null;
+      if (currentData.recurrences) {
+        rec = currentData.recurrences.find((r) => r.id === recId);
+      } else if (currentData.days) {
+        for (const day of currentData.days) {
+          rec = (day.recurrences || []).find((r) => r.id === recId);
+          if (rec) break;
+        }
+      }
+      if (!rec) return;
+
+      savedScrollY = window.scrollY;
+      document.body.classList.add('modal-open');
+
       const modal = document.getElementById('detail-modal');
       const sheet = document.getElementById('modal-content');
 
       sheet.innerHTML = \`
-        <div class="modal-top-bar">
-          <span class="recurrence-badge" style="position:static">↻ Actividad periódica</span>
-          <button class="modal-close-btn" onclick="closeModal()">✕</button>
+        <div class="modal-sticky-header">
+          <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+            <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          </button>
         </div>
-        <h2 class="modal-title">\${escapeHtml(title)}</h2>
-        <p class="modal-description">Plan recurrente habitual en <strong>\${escapeHtml(venue)}</strong>. Consulta directamente con el local los posibles cambios puntuales de programación.</p>
+
+        <div class="modal-body" style="padding-top:1.25rem;">
+          <span class="recurrence-badge" style="margin-bottom:0.75rem;">↻ Actividad periódica</span>
+          <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(rec.title)}</h1>
+          <p style="font-size:0.9375rem;color:var(--color-text-muted);line-height:1.6;margin-bottom:1.5rem;">
+            Plan recurrente habitual en <strong>\${escapeHtml(rec.venue_name)}</strong>. Consulta directamente con el local los posibles cambios puntuales de programación o festivos.
+          </p>
+          <button class="btn-primary-action" style="width:100%;" data-action="close-modal">Entendido</button>
+        </div>
       \`;
       modal.classList.add('active');
-    };
+      sheet.querySelector('.modal-close-btn')?.focus();
+    }
+    window.openRecurrenceModal = openRecurrenceModal;
 
-    window.closeModal = function() {
-      document.getElementById('detail-modal').classList.remove('active');
-    };
-
-    window.closeModalOnBackdrop = function(e) {
-      if (e.target.id === 'detail-modal') {
-        window.closeModal();
+    // ==============================================================================
+    // Cierre de Modal y Gestión de Foco
+    // ==============================================================================
+    function closeModal() {
+      const modal = document.getElementById('detail-modal');
+      modal.classList.remove('active');
+      document.body.classList.remove('modal-open');
+      window.scrollTo(0, savedScrollY);
+      activeModalEventId = null;
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
       }
-    };
+    }
+    window.closeModal = closeModal;
 
     // ==============================================================================
     // Controladores de interfaz y navegación
     // ==============================================================================
-    window.switchView = function(view) {
+    function switchView(view) {
       currentView = view;
       document.querySelectorAll('.time-tab').forEach((el) => el.classList.remove('active'));
 
       if (view === 'today') {
         document.getElementById('tab-today').classList.add('active');
         selectedDate = getTodayDateString();
-        document.getElementById('calendar-label').innerText = 'Fecha';
+        document.getElementById('calendar-label').innerText = 'Calendario';
+      } else if (view === 'tomorrow') {
+        document.getElementById('tab-tomorrow').classList.add('active');
+        selectedDate = getTomorrowDateString();
+        document.getElementById('calendar-label').innerText = 'Calendario';
       } else if (view === 'weekend') {
         document.getElementById('tab-weekend').classList.add('active');
-        document.getElementById('calendar-label').innerText = 'Fecha';
+        document.getElementById('calendar-label').innerText = 'Calendario';
       } else if (view === 'calendar') {
         document.getElementById('tab-calendar').classList.add('active');
       }
 
       loadData();
-    };
+    }
+    window.switchView = switchView;
 
-    window.onDatePicked = function(pickedDate) {
-      if (!pickedDate) return;
-      selectedDate = pickedDate;
-      currentView = 'calendar';
-      document.querySelectorAll('.time-tab').forEach((el) => el.classList.remove('active'));
-      document.getElementById('tab-calendar').classList.add('active');
-      
-      const [y, m, d] = pickedDate.split('-');
-      document.getElementById('calendar-label').innerText = \`\${d}/\${m}\`;
-      loadData();
-    };
-
-    window.setFilter = function(filter) {
+    function setFilter(filter) {
       currentFilter = filter;
-      document.querySelectorAll('.filter-chip').forEach((el) => {
-        el.classList.toggle('active', el.dataset.filter === filter);
+      document.querySelectorAll('.cat-btn').forEach((el) => {
+        el.classList.toggle('active', el.dataset.cat === filter);
       });
 
       if (currentView === 'weekend') {
@@ -1656,12 +2163,108 @@ app.get('/', (c) => {
       } else {
         renderDayAgenda();
       }
-    };
+    }
+    window.setFilter = setFilter;
 
     function getDayNameFromNumber(dow) {
       const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
       return days[dow] || 'día';
     }
+
+    // ==============================================================================
+    // Delegación Segura de Clics (Sin interpolar JavaScript inline)
+    // ==============================================================================
+    document.addEventListener('click', (e) => {
+      // 1. Métricas en enlaces dentro del modal
+      const metricEl = e.target.closest('[data-metric]');
+      if (metricEl) {
+        const type = metricEl.dataset.metric;
+        const evId = metricEl.dataset.eventId;
+        const promoId = metricEl.dataset.promoId ? Number(metricEl.dataset.promoId) : null;
+        if (evId && type) {
+          trackMetric(Number(evId), type, promoId);
+        }
+      }
+
+      // 2. Acciones del modal o lista
+      const trigger = e.target.closest('[data-action]');
+      if (!trigger) return;
+
+      const action = trigger.dataset.action;
+
+      if (action === 'open-event') {
+        lastFocusedElement = trigger;
+        openEventModal(Number(trigger.dataset.id));
+      } else if (action === 'open-place') {
+        lastFocusedElement = trigger;
+        openPlaceModal(Number(trigger.dataset.id));
+      } else if (action === 'open-recurrence') {
+        lastFocusedElement = trigger;
+        openRecurrenceModal(Number(trigger.dataset.id));
+      } else if (action === 'close-modal') {
+        closeModal();
+      } else if (action === 'switch-view') {
+        switchView(trigger.dataset.view);
+      } else if (action === 'set-cat') {
+        setFilter(trigger.dataset.cat);
+      } else if (action === 'clear-filters') {
+        clearAllFilters();
+      } else if (action === 'remove-cat-filter') {
+        setFilter('all');
+      } else if (action === 'reload-data') {
+        loadData();
+      }
+    });
+
+    // Cierre al pulsar sobre el fondo oscurecido del modal
+    document.getElementById('detail-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'detail-modal') {
+        closeModal();
+      }
+    });
+
+    // Selector de fecha nativo en calendario
+    document.getElementById('date-input').addEventListener('change', (e) => {
+      const pickedDate = e.target.value;
+      if (!pickedDate) return;
+      selectedDate = pickedDate;
+      currentView = 'calendar';
+      document.querySelectorAll('.time-tab').forEach((el) => el.classList.remove('active'));
+      document.getElementById('tab-calendar').classList.add('active');
+
+      const [y, m, d] = pickedDate.split('-');
+      document.getElementById('calendar-label').innerText = \`\${d}/\${m}\`;
+      loadData();
+    });
+
+    // ==============================================================================
+    // Accesibilidad: Tecla Escape y Atrapado de Foco (Focus Trap)
+    // ==============================================================================
+    document.addEventListener('keydown', (e) => {
+      const modal = document.getElementById('detail-modal');
+      if (!modal.classList.contains('active')) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
 
     // ==============================================================================
     // Registro de Service Worker PWA
@@ -1688,17 +2291,20 @@ app.get('/', (c) => {
 // Puerto y arranque del servidor web
 // ==============================================================================
 const port = Number(process.env.PORT || 3000);
+const hostname = process.env.HOST || '127.0.0.1';
 
 console.log(
   JSON.stringify({
     timestamp: new Date().toISOString(),
     level: 'info',
-    message: `Servidor web PWA VayaPlan iniciando en puerto ${port}`,
+    message: `Servidor web PWA VayaPlan iniciando en puerto ${port} (${hostname})`,
     port,
+    hostname,
   })
 );
 
 export default {
   port,
+  hostname,
   fetch: app.fetch,
 };
