@@ -136,3 +136,50 @@ export function isValidDateString(dateStr: string): boolean {
   const parsed = new Date(`${dateStr}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime());
 }
+
+/**
+ * Normaliza y calcula el día editorial (YYYY-MM-DD) para un timestamp ISO en zona horaria Europe/Madrid.
+ * Regla de negocio VayaPlan:
+ * - Si cae entre las 00:00 y las 05:59 (hora de Palencia/Madrid, Europe/Madrid), el día editorial es la fecha del día anterior.
+ * - Si cae a partir de las 06:00, el día editorial es la fecha del mismo día natural.
+ * Evalúa explícitamente la hora local en Europe/Madrid sin depender de la timezone del servidor.
+ */
+export function computeEditorialDate(startTimeIso: string, timeZone: string = 'Europe/Madrid'): string {
+  const date = new Date(startTimeIso);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Fecha inválida para computeEditorialDate: ${startTimeIso}`);
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+
+  const parts = formatter.formatToParts(date);
+  const partMap: Record<string, string> = {};
+  for (const p of parts) {
+    partMap[p.type] = p.value;
+  }
+
+  const year = parseInt(partMap.year, 10);
+  const month = parseInt(partMap.month, 10);
+  const day = parseInt(partMap.day, 10);
+  const hour = parseInt(partMap.hour, 10);
+
+  // Si la hora local en Europe/Madrid es anterior a las 06:00, pertenece a la jornada editorial del día anterior
+  const localUtcDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  if (hour < 6) {
+    localUtcDate.setUTCDate(localUtcDate.getUTCDate() - 1);
+  }
+
+  const y = localUtcDate.getUTCFullYear();
+  const m = String(localUtcDate.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(localUtcDate.getUTCDate()).padStart(2, '0');
+
+  return `${y}-${m}-${d}`;
+}

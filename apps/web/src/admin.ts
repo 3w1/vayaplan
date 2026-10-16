@@ -411,6 +411,125 @@ export function renderAdminHtml(): string {
       color: var(--text-muted);
       margin-top: 0.25rem;
     }
+
+    /* Subfiltros y Curación */
+    .curation-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.875rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 0.25rem;
+    }
+    .curation-tabs::-webkit-scrollbar { display: none; }
+    .curation-tab-btn {
+      background: #162035;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+      font-weight: 600;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .curation-tab-btn:hover { background: #1e293b; color: #ffffff; }
+    .curation-tab-btn.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #3b82f6;
+    }
+    .badge-unverified {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border: 1px solid #f59e0b;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .btn-reassign {
+      background: #1e3a8a;
+      color: #93c5fd;
+      border-color: #2563eb;
+    }
+    .btn-reassign:hover { background: #2563eb; color: #ffffff; }
+    .venue-badge {
+      font-size: 0.6875rem;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid var(--border);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+    }
+    .badge-tag {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+    }
+    .collision-box {
+      margin-top: 0.5rem;
+      padding: 0.625rem 0.75rem;
+      border-radius: 6px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      font-size: 0.8125rem;
+    }
+    .collision-title {
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: #fecaca;
+    }
+    .collision-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-top: 0.35rem;
+    }
+    .btn-publish-force {
+      background: #065f46;
+      color: #6ee7b7;
+      border-color: #047857;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      border: 1px solid #047857;
+    }
+    .btn-publish-force:hover { background: #047857; color: #ffffff; }
+    .venue-list-item {
+      padding: 0.65rem 0.875rem;
+      border-bottom: 1px solid #1a243c;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      transition: background 0.12s ease;
+    }
+    .venue-list-item:hover { background: #18223a; }
+    .venue-list-item.selected {
+      background: #1e3a8a;
+      border-left: 3px solid #38bdf8;
+    }
   </style>
 </head>
 <body>
@@ -467,9 +586,25 @@ export function renderAdminHtml(): string {
 
       <!-- SECCIÓN 1: EVENTOS -->
       <section id="section-events">
+        <!-- Subfiltros Rápidos de Curación -->
+        <div class="curation-tabs">
+          <button id="subfilter-all" class="curation-tab-btn active" onclick="setCurationSubfilter('all')">
+            Todos los eventos
+          </button>
+          <button id="subfilter-tentative-all" class="curation-tab-btn" onclick="setCurationSubfilter('tentative_all')">
+            📝 Borradores (Todos) <span id="curation-badge-all" class="badge-count" style="display:none; background:#3b82f6;">0</span>
+          </button>
+          <button id="subfilter-unassigned" class="curation-tab-btn" onclick="setCurationSubfilter('tentative_unassigned')">
+            ⚠️ Locales por verificar (9999) <span id="curation-badge-unassigned" class="badge-count" style="display:none; background:#f59e0b;">0</span>
+          </button>
+          <button id="subfilter-collisions" class="curation-tab-btn" onclick="setCurationSubfilter('tentative_collisions')">
+            💥 Posibles colisiones <span id="curation-badge-collisions" class="badge-count" style="display:none; background:#ef4444;">0</span>
+          </button>
+        </div>
+
         <div class="toolbar">
           <div class="filter-group">
-            <select id="event-filter-status" onchange="loadAdminEvents()">
+            <select id="event-filter-status" onchange="onManualStatusFilterChange()">
               <option value="">Todos los estados</option>
               <option value="tentative">Borradores Tentativos (WhatsApp/Web)</option>
               <option value="published">Publicados</option>
@@ -488,8 +623,8 @@ export function renderAdminHtml(): string {
             <thead>
               <tr>
                 <th>Estado</th>
-                <th>Evento / Local</th>
-                <th>Fecha / Hora</th>
+                <th>Evento / Local / Colisión</th>
+                <th>Fecha / Hora (Madrid)</th>
                 <th>Precio</th>
                 <th>Fuente</th>
                 <th>Acciones</th>
@@ -729,6 +864,81 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
+  <!-- MODAL: REASIGNACIÓN RÁPIDA DE LOCAL -->
+  <div id="modal-reassign-venue" class="modal-overlay">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 id="modal-reassign-title">Asignar Local del Censo</h3>
+        <button class="modal-close" onclick="closeModal('modal-reassign-venue')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="reassign-event-id">
+        <div id="reassign-event-info" style="background:#162035; padding:0.75rem 1rem; border-radius:8px; border:1px solid var(--border); margin-bottom:1rem; font-size:0.875rem;">
+        </div>
+
+        <div class="form-grid two-cols" style="margin-bottom:0.75rem;">
+          <div class="form-group">
+            <label>Buscar local por nombre (normalizado)</label>
+            <input type="text" id="reassign-search" placeholder="Ej: Teatro Principal, Bar Alaska..." oninput="filterReassignVenues()">
+          </div>
+          <div class="form-group">
+            <label>Filtrar por Zona</label>
+            <select id="reassign-filter-zone" onchange="filterReassignVenues()">
+              <option value="">Todas las zonas</option>
+              <option value="seminario">Seminario</option>
+              <option value="centro_puebla">Centro / Puebla</option>
+              <option value="salon">El Salón</option>
+              <option value="otros">Otros recintos</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-grid two-cols" style="margin-bottom:1rem;">
+          <div class="form-group">
+            <label>Filtrar por Categoría</label>
+            <select id="reassign-filter-category" onchange="filterReassignVenues()">
+              <option value="">Todas las categorías</option>
+              <option value="bar">Bar</option>
+              <option value="bar_musical">Bar Musical</option>
+              <option value="disco_bar">Disco Bar</option>
+              <option value="discoteca">Discoteca</option>
+              <option value="pub">Pub</option>
+              <option value="sala_conciertos">Sala de conciertos</option>
+              <option value="teatro">Teatro</option>
+              <option value="cine">Cine</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+          <div class="form-group" style="display:flex; align-items:flex-end;">
+            <button type="button" class="btn-sm" style="background:#1e3a8a; color:#93c5fd; border:1px solid #2563eb; width:100%; height:38px;" onclick="openNewVenueFromReassign()">+ Crear Nuevo Local</button>
+          </div>
+        </div>
+
+        <div style="font-size:0.8125rem; color:var(--text-muted); margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+          <span>Selecciona un local del censo:</span>
+          <span id="reassign-results-count">56 locales disponibles</span>
+        </div>
+
+        <div id="reassign-venues-list" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #0b1120;">
+        </div>
+
+        <div id="reassign-selected-preview" style="display:none; margin-top:1rem; padding:0.875rem; background:#0f2942; border:1px solid #38bdf8; border-radius:8px;">
+          <div style="font-size:0.75rem; text-transform:uppercase; color:#38bdf8; font-weight:700;">Local Seleccionado para Asignar:</div>
+          <div id="reassign-preview-name" style="font-size:1rem; font-weight:700; color:#ffffff; margin-top:0.25rem;"></div>
+          <div id="reassign-preview-address" style="font-size:0.8125rem; color:#cbd5e1; margin-top:0.25rem;"></div>
+          <div id="reassign-preview-meta" style="font-size:0.75rem; color:#94a3b8; margin-top:0.25rem;"></div>
+        </div>
+        <input type="hidden" id="reassign-selected-id">
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:0.75rem; color:#94a3b8;">⚠️ Asigna el local sin publicar automáticamente.</span>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-reassign-venue')">Cancelar</button>
+          <button type="button" id="btn-save-reassign" class="btn-primary" disabled onclick="saveReassignVenue()">Guardar Asignación</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: NUEVO LOCAL (VENUE) -->
   <div id="modal-venue" class="modal-overlay">
     <div class="modal-card">
@@ -931,6 +1141,39 @@ export function renderAdminHtml(): string {
     // Estado y Helpers del Panel de Curación
     // ==============================================================================
     let cachedVenues = [];
+    let currentLoadedEvents = [];
+    let curationSubfilter = 'all';
+    let reassignSelectedVenueId = null;
+
+    function formatMadridTime(isoStr) {
+      if (!isoStr) return '—';
+      try {
+        const d = new Date(isoStr);
+        return d.toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hour12: false });
+      } catch {
+        return isoStr.slice(11, 16);
+      }
+    }
+
+    function formatCategory(cat) {
+      const map = {
+        'musica_directo': 'Música Directo',
+        'dj_tardeo': 'DJ & Tardeo',
+        'monologo': 'Monólogo',
+        'cine': 'Cine',
+        'teatro': 'Teatro',
+        'exposicion': 'Exposición',
+        'cultura': 'Cultura',
+      };
+      return map[cat] || cat;
+    }
+
+    function normalizeSearchText(str) {
+      return (str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    }
 
     function getToken() {
       return localStorage.getItem('vp_admin_token') || '';
@@ -1073,6 +1316,85 @@ export function renderAdminHtml(): string {
       } catch {}
     }
 
+    window.setCurationSubfilter = function(filter) {
+      curationSubfilter = filter;
+      const buttons = [
+        { id: 'subfilter-all', key: 'all' },
+        { id: 'subfilter-tentative-all', key: 'tentative_all' },
+        { id: 'subfilter-unassigned', key: 'tentative_unassigned' },
+        { id: 'subfilter-collisions', key: 'tentative_collisions' },
+      ];
+
+      buttons.forEach(b => {
+        const el = document.getElementById(b.id);
+        if (el) el.classList.toggle('active', b.key === filter);
+      });
+
+      const statusSelect = document.getElementById('event-filter-status');
+      if (filter === 'all') {
+        statusSelect.value = '';
+      } else {
+        statusSelect.value = 'tentative';
+      }
+      loadAdminEvents();
+    };
+
+    window.onManualStatusFilterChange = function() {
+      const val = document.getElementById('event-filter-status').value;
+      if (val === 'tentative') {
+        curationSubfilter = 'tentative_all';
+      } else {
+        curationSubfilter = 'all';
+      }
+      const buttons = [
+        { id: 'subfilter-all', key: 'all' },
+        { id: 'subfilter-tentative-all', key: 'tentative_all' },
+        { id: 'subfilter-unassigned', key: 'tentative_unassigned' },
+        { id: 'subfilter-collisions', key: 'tentative_collisions' },
+      ];
+      buttons.forEach(b => {
+        const el = document.getElementById(b.id);
+        if (el) el.classList.toggle('active', b.key === curationSubfilter);
+      });
+      loadAdminEvents();
+    };
+
+    async function updateCurationCounts() {
+      try {
+        const res = await apiFetch('/api/v1/admin/events?status=tentative');
+        const data = await res.json();
+        const drafts = data.events || [];
+
+        const totalTentative = drafts.length;
+        const totalUnassigned = drafts.filter(e => e.venue_id === 9999).length;
+        const totalCollisions = drafts.filter(e => Boolean(e.collision_alert)).length;
+
+        const badgeTentative = document.getElementById('badge-tentative');
+        if (badgeTentative) {
+          badgeTentative.innerText = totalTentative;
+          badgeTentative.style.display = totalTentative > 0 ? 'inline-block' : 'none';
+        }
+
+        const bAll = document.getElementById('curation-badge-all');
+        if (bAll) {
+          bAll.innerText = totalTentative;
+          bAll.style.display = totalTentative > 0 ? 'inline-block' : 'none';
+        }
+
+        const bUnassigned = document.getElementById('curation-badge-unassigned');
+        if (bUnassigned) {
+          bUnassigned.innerText = totalUnassigned;
+          bUnassigned.style.display = totalUnassigned > 0 ? 'inline-block' : 'none';
+        }
+
+        const bCollisions = document.getElementById('curation-badge-collisions');
+        if (bCollisions) {
+          bCollisions.innerText = totalCollisions;
+          bCollisions.style.display = totalCollisions > 0 ? 'inline-block' : 'none';
+        }
+      } catch {}
+    }
+
     async function loadAdminEvents() {
       const tbody = document.getElementById('events-tbody');
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando...</td></tr>';
@@ -1084,65 +1406,118 @@ export function renderAdminHtml(): string {
       if (status) url += 'status=' + encodeURIComponent(status) + '&';
       if (date) url += 'date=' + encodeURIComponent(date) + '&';
 
+      if (curationSubfilter === 'tentative_unassigned') {
+        url += 'venue_id=9999&';
+      } else if (curationSubfilter === 'tentative_collisions') {
+        url += 'has_collision=true&';
+      }
+
       try {
         const res = await apiFetch(url);
         const data = await res.json();
         const events = data.events || [];
+        currentLoadedEvents = events;
 
-        // Conteo de tentativos para badge
-        const tentativeCount = events.filter(e => e.status === 'tentative').length;
-        const badgeTentative = document.getElementById('badge-tentative');
-        if (tentativeCount > 0) {
-          badgeTentative.innerText = tentativeCount;
-          badgeTentative.style.display = 'inline-block';
-        } else {
-          badgeTentative.style.display = 'none';
-        }
+        updateCurationCounts();
 
         if (events.length === 0) {
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No se encontraron eventos con los filtros seleccionados.</td></tr>';
           return;
         }
 
-        tbody.innerHTML = events.map(e => \`
-          <tr>
-            <td><span class="status-pill status-\${e.status}">\${e.status}</span></td>
-            <td>
-              <strong>\${escapeHtml(e.title)}</strong><br>
-              <small style="color:#94a3b8;">📍 \${escapeHtml(e.venue_name)}</small>
-            </td>
-            <td>
-              <span>\${e.editorial_date}</span><br>
-              <small style="color:var(--accent-blue);">⏰ \${e.start_time.slice(11, 16)}</small>
-            </td>
-            <td>\${e.is_free ? '<span style="color:var(--emerald)">Gratis</span>' : (e.price_cents/100).toFixed(2).replace('.', ',') + ' €'}</td>
-            <td><small>\${escapeHtml(e.source_type || 'manual')}</small></td>
-            <td>
-              <div class="action-group">
-                \${e.status === 'tentative' ? \`
-                  <button class="btn-act btn-publish" onclick="publishEvent(\${e.id})">✓ Publicar</button>
-                  <button class="btn-act" onclick="markDuplicate(\${e.id})">⧉ Duplicado</button>
+        tbody.innerHTML = events.map(e => {
+          const isTentative = e.status === 'tentative';
+          const isUnassigned = e.venue_id === 9999;
+          const hasCollision = Boolean(e.collision_alert);
+
+          return \`
+            <tr id="event-row-\${e.id}">
+              <td><span class="status-pill status-\${e.status}">\${e.status}</span></td>
+              <td>
+                <div style="font-weight:700; font-size:0.9375rem; color:#ffffff;">\${escapeHtml(e.title)}</div>
+                <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.25rem;">
+                  <span class="badge-tag">\${formatCategory(e.category)}</span>
+                </div>
+                \${isUnassigned ? \`
+                  <div style="margin-top:0.4rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <span class="badge-unverified">⚠️ Local por verificar</span>
+                    <button class="btn-sm btn-reassign" onclick="openReassignModal(\${e.id})">🏢 Asignar Local</button>
+                  </div>
+                \` : \`
+                  <div style="margin-top:0.4rem; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; font-size:0.8125rem;">
+                    <span>📍 <strong>\${escapeHtml(e.venue_name)}</strong></span>
+                    <span class="venue-badge">Zona: \${escapeHtml(e.venue_zone || 'otros')}</span>
+                    <span class="venue-badge">Cat: \${escapeHtml(e.venue_category || 'general')}</span>
+                    <button class="btn-act" style="padding:0.15rem 0.4rem; font-size:0.6875rem;" onclick="openReassignModal(\${e.id})" title="Reasignar local">✏️ Cambiar</button>
+                  </div>
+                \`}
+                \${hasCollision ? \`
+                  <div class="collision-box">
+                    <div class="collision-title">
+                      ⚠️ <strong>Posible colisión con:</strong> \${escapeHtml(e.collision_alert.colliding_title)} (\${formatMadridTime(e.collision_alert.colliding_start_time)}) — Diferencia: \${e.collision_alert.diff_minutes} min
+                    </div>
+                    <div class="collision-actions">
+                      \${!isUnassigned && isTentative ? \`
+                        <button class="btn-publish-force" onclick="publishEvent(\${e.id}, \${e.venue_id})">✓ Publicar de todos modos</button>
+                      \` : ''}
+                      <button class="btn-act" onclick="archiveEvent(\${e.id})">📦 Descartar / Archivar</button>
+                      <button class="btn-act" onclick="markDuplicate(\${e.id})">⧉ Marcar duplicado</button>
+                      <button class="btn-act" onclick="editEvent(\${e.id})">✏️ Ajustar hora</button>
+                    </div>
+                  </div>
                 \` : ''}
-                \${e.status === 'published' ? \`
-                  <button class="btn-act btn-cancel" onclick="cancelEvent(\${e.id})">✕ Cancelar</button>
-                  <button class="btn-act" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
-                \` : ''}
-                <button class="btn-act btn-metrics" onclick="viewMetrics(\${e.id})">📊</button>
-                <button class="btn-act" onclick="editEvent(\${e.id})">✏️</button>
-                <button class="btn-act" onclick="deleteEvent(\${e.id})" style="color:#f87171;">🗑️</button>
-              </div>
-            </td>
-          </tr>
-        \`).join('');
+              </td>
+              <td>
+                <div>📅 <strong>\${e.editorial_date}</strong></div>
+                <div style="margin-top:0.2rem;">⏰ <span style="color:var(--accent-blue); font-weight:600;">\${formatMadridTime(e.start_time)}</span> <small style="color:#94a3b8;">(Madrid)</small></div>
+              </td>
+              <td>\${e.is_free ? '<span style="color:var(--emerald); font-weight:700;">Gratis</span>' : (e.price_cents/100).toFixed(2).replace('.', ',') + ' €'}</td>
+              <td>
+                <div><small style="color:#94a3b8;">\${escapeHtml(e.source_type || 'manual')}</small></div>
+                \${e.source_url ? \`<a href="\${escapeHtml(e.source_url)}" target="_blank" rel="noopener" class="link-source" style="font-size:0.75rem; color:var(--accent-blue); text-decoration:none; display:inline-block; margin-top:0.2rem;">🔗 Fuente oficial ↗</a>\` : ''}
+              </td>
+              <td>
+                <div class="action-group">
+                  \${isTentative ? \`
+                    <button class="btn-act btn-publish" onclick="publishEvent(\${e.id}, \${e.venue_id})">✓ Publicar</button>
+                    <button class="btn-act btn-reassign" onclick="openReassignModal(\${e.id})">🏢 Asignar</button>
+                    <button class="btn-act" onclick="markDuplicate(\${e.id})">⧉ Duplicado</button>
+                    <button class="btn-act" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
+                  \` : ''}
+                  \${e.status === 'published' ? \`
+                    <button class="btn-act btn-cancel" onclick="cancelEvent(\${e.id})">✕ Cancelar</button>
+                    <button class="btn-act" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
+                  \` : ''}
+                  <button class="btn-act btn-metrics" onclick="viewMetrics(\${e.id})">📊</button>
+                  <button class="btn-act" onclick="editEvent(\${e.id})">✏️</button>
+                  <button class="btn-act" onclick="deleteEvent(\${e.id})" style="color:#f87171;">🗑️</button>
+                </div>
+              </td>
+            </tr>
+          \`;
+        }).join('');
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#ef4444;">Error al cargar eventos.</td></tr>';
       }
     }
 
-    window.publishEvent = async function(id) {
+    window.publishEvent = async function(id, venueId) {
+      if (venueId === 9999) {
+        alert('No se puede publicar un evento con Local por verificar (venue 9999). Asigna un local del censo primero.');
+        return;
+      }
       if (!confirm('¿Confirmar publicación del evento? Pasará a ser visible en la agenda pública.')) return;
-      await apiFetch(\`/api/v1/admin/events/\${id}/publish\`, { method: 'POST' });
-      loadAdminEvents();
+      try {
+        const res = await apiFetch(\`/api/v1/admin/events/\${id}/publish\`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.message || 'Error al publicar evento.');
+          return;
+        }
+        await loadAdminEvents();
+      } catch (err) {
+        alert(err.message || 'Error al conectar con el servidor.');
+      }
     };
 
     window.cancelEvent = async function(id) {
@@ -1165,6 +1540,145 @@ export function renderAdminHtml(): string {
       if (!confirm('¿Estás seguro de eliminar este evento definitivamente?')) return;
       await apiFetch(\`/api/v1/admin/events/\${id}\`, { method: 'DELETE' });
       loadAdminEvents();
+    };
+
+    // ==============================================================================
+    // Lógica del Modal de Reasignación Rápida de Local
+    // ==============================================================================
+    window.openReassignModal = async function(eventId) {
+      let ev = currentLoadedEvents.find(e => e.id === eventId);
+      if (!ev) {
+        try {
+          const res = await apiFetch(\`/api/v1/admin/events/\${eventId}\`);
+          const data = await res.json();
+          ev = data.event;
+        } catch {}
+      }
+      if (!ev) return;
+
+      document.getElementById('reassign-event-id').value = ev.id;
+      document.getElementById('reassign-event-info').innerHTML = \`
+        <div style="font-weight:700; color:#fff; font-size:1rem;">\${escapeHtml(ev.title)}</div>
+        <div style="display:flex; gap:1rem; margin-top:0.35rem; color:#94a3b8; font-size:0.8125rem; flex-wrap:wrap;">
+          <span>📅 Fecha: <strong>\${ev.editorial_date}</strong></span>
+          <span>⏰ Hora: <strong>\${formatMadridTime(ev.start_time)}</strong></span>
+          <span>Local actual: \${ev.venue_id === 9999 ? '<span style="color:#fbbf24; font-weight:700;">⚠️ Local por verificar (9999)</span>' : '<strong>' + escapeHtml(ev.venue_name) + '</strong>'}</span>
+        </div>
+      \`;
+
+      document.getElementById('reassign-search').value = '';
+      document.getElementById('reassign-filter-zone').value = '';
+      document.getElementById('reassign-filter-category').value = '';
+      reassignSelectedVenueId = null;
+      document.getElementById('reassign-selected-id').value = '';
+      document.getElementById('reassign-selected-preview').style.display = 'none';
+      document.getElementById('btn-save-reassign').disabled = true;
+
+      filterReassignVenues();
+      openModal('modal-reassign-venue');
+    };
+
+    window.filterReassignVenues = function() {
+      const query = normalizeSearchText(document.getElementById('reassign-search').value.trim());
+      const zone = document.getElementById('reassign-filter-zone').value;
+      const category = document.getElementById('reassign-filter-category').value;
+
+      // EXCLUSIÓN ESTRICTA: El venue 9999 nunca se puede seleccionar
+      const validVenues = cachedVenues.filter(v => v.id !== 9999);
+
+      const filtered = validVenues.filter(v => {
+        if (zone && v.zone !== zone) return false;
+        if (category && v.category !== category) return false;
+        if (query) {
+          const normName = normalizeSearchText(v.name);
+          const normAddress = normalizeSearchText(v.address);
+          if (!normName.includes(query) && !normAddress.includes(query)) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('reassign-results-count').innerText = \`\${filtered.length} locales disponibles\`;
+
+      const listContainer = document.getElementById('reassign-venues-list');
+      if (filtered.length === 0) {
+        listContainer.innerHTML = \`
+          <div style="padding:1.5rem; text-align:center; color:#94a3b8; font-size:0.875rem;">
+            No se encontró ningún local con estos filtros.<br>
+            <button type="button" class="btn-sm" style="margin-top:0.75rem; background:#1e3a8a; color:#93c5fd; border:1px solid #2563eb;" onclick="openNewVenueFromReassign()">+ Crear nuevo local en el censo</button>
+          </div>
+        \`;
+        return;
+      }
+
+      listContainer.innerHTML = filtered.map(v => {
+        const isSelected = reassignSelectedVenueId === v.id;
+        return \`
+          <div class="venue-list-item \${isSelected ? 'selected' : ''}" onclick="selectReassignVenue(\${v.id})">
+            <div>
+              <div style="font-weight:700; color:#fff;">\${escapeHtml(v.name)}</div>
+              <div style="font-size:0.75rem; color:#94a3b8; margin-top:0.15rem;">📍 \${escapeHtml(v.address || 'Sin dirección')}</div>
+            </div>
+            <div style="text-align:right; display:flex; flex-direction:column; gap:0.25rem; align-items:flex-end;">
+              <span class="venue-badge">Zona: \${escapeHtml(v.zone || 'otros')}</span>
+              <span class="venue-badge">Cat: \${escapeHtml(v.category || 'general')}</span>
+            </div>
+          </div>
+        \`;
+      }).join('');
+    };
+
+    window.selectReassignVenue = function(venueId) {
+      if (venueId === 9999) {
+        alert('Prohibido seleccionar el local provisional 9999.');
+        return;
+      }
+      const v = cachedVenues.find(item => item.id === venueId);
+      if (!v) return;
+
+      reassignSelectedVenueId = venueId;
+      document.getElementById('reassign-selected-id').value = venueId;
+
+      const preview = document.getElementById('reassign-selected-preview');
+      preview.style.display = 'block';
+      document.getElementById('reassign-preview-name').innerText = v.name;
+      document.getElementById('reassign-preview-address').innerText = '📍 ' + (v.address || 'Sin dirección especificada');
+      document.getElementById('reassign-preview-meta').innerText = \`Zona: \${v.zone || 'otros'} • Categoría: \${v.category || 'general'}\`;
+
+      document.getElementById('btn-save-reassign').disabled = false;
+      filterReassignVenues();
+    };
+
+    window.saveReassignVenue = async function() {
+      const eventId = Number(document.getElementById('reassign-event-id').value);
+      const venueId = Number(document.getElementById('reassign-selected-id').value);
+
+      if (!venueId || venueId === 9999) {
+        alert('Prohibido asignar venue provisional 9999. Selecciona un local válido del censo.');
+        return;
+      }
+
+      try {
+        const res = await apiFetch(\`/api/v1/admin/events/\${eventId}\`, {
+          method: 'PATCH',
+          body: JSON.stringify({ venue_id: venueId }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          alert(err.message || 'Error al reasignar local.');
+          return;
+        }
+
+        closeModal('modal-reassign-venue');
+        await loadAdminEvents();
+      } catch (err) {
+        alert(err.message || 'Error al conectar con el servidor.');
+      }
+    };
+
+    window.openNewVenueFromReassign = function() {
+      closeModal('modal-reassign-venue');
+      openNewVenueModal();
     };
 
     window.openNewEventModal = function() {

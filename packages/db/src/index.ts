@@ -1,4 +1,7 @@
-import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
+import { Pool, types, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
+
+// Retornar columnas tipo DATE (OID 1082) como string 'YYYY-MM-DD' sin conversión a Date local
+types.setTypeParser(1082, (val: string) => val);
 
 let poolInstance: Pool | null = null;
 
