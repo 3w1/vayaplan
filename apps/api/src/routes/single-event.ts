@@ -56,7 +56,11 @@ singleEventRoutes.get('/events/:id', async (c) => {
       p.status AS promotion_status
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
-    LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
+    LEFT JOIN promotions p ON p.event_id = e.id 
+      AND p.city_id = e.city_id
+      AND p.status IN ('active', 'scheduled')
+      AND p.starts_at <= now()
+      AND p.ends_at > now()
     WHERE e.id = $1
     LIMIT 1;
   `;

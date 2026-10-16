@@ -101,7 +101,11 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       p.status AS promotion_status
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
-    LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
+    LEFT JOIN promotions p ON p.event_id = e.id 
+      AND p.city_id = e.city_id
+      AND p.status IN ('active', 'scheduled')
+      AND p.starts_at <= now()
+      AND p.ends_at > now()
     WHERE e.city_id = $1 
       AND e.editorial_date = $2 
       AND e.status = 'published'
@@ -112,7 +116,7 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
     eventsSql += ` AND e.category = $3`;
   }
 
-  eventsSql += ` ORDER BY e.start_time ASC;`;
+  eventsSql += ` ORDER BY (CASE WHEN p.id IS NOT NULL THEN 0 ELSE 1 END) ASC, e.start_time ASC;`;
 
   const eventsResult = await query(eventsSql, eventQueryParams);
 
