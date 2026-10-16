@@ -606,14 +606,14 @@ app.get('/', (c) => {
       top: 0.875rem;
       left: 0.875rem;
       z-index: 2;
-      background-color: var(--color-amber);
+      background-color: rgba(255, 255, 255, 0.95);
       color: var(--color-night);
       font-size: 0.6875rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      padding: 0.25rem 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 0.2rem 0.55rem;
       border-radius: var(--radius-pill);
+      box-shadow: 0 2px 6px rgba(11, 15, 59, 0.15);
     }
 
     .hero-content {
@@ -693,6 +693,15 @@ app.get('/', (c) => {
       border-color: rgba(239, 68, 68, 0.4);
       background-color: rgba(239, 68, 68, 0.03);
       opacity: 0.85;
+    }
+    .card-compact.is-promoted {
+      border-color: rgba(108, 59, 255, 0.35);
+      background: linear-gradient(180deg, #FFFFFF 0%, #FAF8FF 100%);
+      box-shadow: 0 2px 8px rgba(108, 59, 255, 0.05);
+    }
+    .card-compact.is-promoted:hover {
+      border-color: var(--color-primary);
+      box-shadow: 0 4px 14px rgba(108, 59, 255, 0.12);
     }
 
     .card-thumb {
@@ -784,15 +793,15 @@ app.get('/', (c) => {
     }
 
     /* Badges de Estado, Recurrencias y Lugares */
-    .promoted-tag-mini {
+    .badge-destacado {
       display: inline-block;
-      background: #FFF9E6;
-      color: #B45309;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
       font-size: 0.6875rem;
-      font-weight: 800;
-      padding: 0.15rem 0.45rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
       border-radius: var(--radius-pill);
-      margin-bottom: 0.2rem;
+      margin-bottom: 0.25rem;
     }
 
     .cancelled-tag {
@@ -1593,12 +1602,12 @@ app.get('/', (c) => {
         if (promotedEvent) {
           const hasImage = Boolean(promotedEvent.image_url);
           promotedContainer.innerHTML = \`
-            <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${promotedEvent.id}" aria-label="Destacado promocionado: \${escapeHtml(promotedEvent.title)}">
+            <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${promotedEvent.id}" aria-label="Evento destacado: \${escapeHtml(promotedEvent.title)}">
               \${hasImage ? \`
                 <img class="hero-img" src="\${escapeHtml(promotedEvent.image_url)}" alt="\${escapeHtml(promotedEvent.title)}" loading="eager" onerror="this.onerror=null;const card=this.closest('.promoted-hero-card');if(card){card.classList.add('no-image');}this.remove();">
                 <div class="hero-overlay"></div>
               \` : ''}
-              <span class="hero-badge-tag">★ Promocionado</span>
+              <span class="hero-badge-tag">Destacado</span>
               <div class="hero-content">
                 <h3 class="hero-title">\${escapeHtml(promotedEvent.title)}</h3>
                 <div class="hero-meta">
@@ -1662,12 +1671,13 @@ app.get('/', (c) => {
       // 2. Tarjetas compactas de eventos (botones semánticos accesibles)
       for (const ev of listEvents) {
         const isCancelled = ev.status === 'cancelled';
+        const isPromoted = Boolean(ev.promotion) && !isCancelled;
         html += \`
-          <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+          <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
             \${renderEventThumbnail(ev.image_url, ev.title)}
             <div class="card-info">
               <div>
-                \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+                \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
                 <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
                 <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
               </div>
@@ -1770,12 +1780,13 @@ app.get('/', (c) => {
         // Eventos del día
         for (const ev of filteredEvents) {
           const isCancelled = ev.status === 'cancelled';
+          const isPromoted = Boolean(ev.promotion) && !isCancelled;
           html += \`
-            <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+            <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
               \${renderEventThumbnail(ev.image_url, ev.title)}
               <div class="card-info">
                 <div>
-                  \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+                  \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
                   <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
                   <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
                 </div>
@@ -1928,7 +1939,7 @@ app.get('/', (c) => {
 
           <div class="modal-body">
             <div style="margin-bottom:0.75rem;">
-              \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+              \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="badge-destacado">Destacado</span>' : '')}
             </div>
 
             <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
