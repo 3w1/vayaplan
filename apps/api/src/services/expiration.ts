@@ -51,6 +51,63 @@ export async function runEventExpirationCheck(): Promise<number> {
 }
 
 /**
+ * Tarea periódica de ciclo de vida de promociones
+ * - Pasa de 'scheduled' a 'active' cuando starts_at <= now() < ends_at
+ * - Pasa de 'active' o 'scheduled' a 'completed' cuando ends_at <= now()
+ */
+export async function runPromotionLifecycleCheck(): Promise<{ activated: number; completed: number }> {
+  try {
+    const activateSql = `
+      UPDATE promotions
+      SET status = 'active'
+      WHERE status = 'scheduled'
+        AND starts_at <= now()
+        AND ends_at > now()
+      RETURNING id;
+    `;
+    const activateResult = await query(activateSql);
+
+    const completeSql = `
+      UPDATE promotions
+      SET status = 'completed'
+      WHERE status IN ('active', 'scheduled')
+        AND ends_at <= now()
+      RETURNING id;
+    `;
+    const completeResult = await query(completeSql);
+
+    const activated = activateResult.rows.length;
+    const completed = completeResult.rows.length;
+
+    if (activated > 0 || completed > 0) {
+      console.log(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          worker: 'promotion_lifecycle',
+          message: `Ciclo de promociones: ${activated} activadas, ${completed} completadas.`,
+          activatedIds: activateResult.rows.map((r) => r.id),
+          completedIds: completeResult.rows.map((r) => r.id),
+        })
+      );
+    }
+
+    return { activated, completed };
+  } catch (err: any) {
+    console.error(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        worker: 'promotion_lifecycle',
+        message: 'Error al ejecutar tarea programada de ciclo de vida de promociones',
+        error: err?.message || String(err),
+      })
+    );
+    return { activated: 0, completed: 0 };
+  }
+}
+
+/**
  * Inicia el cron/worker interno en memoria (ejecuta cada 10 minutos y al arrancar)
  */
 export function startExpirationWorker(intervalMs: number = 600000): void {
@@ -59,10 +116,12 @@ export function startExpirationWorker(intervalMs: number = 600000): void {
   // Ejecución inicial diferida 5 segundos tras el arranque
   setTimeout(() => {
     runEventExpirationCheck().catch(() => {});
+    runPromotionLifecycleCheck().catch(() => {});
   }, 5000);
 
   timer = setInterval(() => {
     runEventExpirationCheck().catch(() => {});
+    runPromotionLifecycleCheck().catch(() => {});
   }, intervalMs);
 
   console.log(

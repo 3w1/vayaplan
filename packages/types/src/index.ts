@@ -421,4 +421,80 @@ export interface CreateDraftFromWhatsAppInput {
   imageUrl?: string | null;
 }
 
+// ==============================================================================
+// Contratos y Tipos Sprint 4 (Promociones e Informes Comerciales)
+// ==============================================================================
+
+export interface AdminPromotionItem {
+  id: number;
+  city_id: number;
+  city_name: string;
+  city_slug: string;
+  event_id: number;
+  event_title: string;
+  event_status: EventStatus;
+  event_start_time: string;
+  venue_id: number;
+  venue_name: string;
+  venue_slug: string;
+  editorial_date: string;
+  starts_at: string;
+  ends_at: string;
+  price_cents: number;
+  status: PromotionStatus;
+  created_at: string;
+}
+
+export interface PromotionReportMetricsBlock {
+  impressions: number;
+  unique_impressions_sessions: number;
+  map_clicks: number;
+  unique_map_clicks_sessions: number;
+  booking_clicks: number;
+  ticket_clicks: number;
+  whatsapp_clicks: number;
+  profile_clicks: number;
+  channel_views: number;
+  qr_scans: number;
+  total_actions: number;
+  unique_action_sessions: number;
+}
+
+export interface PromotionReportResponse {
+  promotion_id: number;
+  event_id: number;
+  event_title: string;
+  venue_name: string;
+  editorial_date: string;
+  starts_at: string;
+  ends_at: string;
+  price_cents: number;
+  status: PromotionStatus;
+  generated_at: string;
+  promotion_metrics: PromotionReportMetricsBlock;
+  event_overall_metrics: PromotionReportMetricsBlock;
+  impressions: number;
+  unique_impressions: number;
+  map_clicks: number;
+  unique_map_clicks: number;
+  booking_clicks: number;
+  ticket_clicks: number;
+  whatsapp_clicks: number;
+  profile_clicks: number;
+  channel_views: number;
+  qr_scans: number;
+  total_actions: number;
+  whatsapp_text: string;
+}
+
+export interface CreatePromotionInput {
+  event_id: number;
+  editorial_date?: string;
+  starts_at?: string;
+  ends_at?: string;
+  price_cents?: number;
+  status?: PromotionStatus;
+}
+
+
 
