@@ -259,6 +259,28 @@ export interface PublicEventItem {
   promotion: PromotionInfo | null;
 }
 
+export interface PublicActivePromotionItem {
+  promotion_id: number;
+  starts_at: string;
+  ends_at: string;
+  event: PublicEventItem;
+}
+
+export interface ActivePromotionsResponseContract {
+  city: {
+    slug: string;
+    name: string;
+    timezone: string;
+  };
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
+  promotions: PublicActivePromotionItem[];
+}
+
 export interface RecurrenceItem {
   id: number;
   title: string;
