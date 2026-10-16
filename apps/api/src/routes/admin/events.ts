@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { query } from '@vayaplan/db';
 import { requireAdminAuth } from '../../middleware/auth';
+import { ingestCulturalAgenda } from '../../services/ingestion';
 import {
   VALID_EVENT_CATEGORIES,
   VALID_EVENT_SOURCES,
@@ -23,6 +24,7 @@ adminEventsRoutes.get('/events', async (c) => {
   const statusFilter = c.req.query('status')?.trim();
   const dateFilter = c.req.query('date')?.trim();
   const venueIdFilter = c.req.query('venue_id')?.trim();
+  const hasCollision = c.req.query('has_collision')?.trim() === 'true';
 
   const queryParams: any[] = [];
   let sql = `
@@ -30,7 +32,26 @@ adminEventsRoutes.get('/events', async (c) => {
       e.*,
       v.name AS venue_name,
       v.slug AS venue_slug,
-      p.id AS promotion_id
+      v.zone AS venue_zone,
+      v.category AS venue_category,
+      v.address AS venue_address,
+      p.id AS promotion_id,
+      (
+        SELECT json_build_object(
+          'colliding_event_id', c.id,
+          'colliding_title', c.title,
+          'colliding_start_time', c.start_time,
+          'diff_minutes', ROUND(ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) / 60)
+        )
+        FROM events c
+        WHERE c.venue_id = e.venue_id
+          AND c.editorial_date = e.editorial_date
+          AND c.id != e.id
+          AND c.status NOT IN ('cancelled', 'duplicate')
+          AND e.venue_id != 9999
+          AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
+        LIMIT 1
+      ) AS collision_alert
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
     LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
@@ -52,14 +73,35 @@ adminEventsRoutes.get('/events', async (c) => {
     sql += ` AND e.venue_id = $${queryParams.length}`;
   }
 
-  // Ordenar priorizando estado 'tentative', seguido de fecha y hora
-  sql += `
-    ORDER BY 
-      CASE WHEN e.status = 'tentative' THEN 0 ELSE 1 END ASC,
-      e.editorial_date DESC,
-      e.start_time ASC
-    LIMIT 200;
-  `;
+  if (hasCollision) {
+    sql += ` AND EXISTS (
+      SELECT 1 FROM events c
+      WHERE c.venue_id = e.venue_id
+        AND c.editorial_date = e.editorial_date
+        AND c.id != e.id
+        AND c.status NOT IN ('cancelled', 'duplicate')
+        AND e.venue_id != 9999
+        AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
+    )`;
+  }
+
+  // Ordenar cronológicamente ascendente si son borradores tentative, o priorizando tentative
+  if (statusFilter === 'tentative') {
+    sql += `
+      ORDER BY 
+        e.start_time ASC,
+        e.id ASC
+      LIMIT 200;
+    `;
+  } else {
+    sql += `
+      ORDER BY 
+        CASE WHEN e.status = 'tentative' THEN 0 ELSE 1 END ASC,
+        e.editorial_date DESC,
+        e.start_time ASC
+      LIMIT 200;
+    `;
+  }
 
   const result = await query(sql, queryParams);
 
@@ -89,7 +131,11 @@ adminEventsRoutes.get('/events', async (c) => {
     updated_at: new Date(row.updated_at).toISOString(),
     venue_name: row.venue_name,
     venue_slug: row.venue_slug,
+    venue_zone: row.venue_zone || null,
+    venue_category: row.venue_category || null,
+    venue_address: row.venue_address || null,
     promotion_id: row.promotion_id ? Number(row.promotion_id) : null,
+    collision_alert: row.collision_alert || null,
   }));
 
   return c.json({
@@ -113,7 +159,26 @@ adminEventsRoutes.get('/events/:id', async (c) => {
       e.*,
       v.name AS venue_name,
       v.slug AS venue_slug,
-      p.id AS promotion_id
+      v.zone AS venue_zone,
+      v.category AS venue_category,
+      v.address AS venue_address,
+      p.id AS promotion_id,
+      (
+        SELECT json_build_object(
+          'colliding_event_id', c.id,
+          'colliding_title', c.title,
+          'colliding_start_time', c.start_time,
+          'diff_minutes', ROUND(ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) / 60)
+        )
+        FROM events c
+        WHERE c.venue_id = e.venue_id
+          AND c.editorial_date = e.editorial_date
+          AND c.id != e.id
+          AND c.status NOT IN ('cancelled', 'duplicate')
+          AND e.venue_id != 9999
+          AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
+        LIMIT 1
+      ) AS collision_alert
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
     LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
@@ -153,7 +218,11 @@ adminEventsRoutes.get('/events/:id', async (c) => {
     updated_at: new Date(row.updated_at).toISOString(),
     venue_name: row.venue_name,
     venue_slug: row.venue_slug,
+    venue_zone: row.venue_zone || null,
+    venue_category: row.venue_category || null,
+    venue_address: row.venue_address || null,
     promotion_id: row.promotion_id ? Number(row.promotion_id) : null,
+    collision_alert: row.collision_alert || null,
   };
 
   return c.json({ event });
@@ -378,12 +447,56 @@ adminEventsRoutes.delete('/events/:id', async (c) => {
 });
 
 /**
+ * POST /api/v1/admin/ingest/cultural-agenda
+ * Ejecuta bajo demanda la ingesta de eventos de la Agenda Cultural de Castilla y León para Palencia
+ */
+adminEventsRoutes.post('/ingest/cultural-agenda', async (c) => {
+  let body: any = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    // Body opcional
+  }
+
+  const minDate = typeof body?.min_date === 'string' && isValidDateString(body.min_date) ? body.min_date : undefined;
+  const limit = typeof body?.limit === 'number' && body.limit > 0 ? body.limit : undefined;
+
+  const result = await ingestCulturalAgenda({
+    minDate,
+    limit,
+  });
+
+  return c.json({
+    status: 'ok',
+    summary: result.summary,
+    inserted_events: result.inserted_events,
+  });
+});
+
+/**
  * POST /api/v1/admin/events/:id/publish
  * Valida y publica un borrador tentativo
  */
 adminEventsRoutes.post('/events/:id/publish', async (c) => {
   const id = Number(c.req.param('id'));
+  if (Number.isNaN(id) || id <= 0) {
+    return c.json({ error: 'invalid_parameter', message: 'ID de evento inválido.' }, 400);
+  }
   const admin = c.get('user') as AdminUser;
+
+  // 1. Verificar existencia y asignación de venue válido
+  const check = await query(`SELECT id, venue_id, status FROM events WHERE id = $1 LIMIT 1;`, [id]);
+  if (check.rows.length === 0) {
+    return c.json({ error: 'event_not_found', message: `Evento ${id} no encontrado.` }, 404);
+  }
+
+  const currentEvent = check.rows[0];
+  if (Number(currentEvent.venue_id) === 9999) {
+    return c.json({
+      error: 'venue_not_assigned',
+      message: 'No se puede publicar un evento con Local por verificar (venue 9999). Asigna un local del censo primero.',
+    }, 400);
+  }
 
   const result = await query(
     `UPDATE events
@@ -395,10 +508,6 @@ adminEventsRoutes.post('/events/:id/publish', async (c) => {
      RETURNING id, status, verified_at;`,
     [id, admin?.email || 'Curador']
   );
-
-  if (result.rows.length === 0) {
-    return c.json({ error: 'event_not_found', message: `Evento ${id} no encontrado.` }, 404);
-  }
 
   return c.json({ status: 'ok', message: 'Evento publicado correctamente.', event: result.rows[0] });
 });

@@ -294,3 +294,54 @@ Se considera error material:
 - No almacenar conversaciones completas sin necesidad.
 - Usar solo datos necesarios para publicar el evento.
 - Cumplir RGPD y política de privacidad.
+
+---
+
+## 13. Censo de Locales y Metadatos de Venues (Palencia)
+
+En la Fase 2 de Ingesta se introduce la semilla auditada de locales en `infra/migrations/004_seed_palencia_venues.sql`:
+
+### 13.1 Metadatos de Local
+- `zone VARCHAR(50)`: Zonas geográficas de ocio (`seminario`, `centro_puebla`, `salon`, `otros`).
+- `category VARCHAR(50)`: Tipología del local (`general`, `bar_musical`, `disco_bar`, `bar`, `sala_conciertos`, `pub`, `discoteca`, `teatro`, `cine`).
+- `phone VARCHAR(50)`: Teléfono de contacto general (independiente de `whatsapp_contact`).
+- `website_url TEXT`: URL corporativa o canal de difusión.
+
+### 13.2 Reglas de Preservación de Identidades
+- Unicidad compuesta: `UNIQUE (city_id, slug)`.
+- `universonoro` (ID 1) y `teatro-principal` (ID 2) conservan sus IDs y slugs canónicos.
+- `local-por-verificar-borrador` (ID 9999) es el local contingente oficial para eventos sin espacio asignado en Palencia.
+- `Sky Bar Palencia` y `Manhattan copas palencia` se mantienen como dos registros diferenciados en Cardenal Almaraz, 4 y 6.
+- `Jimmy Jazz` está cerrado y no se incluye en el censo activo.
+- `La Gomila` se clasifica bajo categoría `pub`.
+
+---
+
+## 14. Estado del Incremento de Ingesta y Curación (Rama `feat/cultural-agenda-curation`)
+
+### 14.1 Implementado
+- **Cálculo de Jornada Editorial**: Función `computeEditorialDate` en `@vayaplan/shared` normalizando a `Europe/Madrid` con umbral a las 06:00 AM.
+- **Servicio de Ingesta JCyL**: `ingestCulturalAgenda()` en `@vayaplan/api` con filtrado por municipio Palencia, deduplicación por `source_hash`, matching contra el censo y asignación contingente a venue 9999.
+- **Endpoint Administrativo**: `POST /api/v1/admin/ingest/cultural-agenda` bajo autenticación admin.
+- **Metadatos y Tipos de Venues**: `VenueZone`, `VenueCategory`, `CollisionAlertInfo` en `@vayaplan/types` y columnas `zone`, `category`, `phone` en `Venue`.
+- **Censo Auditado**: Archivo `infra/migrations/004_seed_palencia_venues.sql` con 56 locales activos, preservación de IDs canónicos (1, 2) y guarda estricta para `vayaplan_test`.
+- **Panel de Curación**: Pestañas de subfiltros (Todos, Tentative, Venue 9999, Colisiones), caja no invasiva de alerta horaria ($\le 2\text{h}$) y modal interactivo de reasignación rápida de local.
+- **Seguridad en Publicación**: Bloqueo de publicación en cliente y servidor (`POST /events/:id/publish`) si `venue_id = 9999`.
+- **Parser de Fecha PostgreSQL**: Corrección en `@vayaplan/db` para retornar DATE (OID 1082) como string puro `YYYY-MM-DD` sin mutación por huso horario.
+
+### 14.2 Probado en Test (Aislado)
+- **19/19 tests unitarios**: En `packages/shared/src/index.test.ts` (CEST, CET, UTC, fin de mes, cambio de año).
+- **1/1 test de regresión DATE**: En `packages/db/src/index.test.ts`.
+- **Suite End-to-End Aislada**: Ejecutada en entorno aislado contra `vayaplan_test` en puertos 4002 (API) y 3002 (Web).
+- **Idempotencia validada**: 0 duplicados en segundas pasadas.
+- **Bloqueo y Reasignación validados**: 400 en venue 9999, preservación de `tentative` en PATCH y posterior publicación exitosa en agenda pública.
+- **Docker build de prueba**: Imágenes construidas con tags aislados sin tocar producción.
+
+### 14.3 Pendiente de Versionar
+- Commit unificado en rama `feat/cultural-agenda-curation`.
+
+### 14.4 Pendiente de Adaptar y Desplegar a Producción
+- **Esquema de Producción**: La base `vayaplan` en producción no tiene aplicadas las columnas `zone`, `category`, `phone`. Requiere una migración DDL separada de la semilla.
+- **Censo de Producción**: La semilla 004 está protegida exclusivamente para `vayaplan_test`. Se requiere un plan de ejecución de semilla sin la guarda temporal.
+- **Despliegue de Código**: Reconstrucción y reinicio de contenedores `api` y `web` tras autorizar el merge a `main`.
+- **Estado Actual**: Esta entrega **NO está desplegada** en producción y la base de datos `vayaplan` permanece inalterada.

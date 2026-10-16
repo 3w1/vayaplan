@@ -63,17 +63,33 @@ export interface City {
   created_at: string;
 }
 
+export type VenueZone = 'seminario' | 'centro_puebla' | 'salon' | 'otros';
+
+export type VenueCategory =
+  | 'general'
+  | 'bar_musical'
+  | 'disco_bar'
+  | 'bar'
+  | 'sala_conciertos'
+  | 'pub'
+  | 'discoteca'
+  | 'teatro'
+  | 'cine';
+
 export interface Venue {
   id: number;
   city_id: number;
   name: string;
   slug: string;
   address: string | null;
+  zone?: VenueZone | string | null;
+  category?: VenueCategory | string | null;
   latitude: number | null;
   longitude: number | null;
   google_maps_url: string | null;
   instagram_handle: string | null;
   whatsapp_contact: string | null;
+  phone?: string | null;
   website_url: string | null;
   is_active: boolean;
   created_at: string;
@@ -359,10 +375,21 @@ export interface AdminMeResponse {
   user: AdminUser;
 }
 
+export interface CollisionAlertInfo {
+  colliding_event_id: number;
+  colliding_title: string;
+  colliding_start_time: string;
+  diff_minutes: number;
+}
+
 export interface AdminEventItem extends Event {
   venue_name: string;
   venue_slug: string;
+  venue_zone?: string | null;
+  venue_category?: string | null;
+  venue_address?: string | null;
   promotion_id?: number | null;
+  collision_alert?: CollisionAlertInfo | null;
 }
 
 export interface EventMetricsSummary {

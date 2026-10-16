@@ -20,7 +20,7 @@ import { qrRedirectRoutes } from './routes/qr-redirect';
 import { startExpirationWorker, stopExpirationWorker } from './services/expiration';
 import { closePool } from '@vayaplan/db';
 
-const app = new Hono();
+export const app = new Hono();
 
 // Middleware global de logs estructurados
 app.use('*', structuredLogger);
@@ -78,13 +78,15 @@ startExpirationWorker();
 
 // Puerto de ejecución
 const port = Number(process.env.PORT || 4000);
+const hostname = process.env.HOST || '0.0.0.0';
 
 console.log(JSON.stringify({
   timestamp: new Date().toISOString(),
   level: 'info',
-  message: `Servidor VayaPlan API iniciando en puerto ${port}`,
+  message: `Servidor VayaPlan API iniciando en puerto ${port} (${hostname})`,
   nodeEnv: process.env.NODE_ENV || 'development',
   port,
+  hostname,
 }));
 
 // Manejo de apagado ordenado (graceful shutdown)
@@ -104,5 +106,6 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 export default {
   port,
+  hostname,
   fetch: app.fetch,
 };
