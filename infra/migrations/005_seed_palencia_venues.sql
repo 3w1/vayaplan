@@ -19,22 +19,17 @@ DECLARE
   v_max_id BIGINT;
 BEGIN
   -- A. Autorización de base de datos
-  IF current_database() = 'vayaplan_test' THEN
-    v_allowed := true;
-  END IF;
-
-  IF current_database() LIKE 'vayaplan_rehearsal%' OR current_database() LIKE 'vayaplan_ensayo%' THEN
-    v_allowed := true;
-  END IF;
-
-  IF current_setting('vayaplan.allow_census_seed', true) = 'true' THEN
-    v_allowed := true;
-  END IF;
-
   IF current_database() = 'vayaplan' THEN
-    IF current_setting('vayaplan.confirm_production_seed', true) != 'true' THEN
+    IF current_setting('vayaplan.confirm_production_seed', true) IS DISTINCT FROM 'true' THEN
       RAISE EXCEPTION 'Abortado: ejecución en producción (vayaplan) bloqueada. Requiere confirmación explícita previa: SET vayaplan.confirm_production_seed = ''true'';';
-    ELSE
+    END IF;
+    v_allowed := true;
+  ELSE
+    IF current_database() = 'vayaplan_test' THEN
+      v_allowed := true;
+    ELSIF current_database() LIKE 'vayaplan_rehearsal%' OR current_database() LIKE 'vayaplan_ensayo%' THEN
+      v_allowed := true;
+    ELSIF current_setting('vayaplan.allow_census_seed', true) = 'true' THEN
       v_allowed := true;
     END IF;
   END IF;

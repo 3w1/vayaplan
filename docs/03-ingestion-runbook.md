@@ -316,8 +316,10 @@ En la Fase 2 de Ingesta se introduce la separación de migraciones:
 - `Sky Bar Palencia` y `Manhattan copas palencia` se mantienen como dos registros diferenciados en Cardenal Almaraz, 4 y 6.
 - `Jimmy Jazz` está cerrado y no se incluye en el censo activo.
 - `La Gomila` se clasifica bajo categoría `pub`.
-- Ajustes de secuencia no decrecientes respecto a `last_value` y `MAX(id)`.
+- Ajustes de secuencia no decrecientes respecto a `last_value` y `MAX(id)`. Nótese que `nextval` y `setval` son operaciones no transaccionales (no se revierten con rollback); el INSERT masivo evalúa el valor por defecto para todas las filas candidatas antes de la resolución de conflictos, por lo que consume saltos de secuencia para las filas actualizadas sin exigir identificadores consecutivos.
 - Preservación de estado `is_active` en locales inactivos y preservación de datos ya corregidos vía `COALESCE`.
+- Guarda estricta: en base `vayaplan` se exige incondicionalmente `vayaplan.confirm_production_seed = 'true'` evaluado mediante `IS DISTINCT FROM 'true'`, no siendo suficiente `allow_census_seed`.
+
 
 ---
 
