@@ -940,6 +940,106 @@ export function renderAdminHtml(): string {
     .status-active { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
     .status-scheduled { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
     .status-completed { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .status-refunded { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+
+    /* Promociones Responsive: Tabla en Desktop y Tarjetas en Móvil */
+    .promo-cards-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .promo-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.125rem;
+      box-shadow: 0 1px 3px rgba(11, 15, 59, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .promo-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+    .promo-card-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin: 0.25rem 0 0 0;
+    }
+    .promo-card-venue {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin-top: 0.15rem;
+    }
+    .promo-card-times {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      background: var(--bg-subtle);
+      border-radius: 8px;
+      padding: 0.625rem 0.75rem;
+      font-size: 0.8125rem;
+    }
+    .promo-card-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+    }
+
+    @media (max-width: 768px) {
+      .promo-table-desktop {
+        display: none !important;
+      }
+      .promo-cards-mobile {
+        display: flex !important;
+      }
+    }
+    @media (min-width: 769px) {
+      .promo-table-desktop {
+        display: block !important;
+      }
+      .promo-cards-mobile {
+        display: none !important;
+      }
+    }
+
+    /* Grids de Métricas en Informes */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .metric-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.875rem 1rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .metric-value {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1.2;
+    }
+    .metric-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
+      line-height: 1.3;
+    }
+    .metric-sublabel {
+      font-size: 0.6875rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+    }
 
     /* Modales Claros */
     .modal-overlay {
@@ -1122,7 +1222,7 @@ export function renderAdminHtml(): string {
     <div class="login-container">
       <h2 class="login-title">Acceso Panel Curador</h2>
       <p class="login-desc">Introduce tus credenciales administrativas para gestionar la agenda.</p>
-      
+
       <div id="login-error" class="alert-error"></div>
 
       <form onsubmit="handleLogin(event)">
@@ -1387,7 +1487,7 @@ export function renderAdminHtml(): string {
       <section id="section-promotions" style="display:none;">
         <div class="toolbar">
           <div class="filter-group">
-            <select id="promo-filter-status" onchange="loadAdminPromotions()">
+            <select id="promo-filter-status" onchange="loadAdminPromotions()" aria-label="Filtrar por estado">
               <option value="">Todos los estados</option>
               <option value="active">Activas</option>
               <option value="scheduled">Programadas</option>
@@ -1399,15 +1499,16 @@ export function renderAdminHtml(): string {
           <button class="btn-primary" onclick="openNewPromotionModal()">+ Nueva Promoción</button>
         </div>
 
-        <div class="table-container">
+        <!-- Vista Desktop: Tabla estructurada -->
+        <div class="table-container promo-table-desktop">
           <table>
             <thead>
               <tr>
-                <th>ID</th>
+                <th>Campaña</th>
                 <th>Estado</th>
-                <th>Evento</th>
-                <th>Local</th>
-                <th>Fecha Editorial</th>
+                <th>Evento / Local</th>
+                <th>Horario del Evento</th>
+                <th>Vigencia de Campaña</th>
                 <th>Precio</th>
                 <th>Acciones</th>
               </tr>
@@ -1416,6 +1517,11 @@ export function renderAdminHtml(): string {
               <tr><td colspan="7" style="text-align:center;">Cargando promociones...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas adaptadas -->
+        <div class="promo-cards-mobile" id="promo-cards-mobile">
+          <!-- Renderizado dinámicamente -->
         </div>
       </section>
 
@@ -1914,45 +2020,70 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
-  <!-- MODAL NUEVA PROMOCIÓN -->
+  <!-- MODAL NUEVA PROMOCIÓN (TEMA CLARO - CONTROL DE VIGENCIA) -->
   <div id="modal-promotion" class="modal-overlay">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 620px;">
       <div class="modal-header">
-        <h3>Nueva Promoción Comercial</h3>
-        <button class="modal-close" onclick="closeModal('modal-promotion')">✕</button>
+        <h3 id="modal-promo-title" style="color:var(--text-main); font-weight:800;">Nueva Promoción Comercial</h3>
+        <button class="modal-close" onclick="closeModal('modal-promotion')" aria-label="Cerrar modal">✕</button>
       </div>
       <form id="form-promotion" onsubmit="submitPromotion(event)">
         <div class="modal-body">
-          <div class="form-group">
-            <label for="promo-event-id">Evento Publicado *</label>
+          <div class="form-group" style="margin-bottom: 0.875rem;">
+            <label for="promo-event-id" style="font-weight:700; color:var(--text-main);">Evento Publicado del Catálogo *</label>
             <select id="promo-event-id" required onchange="onPromoEventSelected()">
               <option value="">Selecciona un evento...</option>
             </select>
           </div>
-          <div id="promo-conflict-alert" style="display:none; padding: 0.625rem; border-radius: 6px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; font-size: 0.8125rem; margin-bottom: 0.75rem;">
-            ⚠️ <strong>Conflicto de Escasez:</strong> Ya existe una promoción activa o programada para esta ciudad en esa fecha editorial. Debe cancelarse o reembolsarse la anterior para reservar esta fecha.
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="promo-editorial-date">Fecha Editorial (del evento)</label>
-              <input type="date" id="promo-editorial-date" required readonly style="opacity:0.8; cursor:not-allowed;">
+
+          <!-- Referencia informativa del evento -->
+          <div id="promo-event-reference" style="display:none; background:var(--bg-subtle); padding:0.75rem 1rem; border-radius:8px; border:1px solid var(--border); margin-bottom: 0.875rem;"></div>
+
+          <!-- Alerta de Escasez / Conflicto preventivo -->
+          <div id="promo-conflict-alert" style="display:none; padding: 0.75rem; border-radius: 8px; background: #fffbeb; border: 1px solid #f59e0b; color: #92400e; font-size: 0.8125rem; margin-bottom: 0.875rem;"></div>
+
+          <!-- Bloque de Vigencia de Campaña Comercial -->
+          <div style="background:var(--bg-subtle); border:1px solid var(--border); border-radius:10px; padding:1rem; margin-bottom:1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.625rem;">
+              <span style="font-size:0.8125rem; font-weight:800; text-transform:uppercase; color:var(--primary);">Vigencia de la Campaña Comercial</span>
+              <span style="font-size:0.75rem; color:var(--text-dim); background:#ffffff; border:1px solid var(--border); padding:0.15rem 0.5rem; border-radius:9999px;">🌐 Europe/Madrid</span>
             </div>
-            <div class="form-group">
-              <label for="promo-price-euros">Precio (€) *</label>
-              <input type="number" step="0.01" id="promo-price-euros" value="19.00" required min="0">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="promo-status">Estado inicial</label>
-              <select id="promo-status" onchange="checkPromoDateConflict()">
-                <option value="active">Activa (Inmediata)</option>
-                <option value="scheduled">Programada (Futura)</option>
+
+            <div class="form-group" style="margin-bottom:0.75rem;">
+              <label for="promo-status" style="font-weight:600; font-size:0.8125rem; color:var(--text-muted);">Modalidad de activación</label>
+              <select id="promo-status" onchange="onPromoStatusChanged()">
+                <option value="active">Activa (visible desde su activación inmediata)</option>
+                <option value="scheduled">Programada (visible en fecha y hora futura)</option>
               </select>
+              <div id="promo-scheduled-hint" style="display:none; font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem; background:#eff6ff; padding:0.4rem 0.6rem; border-radius:6px; border:1px solid #bfdbfe;">
+                ℹ️ <strong>Campaña programada:</strong> no será visible en la plataforma pública hasta la fecha y hora de inicio fijadas.
+              </div>
+            </div>
+
+            <div class="form-grid two-cols" style="gap:0.75rem;">
+              <div class="form-group">
+                <label for="promo-starts-at" style="font-weight:600; font-size:0.8125rem; color:var(--text-muted);">Visible desde *</label>
+                <input type="datetime-local" id="promo-starts-at" required oninput="onUserModifiedStartsAt()">
+                <small style="font-size:0.6875rem; color:var(--text-dim); display:block; margin-top:0.25rem;">Inicio de campaña en portada</small>
+              </div>
+              <div class="form-group">
+                <label for="promo-ends-at" style="font-weight:600; font-size:0.8125rem; color:var(--text-muted);">Visible hasta *</label>
+                <input type="datetime-local" id="promo-ends-at" required oninput="onUserModifiedEndsAt()">
+                <small id="promo-ends-at-hint" style="font-size:0.6875rem; color:var(--text-dim); display:block; margin-top:0.25rem;">Fin de campaña en portada</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bloque Comercial -->
+          <div class="form-row" style="display:flex; gap:1rem;">
+            <div class="form-group" style="flex:1;">
+              <label for="promo-price-euros" style="font-weight:700; color:var(--text-main);">Precio comercial de campaña (€) *</label>
+              <input type="number" step="0.01" id="promo-price-euros" value="19.00" required min="0">
+              <small style="font-size:0.6875rem; color:var(--text-dim);">Tarifa estándar: 19,00 € por día reservado</small>
             </div>
           </div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
           <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-promotion')">Cancelar</button>
           <button type="submit" id="btn-save-promo" class="btn-primary">Guardar Promoción</button>
         </div>
@@ -1960,27 +2091,40 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
-  <!-- MODAL INFORME POST-EVENTO -->
+  <!-- MODAL INFORME POST-EVENTO (TEMA CLARO) -->
   <div id="modal-promotion-report" class="modal-overlay">
     <div class="modal-card" style="max-width: 680px;">
       <div class="modal-header">
-        <h3 id="modal-report-title">Informe Post-Evento</h3>
-        <button class="modal-close" onclick="closeModal('modal-promotion-report')">✕</button>
+        <h3 id="modal-report-title" style="color:var(--text-main); font-weight:800;">Informe Post-Evento</h3>
+        <button class="modal-close" onclick="closeModal('modal-promotion-report')" aria-label="Cerrar informe">✕</button>
       </div>
       <div class="modal-body">
-        <div id="report-summary-box" style="background:#1e293b; padding:0.875rem; border-radius:8px; margin-bottom:1rem; border:1px solid var(--border);">
+        <div id="report-summary-box" style="background:var(--bg-subtle); padding:0.875rem; border-radius:8px; margin-bottom:1rem; border:1px solid var(--border);">
           <!-- Info básica del evento cargada por JS -->
         </div>
-        <h4 style="font-size:0.875rem; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.5rem;">Métricas Atribuidas a la Promoción (event_metrics)</h4>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="font-size:0.8125rem; text-transform:uppercase; color:var(--primary); font-weight:800; margin:0;">Métricas Atribuidas a la Campaña (starts_at a ends_at)</h4>
+          <span style="font-size:0.6875rem; color:var(--text-dim);">Filtradas por ventana de campaña</span>
+        </div>
         <div class="metrics-grid" id="report-metrics-grid">
           <!-- Métricas de la promoción cargadas dinámicamente -->
         </div>
-        <h4 style="font-size:0.875rem; text-transform:uppercase; color:var(--text-muted); margin-top:1rem; margin-bottom:0.5rem;">Métricas Globales Acumuladas del Evento</h4>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; margin-bottom:0.5rem;">
+          <h4 style="font-size:0.8125rem; text-transform:uppercase; color:var(--text-muted); font-weight:800; margin:0;">Métricas Globales Acumuladas del Evento</h4>
+          <span style="font-size:0.6875rem; color:var(--text-dim);">Ciclo de vida completo del evento</span>
+        </div>
         <div class="metrics-grid" id="report-event-metrics-grid">
           <!-- Métricas globales del evento cargadas dinámicamente -->
         </div>
-        <h4 style="font-size:0.875rem; text-transform:uppercase; color:var(--text-muted); margin-top:1rem; margin-bottom:0.5rem;">Formato WhatsApp para el Hostelero</h4>
-        <textarea id="report-whatsapp-textarea" rows="7" readonly style="width:100%; background:#090d16; color:#94a3b8; border:1px solid var(--border); border-radius:6px; padding:0.5rem; font-size:0.8125rem; font-family:monospace; resize:vertical;"></textarea>
+
+        <div style="background:#f1f5f9; padding:0.625rem 0.75rem; border-radius:6px; font-size:0.6875rem; color:var(--text-dim); margin-bottom:0.875rem; line-height:1.4;">
+          ℹ️ <strong>Definición técnica de métricas:</strong> "Aperturas de ficha" mide usuarios que abrieron los detalles del evento promocionado (no impresiones en hero de portada). Las "sesiones únicas" corresponden a identificadores de sesión distintos, sin garantizar personas físicas únicas ni asistencia al recinto.
+        </div>
+
+        <h4 style="font-size:0.8125rem; text-transform:uppercase; color:var(--text-muted); font-weight:700; margin-bottom:0.35rem;">Formato WhatsApp para el Hostelero</h4>
+        <textarea id="report-whatsapp-textarea" rows="6" readonly style="width:100%; background:var(--bg-subtle); color:var(--text-main); border:1px solid var(--border); border-radius:6px; padding:0.5rem; font-size:0.8125rem; font-family:monospace; resize:vertical;"></textarea>
       </div>
       <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
         <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-promotion-report')">Cerrar</button>
@@ -2002,6 +2146,9 @@ export function renderAdminHtml(): string {
     let cachedPromotions = [];
     let publishedEventsCache = [];
     let isActionInProgress = false; // Guarda contra clics repetidos
+    let promoSaveInProgress = false; // Guarda contra clics repetidos en guardado de promociones
+    let promoUserModifiedStartsAt = false;
+    let promoUserModifiedEndsAt = false;
 
     // Control de Drawer Móvil (con focus trap para D1-D4)
     let drawerTrapAttached = false;
@@ -2282,7 +2429,7 @@ export function renderAdminHtml(): string {
         const res = await apiFetch('/api/v1/admin/venues');
         const data = await res.json();
         cachedVenues = data.venues || [];
-        
+
         // Rellenar selects
         const selects = ['ev-venue-id', 'rec-venue-id'];
         selects.forEach(id => {
@@ -2819,7 +2966,7 @@ export function renderAdminHtml(): string {
       document.getElementById('modal-event-title').innerText = 'Nuevo Evento';
       document.getElementById('form-event').reset();
       document.getElementById('ev-id').value = '';
-      
+
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('ev-editorial-date').value = today;
       document.getElementById('ev-start-time').value = today + 'T22:00';
@@ -3159,11 +3306,97 @@ export function renderAdminHtml(): string {
     };
 
     // ==============================================================================
-    // Gestión de Promociones Comerciales (Sprint 4)
+    // Gestión de Promociones Comerciales (Sprint 4 & Fase C)
     // ==============================================================================
+
+    // Helpers de Zona Horaria (Europe/Madrid)
+    function formatToMadridDatetimeLocal(isoOrDate) {
+      if (!isoOrDate) return '';
+      const date = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+      if (isNaN(date.getTime())) return '';
+      const formatter = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Europe/Madrid',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      return formatter.format(date).replace(' ', 'T').slice(0, 16);
+    }
+
+    function parseMadridToUtcIso(madridDatetimeLocal) {
+      if (!madridDatetimeLocal) return null;
+      const [datePart, timePart] = madridDatetimeLocal.split('T');
+      if (!datePart || !timePart) return null;
+      const [y, m, d] = datePart.split('-').map(Number);
+      const [h, min] = timePart.split(':').map(Number);
+      let guessUtc = new Date(Date.UTC(y, m - 1, d, h, min, 0));
+      const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Madrid',
+        year: 'numeric', month: 'numeric', day: 'numeric',
+        hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false
+      });
+      for (let i = 0; i < 2; i++) {
+        const parts = Object.fromEntries(dtf.formatToParts(guessUtc).map(p => [p.type, parseInt(p.value, 10)]));
+        const madH = parts.hour === 24 ? 0 : parts.hour;
+        const madAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, madH, parts.minute, parts.second || 0);
+        const offsetMs = madAsUtc - guessUtc.getTime();
+        guessUtc = new Date(Date.UTC(y, m - 1, d, h, min, 0) - offsetMs);
+      }
+      return guessUtc.toISOString();
+    }
+
+    function formatMadridDateTime(isoOrDate) {
+      if (!isoOrDate) return '—';
+      const d = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+      if (isNaN(d.getTime())) return '—';
+      return new Intl.DateTimeFormat('es-ES', {
+        timeZone: 'Europe/Madrid',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(d);
+    }
+
+    function getPromoStatusBadge(status) {
+      if (status === 'active') return '<span class="status-pill status-active">Activa</span>';
+      if (status === 'scheduled') return '<span class="status-pill status-scheduled">Programada</span>';
+      if (status === 'completed') return '<span class="status-pill status-completed">Completada</span>';
+      if (status === 'cancelled') return '<span class="status-pill status-cancelled">Cancelada</span>';
+      if (status === 'refunded') return '<span class="status-pill status-refunded">Reembolsada</span>';
+      return \`<span class="status-pill">\${escapeHtml(status)}</span>\`;
+    }
+
+    window.onUserModifiedStartsAt = function() {
+      promoUserModifiedStartsAt = true;
+      checkPromoDateConflict();
+    };
+
+    window.onUserModifiedEndsAt = function() {
+      promoUserModifiedEndsAt = true;
+    };
+
+    window.onPromoStatusChanged = function() {
+      const status = document.getElementById('promo-status').value;
+      const hint = document.getElementById('promo-scheduled-hint');
+      if (hint) {
+        hint.style.display = status === 'scheduled' ? 'block' : 'none';
+      }
+      if (status === 'active' && !promoUserModifiedStartsAt) {
+        document.getElementById('promo-starts-at').value = formatToMadridDatetimeLocal(new Date());
+      }
+      checkPromoDateConflict();
+    };
+
     async function loadAdminPromotions() {
       const tbody = document.getElementById('promotions-tbody');
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Cargando promociones...</td></tr>';
+      const cardsContainer = document.getElementById('promo-cards-mobile');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando promociones...</td></tr>';
+      if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando promociones...</div>';
 
       const statusFilter = document.getElementById('promo-filter-status').value;
       let url = '/api/v1/admin/promotions';
@@ -3175,53 +3408,131 @@ export function renderAdminHtml(): string {
         cachedPromotions = data.promotions || [];
 
         if (cachedPromotions.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#94a3b8;">No hay promociones registradas.</td></tr>';
+          const emptyMsg = 'No hay promociones registradas para este filtro.';
+          if (tbody) tbody.innerHTML = \`<tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem;">\${emptyMsg}</td></tr>\`;
+          if (cardsContainer) cardsContainer.innerHTML = \`<div style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">\${emptyMsg}</div>\`;
           return;
         }
 
-        tbody.innerHTML = cachedPromotions.map(p => {
-          let statusBadge = '';
-          if (p.status === 'active') statusBadge = '<span class="badge-status status-published">Activa</span>';
-          else if (p.status === 'scheduled') statusBadge = '<span class="badge-status" style="background:#1e3a8a;color:#93c5fd;">Programada</span>';
-          else if (p.status === 'completed') statusBadge = '<span class="badge-status" style="background:#334155;color:#94a3b8;">Completada</span>';
-          else if (p.status === 'cancelled') statusBadge = '<span class="badge-status status-cancelled">Cancelada</span>';
-          else if (p.status === 'refunded') statusBadge = '<span class="badge-status" style="background:#451a03;color:#fdba74;">Reembolsada</span>';
+        // Renderizar Desktop (Tabla)
+        if (tbody) {
+          tbody.innerHTML = cachedPromotions.map(p => {
+            const statusBadge = getPromoStatusBadge(p.status);
+            const canCancelOrRefund = p.status === 'active' || p.status === 'scheduled';
+            const priceFormatted = (p.price_cents / 100).toFixed(2) + ' €';
 
-          const canCancelOrRefund = p.status === 'active' || p.status === 'scheduled';
-          const priceFormatted = (p.price_cents / 100).toFixed(2) + ' €';
+            return \`
+              <tr>
+                <td>
+                  <strong>#\${p.id}</strong>
+                  <div style="font-size:0.6875rem; color:var(--text-dim);">\${formatMadridDateTime(p.created_at)}</div>
+                </td>
+                <td>\${statusBadge}</td>
+                <td>
+                  <strong style="color:var(--text-main);">\${escapeHtml(p.event_title)}</strong>
+                  <div style="font-size:0.75rem; color:var(--text-muted);">\${escapeHtml(p.venue_name)}</div>
+                </td>
+                <td>
+                  <div style="font-weight:700; font-size:0.8125rem;">📅 \${p.editorial_date}</div>
+                  <div style="font-size:0.75rem; color:var(--text-dim);">\${p.event_start_time ? formatMadridDateTime(p.event_start_time) : 'Hora no indicada'}</div>
+                </td>
+                <td>
+                  <div style="font-size:0.75rem;"><span style="color:var(--text-dim); font-weight:700;">Desde:</span> \${formatMadridDateTime(p.starts_at)}</div>
+                  <div style="font-size:0.75rem;"><span style="color:var(--text-dim); font-weight:700;">Hasta:</span> \${formatMadridDateTime(p.ends_at)}</div>
+                </td>
+                <td>
+                  <strong style="color:var(--text-main); font-size:0.9375rem;">\${priceFormatted}</strong>
+                </td>
+                <td style="white-space:nowrap;">
+                  <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                    <button class="btn-sm" style="background:#0284c7; color:#fff;" onclick="viewPromotionReport(\${p.id})">📊 Informe</button>
+                    <button class="btn-sm" style="background:#16a34a; color:#fff;" onclick="copyPromotionReportWhatsApp(\${p.id})">💬 WhatsApp</button>
+                    \${canCancelOrRefund ? \`
+                      <button class="btn-sm btn-logout" onclick="cancelPromotion(\${p.id})">Cancelar</button>
+                      <button class="btn-sm" style="background:#ea580c; color:#fff;" onclick="refundPromotion(\${p.id})">Reembolsar</button>
+                    \` : ''}
+                  </div>
+                </td>
+              </tr>
+            \`;
+          }).join('');
+        }
 
-          return \`
-            <tr>
-              <td>#\${p.id}</td>
-              <td>\${statusBadge}</td>
-              <td><strong>\${escapeHtml(p.event_title)}</strong></td>
-              <td>\${escapeHtml(p.venue_name)}</td>
-              <td>\${p.editorial_date}</td>
-              <td>\${priceFormatted}</td>
-              <td style="white-space:nowrap;">
-                <button class="btn-sm" style="background:#0284c7;color:#fff;" onclick="viewPromotionReport(\${p.id})">📊 Informe</button>
-                <button class="btn-sm" style="background:#16a34a;color:#fff;" onclick="copyPromotionReportWhatsApp(\${p.id})">💬 WhatsApp</button>
-                \${canCancelOrRefund ? \`
-                  <button class="btn-sm" style="background:#b91c1c;color:#fff;" onclick="cancelPromotion(\${p.id})">Cancelar</button>
-                  <button class="btn-sm" style="background:#c2410c;color:#fff;" onclick="refundPromotion(\${p.id})">Reembolsar</button>
-                \` : ''}
-              </td>
-            </tr>
-          \`;
-        }).join('');
+        // Renderizar Móvil (Tarjetas)
+        if (cardsContainer) {
+          cardsContainer.innerHTML = cachedPromotions.map(p => {
+            const statusBadge = getPromoStatusBadge(p.status);
+            const canCancelOrRefund = p.status === 'active' || p.status === 'scheduled';
+            const priceFormatted = (p.price_cents / 100).toFixed(2) + ' €';
+
+            return \`
+              <div class="promo-card">
+                <div class="promo-card-header">
+                  <div style="display:flex; align-items:center; gap:0.5rem;">
+                    \${statusBadge}
+                    <span style="font-size:0.8125rem; font-weight:800; color:var(--text-dim);">#\${p.id}</span>
+                  </div>
+                  <div style="font-size:1.05rem; font-weight:800; color:var(--text-main);">\${priceFormatted}</div>
+                </div>
+
+                <div>
+                  <h4 class="promo-card-title">\${escapeHtml(p.event_title)}</h4>
+                  <div class="promo-card-venue">\${escapeHtml(p.venue_name)}</div>
+                </div>
+
+                <div class="promo-card-times">
+                  <div>
+                    <span style="font-size:0.6875rem; font-weight:800; text-transform:uppercase; color:var(--text-dim); display:block;">Horario del Evento</span>
+                    <strong>📅 \${p.editorial_date}</strong> • \${p.event_start_time ? formatMadridDateTime(p.event_start_time) : 'Hora no indicada'}
+                  </div>
+                  <div style="border-top:1px dashed var(--border); padding-top:0.35rem; margin-top:0.25rem;">
+                    <span style="font-size:0.6875rem; font-weight:800; text-transform:uppercase; color:var(--primary); display:block;">Vigencia Campaña (Europe/Madrid)</span>
+                    <span style="font-size:0.75rem;">\${formatMadridDateTime(p.starts_at)} → \${formatMadridDateTime(p.ends_at)}</span>
+                  </div>
+                </div>
+
+                <div class="promo-card-actions">
+                  <button class="btn-sm" style="background:#0284c7; color:#fff; flex:1;" onclick="viewPromotionReport(\${p.id})">📊 Informe</button>
+                  <button class="btn-sm" style="background:#16a34a; color:#fff; flex:1;" onclick="copyPromotionReportWhatsApp(\${p.id})">💬 WhatsApp</button>
+                  \${canCancelOrRefund ? \`
+                    <button class="btn-sm btn-logout" style="flex:1;" onclick="cancelPromotion(\${p.id})">Cancelar</button>
+                    <button class="btn-sm" style="background:#ea580c; color:#fff; flex:1;" onclick="refundPromotion(\${p.id})">Reembolsar</button>
+                  \` : ''}
+                </div>
+              </div>
+            \`;
+          }).join('');
+        }
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#ef4444;">Error al cargar promociones.</td></tr>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#ef4444; padding:2rem;">Error al cargar promociones.</td></tr>';
+        if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; color:#ef4444; padding:2rem;">Error al cargar promociones.</div>';
       }
     }
 
     window.openNewPromotionModal = async function() {
       const select = document.getElementById('promo-event-id');
       select.innerHTML = '<option value="">Cargando eventos publicados...</option>';
-      document.getElementById('promo-conflict-alert').style.display = 'none';
-      document.getElementById('btn-save-promo').disabled = false;
+      const refBox = document.getElementById('promo-event-reference');
+      if (refBox) { refBox.style.display = 'none'; refBox.innerHTML = ''; }
+      const alertEl = document.getElementById('promo-conflict-alert');
+      if (alertEl) alertEl.style.display = 'none';
+      const saveBtn = document.getElementById('btn-save-promo');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Guardar Promoción'; }
+
       document.getElementById('promo-price-euros').value = '19.00';
       document.getElementById('promo-status').value = 'active';
-      document.getElementById('promo-editorial-date').value = '';
+      const hint = document.getElementById('promo-scheduled-hint');
+      if (hint) hint.style.display = 'none';
+
+      promoUserModifiedStartsAt = false;
+      promoUserModifiedEndsAt = false;
+      promoSaveInProgress = false;
+
+      // Vigencia por defecto: Momento actual en Madrid
+      document.getElementById('promo-starts-at').value = formatToMadridDatetimeLocal(new Date());
+      document.getElementById('promo-ends-at').value = '';
+      const endsHint = document.getElementById('promo-ends-at-hint');
+      if (endsHint) endsHint.innerText = 'Fin de campaña en portada';
 
       openModal('modal-promotion');
 
@@ -3247,36 +3558,78 @@ export function renderAdminHtml(): string {
     window.onPromoEventSelected = function() {
       const eventId = Number(document.getElementById('promo-event-id').value);
       const ev = publishedEventsCache.find(e => e.id === eventId);
+      const refBox = document.getElementById('promo-event-reference');
+      const endsHint = document.getElementById('promo-ends-at-hint');
+
       if (!ev) {
-        document.getElementById('promo-editorial-date').value = '';
+        if (refBox) { refBox.style.display = 'none'; refBox.innerHTML = ''; }
         document.getElementById('promo-conflict-alert').style.display = 'none';
         document.getElementById('btn-save-promo').disabled = false;
         return;
       }
 
-      document.getElementById('promo-editorial-date').value = ev.editorial_date;
+      // 1. Mostrar ficha de referencia informativa del evento
+      if (refBox) {
+        refBox.style.display = 'block';
+        const startFormatted = ev.start_time ? formatMadridDateTime(ev.start_time) : 'Hora no indicada';
+        const endFormatted = ev.end_time ? formatMadridDateTime(ev.end_time) : 'No definida';
+        const ticketDisplay = ev.ticket_price ? \`\${ev.ticket_price} €\` : (ev.price_type === 'free' ? 'Entrada libre / gratuita' : 'No indicada');
+
+        refBox.innerHTML = \`
+          <div style="font-size:0.875rem; font-weight:800; color:var(--text-main); margin-bottom:0.25rem;">
+            \${escapeHtml(ev.title)}
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.2rem;">
+            <div><strong>Local:</strong> \${escapeHtml(ev.venue_name)}</div>
+            <div><strong>Fecha editorial:</strong> \${ev.editorial_date} | <strong>Horario evento:</strong> \${startFormatted} → \${endFormatted}</div>
+            <div><strong>Entrada al evento:</strong> \${ticketDisplay}</div>
+          </div>
+        \`;
+      }
+
+      // 2. Coherencia de vigencia: respetar si el usuario ya modificó los campos
+      const currentMode = document.getElementById('promo-status').value;
+      if (!promoUserModifiedStartsAt) {
+        if (currentMode === 'active') {
+          document.getElementById('promo-starts-at').value = formatToMadridDatetimeLocal(new Date());
+        } else if (ev.start_time) {
+          document.getElementById('promo-starts-at').value = formatToMadridDatetimeLocal(ev.start_time);
+        }
+      }
+
+      if (!promoUserModifiedEndsAt) {
+        if (ev.end_time) {
+          document.getElementById('promo-ends-at').value = formatToMadridDatetimeLocal(ev.end_time);
+          if (endsHint) endsHint.innerText = 'Fin de campaña (inicializado con la hora de fin del evento)';
+        } else {
+          document.getElementById('promo-ends-at').value = '';
+          if (endsHint) endsHint.innerText = '⚠️ El evento no tiene hora de fin. Indica manualmente hasta cuándo es visible la campaña.';
+        }
+      }
+
       checkPromoDateConflict();
     };
 
     window.checkPromoDateConflict = function() {
-      const selectedDate = document.getElementById('promo-editorial-date').value;
+      const eventId = Number(document.getElementById('promo-event-id').value);
+      const ev = publishedEventsCache.find(e => e.id === eventId);
       const selectedStatus = document.getElementById('promo-status').value;
       const alertEl = document.getElementById('promo-conflict-alert');
       const saveBtn = document.getElementById('btn-save-promo');
 
-      if (!selectedDate) {
-        alertEl.style.display = 'none';
-        saveBtn.disabled = false;
+      if (!ev) {
+        if (alertEl) alertEl.style.display = 'none';
+        if (saveBtn) saveBtn.disabled = false;
         return;
       }
 
-      const conflict = cachedPromotions.find(p => 
-        p.editorial_date === selectedDate && (p.status === 'active' || p.status === 'scheduled')
+      const conflict = cachedPromotions.find(p =>
+        p.editorial_date === ev.editorial_date && (p.status === 'active' || p.status === 'scheduled')
       );
 
       if (conflict && (selectedStatus === 'active' || selectedStatus === 'scheduled')) {
         alertEl.style.display = 'block';
-        alertEl.innerHTML = \`⚠️ <strong>Conflicto de Escasez:</strong> Ya existe una promoción \${conflict.status === 'active' ? 'activa' : 'programada'} (#\${conflict.id}: "\${escapeHtml(conflict.event_title)}") para el \${selectedDate}. Solo se permite 1 promoción activa/programada por día.\`;
+        alertEl.innerHTML = \`⚠️ <strong>Conflicto de Escasez:</strong> Ya existe una promoción \${conflict.status === 'active' ? 'activa' : 'programada'} (#\${conflict.id}: "\${escapeHtml(conflict.event_title)}") para la fecha editorial \${conflict.editorial_date}. Solo se permite 1 promoción activa/programada por día.\`;
         saveBtn.disabled = true;
       } else {
         alertEl.style.display = 'none';
@@ -3286,51 +3639,117 @@ export function renderAdminHtml(): string {
 
     window.submitPromotion = async function(e) {
       e.preventDefault();
+      if (promoSaveInProgress) return;
+
       const eventId = Number(document.getElementById('promo-event-id').value);
       if (!eventId) {
-        alert('Debes seleccionar un evento publicado.');
+        alert('Debes seleccionar un evento publicado del catálogo.');
         return;
       }
 
       const ev = publishedEventsCache.find(it => it.id === eventId);
       if (!ev) {
-        alert('Evento no encontrado.');
+        alert('Evento no encontrado en la lista de eventos publicados.');
+        return;
+      }
+
+      if (Number(ev.venue_id) === 9999) {
+        alert('No se puede promocionar un evento con Local por verificar (venue provisional). Debes asignarle un local censado antes de promocionarlo.');
+        return;
+      }
+
+      const startsAtVal = document.getElementById('promo-starts-at').value;
+      const endsAtVal = document.getElementById('promo-ends-at').value;
+
+      if (!startsAtVal || !endsAtVal) {
+        alert('Debes indicar las fechas y horas de inicio y fin de vigencia de la campaña.');
+        return;
+      }
+
+      const startsAtUtc = parseMadridToUtcIso(startsAtVal);
+      const endsAtUtc = parseMadridToUtcIso(endsAtVal);
+
+      if (!startsAtUtc || !endsAtUtc) {
+        alert('Formato de fecha u hora no válido.');
+        return;
+      }
+
+      const startsAtTime = new Date(startsAtUtc).getTime();
+      const endsAtTime = new Date(endsAtUtc).getTime();
+
+      if (endsAtTime <= startsAtTime) {
+        alert('La fecha de fin (Visible hasta) debe ser estrictamente posterior a la fecha de inicio (Visible desde).');
+        return;
+      }
+
+      const nowTime = Date.now();
+      const status = document.getElementById('promo-status').value;
+
+      if ((status === 'active' || status === 'scheduled') && endsAtTime <= nowTime) {
+        alert('La fecha de fin de campaña debe ser posterior al momento actual para tener vigencia activa o programada.');
         return;
       }
 
       const priceEuros = parseFloat(document.getElementById('promo-price-euros').value);
       if (isNaN(priceEuros) || priceEuros < 0) {
-        alert('El precio debe ser un número mayor o igual a 0.');
+        alert('El precio comercial debe ser un número mayor o igual a 0.');
         return;
       }
 
       const priceCents = Math.round(priceEuros * 100);
-      const status = document.getElementById('promo-status').value;
 
       const payload = {
         event_id: eventId,
         editorial_date: ev.editorial_date,
+        starts_at: startsAtUtc,
+        ends_at: endsAtUtc,
         price_cents: priceCents,
         status: status,
       };
 
-      const res = await apiFetch('/api/v1/admin/promotions', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        alert(errData.message || 'Error al crear promoción.');
-        return;
+      const saveBtn = document.getElementById('btn-save-promo');
+      promoSaveInProgress = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Guardando...';
       }
 
-      closeModal('modal-promotion');
-      loadAdminPromotions();
+      try {
+        const res = await apiFetch('/api/v1/admin/promotions', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const alertEl = document.getElementById('promo-conflict-alert');
+          if (res.status === 409) {
+            if (alertEl) {
+              alertEl.style.display = 'block';
+              alertEl.innerHTML = \`⚠️ <strong>Conflicto de Escasez (409):</strong> \${escapeHtml(errData.message || 'Ya existe una promoción activa o programada para esta fecha editorial.')}\`;
+            }
+            alert(\`⚠️ Conflicto de Escasez (409): \${errData.message || 'Ya existe una promoción para esta fecha.'}\`);
+          } else {
+            alert(errData.message || 'Error al crear la promoción comercial.');
+          }
+          return;
+        }
+
+        closeModal('modal-promotion');
+        loadAdminPromotions();
+      } catch (err) {
+        alert('Error de red al guardar la promoción.');
+      } finally {
+        promoSaveInProgress = false;
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = 'Guardar Promoción';
+        }
+      }
     };
 
     window.cancelPromotion = async function(id) {
-      if (!confirm(\`¿Estás seguro de que deseas cancelar la promoción #\${id}? Se liberará el hueco de reserva comercial.\`)) {
+      if (!confirm(\`¿Estás seguro de que deseas cancelar la promoción #\${id}? Se liberará inmediatamente el hueco de reserva comercial y la campaña dejará de mostrarse en portada.\`)) {
         return;
       }
       const res = await apiFetch('/api/v1/admin/promotions/' + id + '/cancel', { method: 'POST' });
@@ -3343,7 +3762,7 @@ export function renderAdminHtml(): string {
     };
 
     window.refundPromotion = async function(id) {
-      if (!confirm(\`¿Estás seguro de que deseas marcar como reembolsada la promoción #\${id}? Se liberará el hueco de reserva comercial.\`)) {
+      if (!confirm(\`¿Estás seguro de que deseas marcar como reembolsada la promoción #\${id}? Esto registrará administrativamente la devolución y liberará el hueco de reserva comercial.\`)) {
         return;
       }
       const res = await apiFetch('/api/v1/admin/promotions/' + id + '/refund', { method: 'POST' });
@@ -3358,16 +3777,16 @@ export function renderAdminHtml(): string {
     window.viewPromotionReport = async function(id) {
       openModal('modal-promotion-report');
       document.getElementById('modal-report-title').innerText = \`Informe Post-Evento — Promoción #\${id}\`;
-      document.getElementById('report-summary-box').innerHTML = 'Cargando datos...';
-      document.getElementById('report-metrics-grid').innerHTML = 'Cargando métricas...';
-      document.getElementById('report-event-metrics-grid').innerHTML = 'Cargando métricas del evento...';
+      document.getElementById('report-summary-box').innerHTML = '<div style="color:var(--text-muted); padding:0.5rem 0;">Cargando datos de la campaña...</div>';
+      document.getElementById('report-metrics-grid').innerHTML = '<div style="color:var(--text-muted); padding:0.5rem 0;">Cargando métricas...</div>';
+      document.getElementById('report-event-metrics-grid').innerHTML = '<div style="color:var(--text-muted); padding:0.5rem 0;">Cargando métricas del evento...</div>';
       document.getElementById('report-whatsapp-textarea').value = '';
 
       try {
         const res = await apiFetch('/api/v1/admin/promotions/' + id + '/report');
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          alert(err.message || 'Error al cargar informe.');
+          alert(err.message || 'Error al cargar informe post-evento.');
           closeModal('modal-promotion-report');
           return;
         }
@@ -3376,36 +3795,71 @@ export function renderAdminHtml(): string {
         const em = data.event_overall_metrics || {};
 
         document.getElementById('report-summary-box').innerHTML = \`
-          <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+          <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; align-items:center;">
             <div>
-              <strong style="font-size:1.05rem; color:#fff;">\${escapeHtml(data.event_title)}</strong>
+              <strong style="font-size:1.05rem; color:var(--text-main);">\${escapeHtml(data.event_title)}</strong>
               <div style="color:var(--text-muted); font-size:0.8125rem;">\${escapeHtml(data.venue_name)} • Fecha editorial: \${data.editorial_date}</div>
+              <div style="font-size:0.75rem; color:var(--text-dim); margin-top:0.25rem;">
+                <strong>Vigencia campaña:</strong> \${formatMadridDateTime(data.starts_at)} → \${formatMadridDateTime(data.ends_at)}
+              </div>
             </div>
             <div style="text-align:right;">
-              <span class="badge-status status-published">\${data.status.toUpperCase()}</span>
-              <div style="font-weight:700; color:#38bdf8; font-size:0.875rem;">\${(data.price_cents / 100).toFixed(2)} €</div>
+              \${getPromoStatusBadge(data.status)}
+              <div style="font-weight:800; color:var(--primary); font-size:1rem; margin-top:0.25rem;">\${(data.price_cents / 100).toFixed(2)} €</div>
             </div>
           </div>
         \`;
 
         document.getElementById('report-metrics-grid').innerHTML = \`
-          <div class="metric-card"><div class="metric-value">\${pm.impressions || 0}</div><div class="metric-label">Visualizaciones (\${pm.unique_impressions_sessions || 0} sesiones únicas)</div></div>
-          <div class="metric-card"><div class="metric-value">\${pm.map_clicks || 0}</div><div class="metric-label">Clics Mapa (\${pm.unique_map_clicks_sessions || 0} sesiones únicas)</div></div>
-          <div class="metric-card"><div class="metric-value">\${(pm.booking_clicks || 0) + (pm.ticket_clicks || 0)}</div><div class="metric-label">Clics Reserva / Entradas</div></div>
-          <div class="metric-card"><div class="metric-value">\${pm.whatsapp_clicks || 0}</div><div class="metric-label">Clics a WhatsApp Local</div></div>
-          <div class="metric-card"><div class="metric-value">\${pm.profile_clicks || 0}</div><div class="metric-label">Clics a Web / Redes</div></div>
-          <div class="metric-card"><div class="metric-value">\${(pm.channel_views || 0) + (pm.qr_scans || 0)}</div><div class="metric-label">Canal WhatsApp / QR Atribuidos</div></div>
-          <div class="metric-card" style="border-color:#38bdf8;"><div class="metric-value" style="color:#38bdf8;">\${pm.total_actions || 0}</div><div class="metric-label">Total Interacciones Promoción (\${pm.unique_action_sessions || 0} sesiones únicas)</div></div>
+          <div class="metric-card">
+            <div class="metric-value">\${pm.impressions || 0}</div>
+            <div class="metric-label">Aperturas de ficha (promoción, no hero)</div>
+            <div class="metric-sublabel">\${pm.unique_impressions_sessions || 0} sesiones únicas</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">\${pm.map_clicks || 0}</div>
+            <div class="metric-label">Clics "Cómo llegar"</div>
+            <div class="metric-sublabel">\${pm.unique_map_clicks_sessions || 0} sesiones únicas</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">\${(pm.booking_clicks || 0) + (pm.ticket_clicks || 0)}</div>
+            <div class="metric-label">Clics Reserva / Entradas</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">\${pm.whatsapp_clicks || 0}</div>
+            <div class="metric-label">Clics a WhatsApp Local</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">\${pm.profile_clicks || 0}</div>
+            <div class="metric-label">Clics a Web / Redes</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">\${(pm.channel_views || 0) + (pm.qr_scans || 0)}</div>
+            <div class="metric-label">Canal WhatsApp / QR Atribuidos</div>
+          </div>
+          <div class="metric-card" style="border-color:var(--primary); background:var(--primary-soft);">
+            <div class="metric-value" style="color:var(--primary);">\${pm.total_actions || 0}</div>
+            <div class="metric-label" style="font-weight:700;">Total Interacciones Promoción</div>
+            <div class="metric-sublabel">\${pm.unique_action_sessions || 0} sesiones únicas</div>
+          </div>
         \`;
 
         document.getElementById('report-event-metrics-grid').innerHTML = \`
-          <div class="metric-card"><div class="metric-value">\${em.impressions || 0}</div><div class="metric-label">Visualizaciones Totales Evento (\${em.unique_impressions_sessions || 0} sesiones únicas)</div></div>
-          <div class="metric-card"><div class="metric-value">\${em.total_actions || 0}</div><div class="metric-label">Interacciones Totales Evento (\${em.unique_action_sessions || 0} sesiones únicas)</div></div>
+          <div class="metric-card">
+            <div class="metric-value">\${em.impressions || 0}</div>
+            <div class="metric-label">Aperturas Totales Evento</div>
+            <div class="metric-sublabel">\${em.unique_impressions_sessions || 0} sesiones únicas</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">\${em.total_actions || 0}</div>
+            <div class="metric-label">Interacciones Totales Evento</div>
+            <div class="metric-sublabel">\${em.unique_action_sessions || 0} sesiones únicas</div>
+          </div>
         \`;
 
         document.getElementById('report-whatsapp-textarea').value = data.whatsapp_text || '';
       } catch (err) {
-        alert('Error al obtener informe.');
+        alert('Error al obtener informe post-evento.');
       }
     };
 
@@ -3472,6 +3926,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (activeModal) {
           // Bloquear Escape si hay una petición de reasignación en vuelo
           if (activeModal.id === 'modal-reassign-venue' && modalSaveInProgress) return;
+          if (activeModal.id === 'modal-promotion' && promoSaveInProgress) return;
           closeModal(activeModal.id);
         } else {
           toggleMobileDrawer(false);
@@ -3493,6 +3948,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     window.closeModal = function(id) {
       // Bloquear cierre del modal de reasignación si hay petición activa en vuelo
       if (id === 'modal-reassign-venue' && modalSaveInProgress) return;
+      if (id === 'modal-promotion' && promoSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
       const target = lastActiveElementBeforeModal;
