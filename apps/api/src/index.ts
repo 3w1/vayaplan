@@ -8,6 +8,7 @@ import { weekendRoutes } from './routes/weekend';
 import { placesRoutes } from './routes/places';
 import { singleEventRoutes } from './routes/single-event';
 import { metricsRoutes } from './routes/metrics';
+import { activePromotionsRoutes } from './routes/active-promotions';
 import { adminAuthRoutes } from './routes/admin/auth';
 import { adminEventsRoutes } from './routes/admin/events';
 import { adminVenuesRoutes } from './routes/admin/venues';
@@ -57,6 +58,7 @@ app.route('/api/v1', weekendRoutes);
 app.route('/api/v1', placesRoutes);
 app.route('/api/v1', singleEventRoutes);
 app.route('/api/v1', metricsRoutes);
+app.route('/api/v1', activePromotionsRoutes);
 
 // Webhook de WhatsApp Business
 app.route('/api/v1/webhooks', whatsappWebhookRoutes);

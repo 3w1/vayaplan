@@ -536,100 +536,215 @@ app.get('/', (c) => {
       padding: 0.25rem;
     }
 
-    /* Tarjeta Destacada (Hero Promocionado) */
-    .promoted-hero-card {
-      margin: 0.75rem 1rem 1rem 1rem;
-      border-radius: var(--radius-lg);
-      position: relative;
-      overflow: hidden;
-      cursor: pointer;
-      box-shadow: 0 8px 24px rgba(11, 15, 59, 0.12);
-      background-color: var(--color-night);
-      aspect-ratio: 16 / 10;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      border: none;
-      text-align: left;
-      padding: 0;
-      width: calc(100% - 2rem);
-    }
-
-    .promoted-hero-card.no-image {
-      aspect-ratio: auto;
-      min-height: auto;
-      padding: 1.25rem;
-      background: linear-gradient(135deg, #0B0F3B 0%, #1A216B 60%, #2A1B5E 100%);
-      border: 1px solid rgba(157, 123, 255, 0.25);
-      box-shadow: 0 4px 14px rgba(11, 15, 59, 0.12);
-      justify-content: flex-start;
-      gap: 0.75rem;
-    }
-
-    .promoted-hero-card.no-image .hero-badge-tag {
-      position: static;
-      align-self: flex-start;
-      margin-bottom: 0.25rem;
-    }
-
-    .promoted-hero-card.no-image .hero-content {
-      padding: 0;
-    }
-
-    .promoted-hero-card.no-image .hero-title {
-      font-size: 1.15rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .promoted-hero-card.no-image .hero-overlay {
+    /* Escaparate de Campañas Destacadas */
+    #promoted-container:empty {
       display: none;
     }
 
-    .hero-img {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+    .promoted-showcase {
+      margin: 0.75rem 0 1.25rem 0;
+      position: relative;
     }
 
-    .hero-overlay {
+    .promoted-showcase-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem 0.5rem 1rem;
+    }
+
+    .promoted-showcase-badge {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--color-primary);
+    }
+
+    .promoted-carousel-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .carousel-arrow {
+      background: #FFFFFF;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-pill);
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(11, 15, 59, 0.1);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      padding: 0;
+    }
+
+    .carousel-arrow:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .carousel-arrow:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .carousel-arrow svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--color-night);
+      display: block;
+    }
+
+    .carousel-counter {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--color-text-muted);
+      min-width: 44px;
+      text-align: center;
+    }
+
+    .promoted-carousel-track {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      gap: 0.875rem;
+      padding: 0.25rem 1rem 0.5rem 1rem;
+      scrollbar-width: none;
+    }
+
+    .promoted-carousel-track::-webkit-scrollbar {
+      display: none;
+    }
+
+    .promoted-hero-card {
+      flex: 0 0 calc(100% - 2.5rem);
+      min-width: calc(100% - 2.5rem);
+      max-width: 440px;
+      scroll-snap-align: center;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(11, 15, 59, 0.14);
+      background-color: var(--color-night);
+      border: 1px solid rgba(157, 123, 255, 0.22);
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+      padding: 0;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .promoted-hero-card:focus-visible {
+      outline: 3px solid var(--color-primary);
+      outline-offset: 3px;
+    }
+
+    /* Zona gráfica superior: contención total del cartel sin recorte */
+    .hero-media-box {
+      position: relative;
+      width: 100%;
+      height: 160px;
+      background-color: #070924;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-img-backdrop {
       position: absolute;
-      inset: 0;
-      background: linear-gradient(180deg, rgba(11, 15, 59, 0.05) 0%, rgba(11, 15, 59, 0.8) 70%, #0B0F3B 100%);
+      inset: -10px;
+      width: calc(100% + 20px);
+      height: calc(100% + 20px);
+      object-fit: cover;
+      filter: blur(14px);
+      opacity: 0.35;
+      transform: scale(1.1);
+      pointer-events: none;
+    }
+
+    .hero-img-contain {
+      position: relative;
       z-index: 1;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+
+    .hero-top-badges {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      right: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      z-index: 2;
     }
 
     .hero-badge-tag {
-      position: absolute;
-      top: 0.875rem;
-      left: 0.875rem;
-      z-index: 2;
-      background-color: rgba(255, 255, 255, 0.95);
+      background-color: #FFFFFF;
       color: var(--color-night);
       font-size: 0.6875rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
       padding: 0.2rem 0.55rem;
       border-radius: var(--radius-pill);
-      box-shadow: 0 2px 6px rgba(11, 15, 59, 0.15);
+      box-shadow: 0 2px 6px rgba(11, 15, 59, 0.25);
     }
 
-    .hero-content {
-      position: relative;
-      z-index: 2;
-      padding: 1rem;
-      color: #ffffff;
-      width: 100%;
+    .hero-category-tag {
+      background-color: rgba(11, 15, 59, 0.75);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    /* Zona inferior independiente de datos y acciones: jamás tapa el cartel */
+    .hero-body {
+      padding: 0.875rem 1rem 1rem 1rem;
+      background: linear-gradient(180deg, #0B0F3B 0%, #11174D 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      flex: 1;
+      justify-content: space-between;
+    }
+
+    .hero-eyebrow-datetime {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #D3C4FF;
     }
 
     .hero-title {
-      font-size: 1.25rem;
+      font-size: 1.1875rem;
       font-weight: 800;
       line-height: 1.25;
-      margin-bottom: 0.4rem;
-      color: #ffffff;
+      color: #FFFFFF;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-word;
+      margin: 0.15rem 0 0.35rem 0;
     }
 
     .hero-meta {
@@ -637,9 +752,25 @@ app.get('/', (c) => {
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;
-      font-size: 0.8125rem;
-      color: rgba(255, 255, 255, 0.9);
       flex-wrap: wrap;
+    }
+
+    .hero-meta-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .hero-venue-name {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.92);
+      max-width: 155px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .hero-price-pill {
@@ -647,8 +778,49 @@ app.get('/', (c) => {
       color: var(--color-primary);
       font-weight: 800;
       font-size: 0.8125rem;
-      padding: 0.25rem 0.65rem;
+      padding: 0.2rem 0.55rem;
       border-radius: var(--radius-pill);
+      white-space: nowrap;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      background-color: #FFFFFF;
+      color: var(--color-night);
+      font-size: 0.8125rem;
+      font-weight: 800;
+      padding: 0.3rem 0.75rem;
+      border-radius: var(--radius-pill);
+      box-shadow: 0 2px 8px rgba(11, 15, 59, 0.2);
+      white-space: nowrap;
+    }
+
+    /* Variante sin imagen o imagen fallida: alternativa geométrica de marca */
+    .promoted-hero-card.no-image .hero-media-box {
+      height: 75px;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(157, 123, 255, 0.25) 0%, transparent 60%),
+        radial-gradient(circle at 0% 100%, rgba(108, 59, 255, 0.2) 0%, transparent 60%),
+        linear-gradient(135deg, #0B0F3B 0%, #171E63 55%, #251B5A 100%);
+      border-bottom: 1px solid rgba(157, 123, 255, 0.2);
+    }
+
+    .promoted-hero-card.no-image .hero-img-backdrop,
+    .promoted-hero-card.no-image .hero-img-contain {
+      display: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .promoted-carousel-track {
+        scroll-behavior: auto !important;
+      }
+      .promoted-hero-card,
+      .hero-cta,
+      .carousel-arrow {
+        transition: none !important;
+        transform: none !important;
+      }
     }
 
     /* Lista y Tarjetas Compactas */
@@ -1241,6 +1413,7 @@ app.get('/', (c) => {
     const CITY_TIMEZONE = 'Europe/Madrid';
     const EDITORIAL_CUTOFF_HOUR = 6; // Eventos antes de las 06:00 pertenecen a la noche anterior
 
+    let currentCity = 'palencia';
     let currentView = 'today';
     let currentFilter = 'all';
     let selectedDate = getTodayDateString();
@@ -1249,6 +1422,11 @@ app.get('/', (c) => {
     let lastFocusedElement = null; // Guarda el elemento que abrió el modal
     let savedScrollY = 0; // Guarda la posición de scroll del fondo para restaurarla al cerrar modal
     let currentRequestId = 0; // Previene condiciones de carrera en respuestas asíncronas
+    let activePromotions = []; // Campañas vigentes cargadas del servidor
+    let activePromotionsCity = ''; // Ciudad de las campañas en memoria
+    let promotionsSeq = 0; // Previene respuestas desordenadas al cambiar de ciudad
+    let carouselCleanupFn = null; // Limpieza de listeners del carrusel
+    let promotionExpirationTimer = null; // Temporizador para retirar campañas expiradas
 
     // ==============================================================================
     // Métricas y Session Hash efímero (sessionStorage)
@@ -1395,6 +1573,247 @@ app.get('/', (c) => {
       return labels[category] || category || 'Plan';
     }
 
+    function formatPromotedHeroDateTime(isoString) {
+      if (!isoString) return '';
+      const date = new Date(isoString);
+      const weekday = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, weekday: 'long' }).toUpperCase();
+      const day = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, day: 'numeric' });
+      const month = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, month: 'short' }).replace('.', '').toUpperCase();
+      const time = formatTime(isoString);
+      return \`\${weekday} \${day} \${month} · \${time}\`;
+    }
+
+    function cleanupCarousel() {
+      if (carouselCleanupFn) {
+        try { carouselCleanupFn(); } catch (e) {}
+        carouselCleanupFn = null;
+      }
+      window.__heroCarouselStep = null;
+    }
+
+    function setupPromotedCarousel(container, itemsCount) {
+      cleanupCarousel();
+      if (!container || itemsCount <= 1) return;
+
+      const track = container.querySelector('#promoted-track');
+      const prevBtn = container.querySelector('[data-action="prev-hero"]');
+      const nextBtn = container.querySelector('[data-action="next-hero"]');
+      const counterEl = container.querySelector('#hero-counter');
+
+      if (!track) return;
+
+      let currentIdx = 0;
+      const cards = Array.from(track.children);
+      const total = cards.length;
+
+      function updateUI(idx) {
+        currentIdx = Math.max(0, Math.min(idx, total - 1));
+        if (counterEl) {
+          counterEl.textContent = \`\${currentIdx + 1} de \${total}\`;
+        }
+        if (prevBtn) {
+          prevBtn.disabled = currentIdx === 0;
+        }
+        if (nextBtn) {
+          nextBtn.disabled = currentIdx === total - 1;
+        }
+      }
+
+      function scrollToIndex(idx, smooth = true) {
+        const targetIdx = Math.max(0, Math.min(idx, total - 1));
+        const targetCard = cards[targetIdx];
+        if (!targetCard) return;
+
+        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const behavior = (smooth && !prefersReducedMotion) ? 'smooth' : 'auto';
+
+        const cardOffset = targetCard.offsetLeft - track.offsetLeft;
+        track.scrollTo({ left: cardOffset, behavior });
+        updateUI(targetIdx);
+      }
+
+      let rafId = null;
+      function onScroll() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          const trackScroll = track.scrollLeft;
+          let closestIdx = 0;
+          let minDiff = Infinity;
+          cards.forEach((c, i) => {
+            const diff = Math.abs((c.offsetLeft - track.offsetLeft) - trackScroll);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closestIdx = i;
+            }
+          });
+          updateUI(closestIdx);
+        });
+      }
+
+      function onFocusIn(e) {
+        const card = e.target.closest('.promoted-hero-card');
+        if (!card) return;
+        const idx = cards.indexOf(card);
+        if (idx !== -1) {
+          updateUI(idx);
+        }
+      }
+
+      function onResize() {
+        scrollToIndex(currentIdx, false);
+      }
+
+      track.addEventListener('scroll', onScroll, { passive: true });
+      track.addEventListener('focusin', onFocusIn);
+      window.addEventListener('resize', onResize);
+
+      updateUI(0);
+
+      carouselCleanupFn = () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        track.removeEventListener('scroll', onScroll);
+        track.removeEventListener('focusin', onFocusIn);
+        window.removeEventListener('resize', onResize);
+      };
+
+      window.__heroCarouselStep = (direction) => {
+        scrollToIndex(currentIdx + direction, true);
+      };
+    }
+
+    function renderPromotedShowcaseHtml(promotedEvents) {
+      if (!promotedEvents || promotedEvents.length === 0) return '';
+      const isMulti = promotedEvents.length > 1;
+      return \`
+        <div class="promoted-showcase" id="promoted-showcase" role="region" aria-label="Planes destacados">
+          <div class="promoted-showcase-header">
+            <span class="promoted-showcase-badge">Destacados</span>
+            \${isMulti ? \`
+              <div class="promoted-carousel-nav">
+                <button type="button" class="carousel-arrow prev" data-action="prev-hero" aria-label="Campaña anterior" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                </button>
+                <span class="carousel-counter" id="hero-counter" aria-live="polite">1 de \${promotedEvents.length}</span>
+                <button type="button" class="carousel-arrow next" data-action="next-hero" aria-label="Siguiente campaña">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                </button>
+              </div>
+            \` : ''}
+          </div>
+          <div class="promoted-carousel-track" id="promoted-track" role="group" aria-label="Carril de eventos destacados">
+            \${promotedEvents.map((ev) => {
+              const hasImage = Boolean(ev.image_url);
+              const dt = formatPromotedHeroDateTime(ev.start_time);
+              return \`
+                <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="Evento destacado: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}, \${escapeHtml(dt)}">
+                  <div class="hero-media-box">
+                    \${hasImage ? \`
+                      <img class="hero-img-backdrop" src="\${escapeHtml(ev.image_url)}" alt="" loading="eager" aria-hidden="true">
+                      <img class="hero-img-contain" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" loading="eager" onerror="this.onerror=null;const card=this.closest('.promoted-hero-card');if(card){card.classList.add('no-image');}this.remove();">
+                    \` : ''}
+                    <div class="hero-top-badges">
+                      <span class="hero-badge-tag">Destacado</span>
+                      <span class="hero-category-tag">\${escapeHtml(getCategoryLabel(ev.category))}</span>
+                    </div>
+                  </div>
+                  <div class="hero-body">
+                    <div>
+                      <div class="hero-eyebrow-datetime">\${escapeHtml(dt)}</div>
+                      <h3 class="hero-title">\${escapeHtml(ev.title)}</h3>
+                    </div>
+                    <div class="hero-meta">
+                      <div class="hero-meta-left">
+                        <span class="hero-venue-name">📍 \${escapeHtml(ev.venue.name)}</span>
+                        <span class="hero-price-pill">\${escapeHtml(ev.price.label)}</span>
+                      </div>
+                      <span class="hero-cta" aria-hidden="true">Ver plan →</span>
+                    </div>
+                  </div>
+                </button>
+              \`;
+            }).join('')}
+          </div>
+        </div>
+      \`;
+    }
+
+    async function loadActivePromotions(citySlug) {
+      const seq = ++promotionsSeq;
+      if (activePromotionsCity !== citySlug) {
+        activePromotions = [];
+        activePromotionsCity = citySlug;
+      }
+      try {
+        const res = await fetch(\`/api/v1/cities/\${encodeURIComponent(citySlug)}/promotions/active?limit=50\`);
+        if (!res.ok) {
+          if (seq === promotionsSeq) {
+            activePromotions = [];
+          }
+          return;
+        }
+        const data = await res.json();
+        if (seq === promotionsSeq && data && Array.isArray(data.promotions)) {
+          activePromotions = data.promotions.map((p) => ({
+            ...p.event,
+            promotion_starts_at: p.starts_at,
+            promotion_ends_at: p.ends_at,
+          }));
+          scheduleNextPromotionExpiration();
+        }
+      } catch (err) {
+        if (seq === promotionsSeq) {
+          activePromotions = [];
+        }
+      }
+    }
+
+    function scheduleNextPromotionExpiration() {
+      if (promotionExpirationTimer) {
+        clearTimeout(promotionExpirationTimer);
+        promotionExpirationTimer = null;
+      }
+      const nowTime = Date.now();
+      const futureExpirations = activePromotions
+        .map((ev) => new Date(ev.promotion_ends_at).getTime())
+        .filter((t) => !Number.isNaN(t) && t > nowTime);
+
+      if (futureExpirations.length === 0) return;
+
+      const nextExpiration = Math.min(...futureExpirations);
+      const delay = Math.max(1000, nextExpiration - nowTime + 500);
+
+      promotionExpirationTimer = setTimeout(() => {
+        const curTime = Date.now();
+        activePromotions = activePromotions.filter((ev) => {
+          const endMs = new Date(ev.promotion_ends_at).getTime();
+          return Number.isNaN(endMs) || endMs > curTime;
+        });
+
+        if (currentView === 'weekend') {
+          renderWeekendAgenda();
+        } else {
+          renderDayAgenda();
+        }
+
+        loadActivePromotions(currentCity).then(() => {
+          if (currentView === 'weekend') {
+            renderWeekendAgenda();
+          } else {
+            renderDayAgenda();
+          }
+        });
+      }, delay);
+    }
+
+    function changeCity(newSlug) {
+      if (!newSlug || newSlug === currentCity) return;
+      currentCity = newSlug;
+      activePromotions = [];
+      activePromotionsCity = newSlug;
+      loadData();
+    }
+    window.changeCity = changeCity;
+
     // ==============================================================================
     // Carga de datos mediante rutas relativas /api/v1/... (con control de concurrencia)
     // ==============================================================================
@@ -1402,7 +1821,7 @@ app.get('/', (c) => {
       const container = document.getElementById('content-container');
       const promotedContainer = document.getElementById('promoted-container');
 
-      // Limpieza inmediata del destacado y spinner de carga
+      cleanupCarousel();
       promotedContainer.innerHTML = '';
       container.innerHTML = '<div class="loader-spinner"></div>';
 
@@ -1411,12 +1830,16 @@ app.get('/', (c) => {
       try {
         let url = '';
         if (currentView === 'today' || currentView === 'tomorrow' || currentView === 'calendar') {
-          url = \`/api/v1/cities/palencia/events?date=\${selectedDate}\`;
+          url = \`/api/v1/cities/\${encodeURIComponent(currentCity)}/events?date=\${selectedDate}\`;
         } else if (currentView === 'weekend') {
-          url = '/api/v1/cities/palencia/weekend';
+          url = \`/api/v1/cities/\${encodeURIComponent(currentCity)}/weekend\`;
         }
 
-        const res = await fetch(url);
+        const [res] = await Promise.all([
+          fetch(url),
+          loadActivePromotions(currentCity).catch(() => {})
+        ]);
+
         if (!res.ok) throw new Error('Error al cargar agenda');
         const data = await res.json();
 
@@ -1431,6 +1854,7 @@ app.get('/', (c) => {
         }
       } catch (err) {
         if (requestId !== currentRequestId) return;
+        cleanupCarousel();
         promotedContainer.innerHTML = '';
         container.innerHTML = \`
           <div class="empty-state">
@@ -1593,34 +2017,24 @@ app.get('/', (c) => {
         viewTitleEl.innerText = formatDateSpanish(selectedDate);
       }
 
-      // 1. Destacado Promocionado único (solo si Boolean(ev.promotion), sin filtro y NO cancelado)
-      let listEvents = filteredEvents;
+      // 1. Escaparate de Campañas Destacadas
+      cleanupCarousel();
       promotedContainer.innerHTML = '';
-
-      if (currentFilter === 'all') {
-        const promotedEvent = filteredEvents.find((ev) => Boolean(ev.promotion) && ev.status !== 'cancelled');
-        if (promotedEvent) {
-          const hasImage = Boolean(promotedEvent.image_url);
-          promotedContainer.innerHTML = \`
-            <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${promotedEvent.id}" aria-label="Evento destacado: \${escapeHtml(promotedEvent.title)}">
-              \${hasImage ? \`
-                <img class="hero-img" src="\${escapeHtml(promotedEvent.image_url)}" alt="\${escapeHtml(promotedEvent.title)}" loading="eager" onerror="this.onerror=null;const card=this.closest('.promoted-hero-card');if(card){card.classList.add('no-image');}this.remove();">
-                <div class="hero-overlay"></div>
-              \` : ''}
-              <span class="hero-badge-tag">Destacado</span>
-              <div class="hero-content">
-                <h3 class="hero-title">\${escapeHtml(promotedEvent.title)}</h3>
-                <div class="hero-meta">
-                  <span>📍 \${escapeHtml(promotedEvent.venue.name)} · \${formatTime(promotedEvent.start_time)}\${formatEventRealDateTime(promotedEvent.start_time).isMadrugada ? ' (madrugada)' : ''}</span>
-                  <span class="hero-price-pill">\${escapeHtml(promotedEvent.price.label)}</span>
-                </div>
-              </div>
-            </button>
-          \`;
-          // Evitar duplicado inmediato en la lista superior
-          listEvents = filteredEvents.filter((ev) => ev.id !== promotedEvent.id);
-        }
+      const nowTime = Date.now();
+      const eligiblePromoted = filterEvents(
+        activePromotions.filter((ev) => {
+          if (ev.status === 'cancelled') return false;
+          if (ev.promotion_ends_at && new Date(ev.promotion_ends_at).getTime() <= nowTime) return false;
+          if (ev.promotion_starts_at && new Date(ev.promotion_starts_at).getTime() > nowTime) return false;
+          return true;
+        })
+      );
+      if (eligiblePromoted.length > 0) {
+        promotedContainer.innerHTML = renderPromotedShowcaseHtml(eligiblePromoted);
+        setupPromotedCarousel(promotedContainer, eligiblePromoted.length);
       }
+      // Conservar la lista íntegra sin exclusiones: doble presencia intencionada
+      const listEvents = filteredEvents;
 
       if (totalItems === 0) {
         let emptyTitle = '';
@@ -1749,7 +2163,26 @@ app.get('/', (c) => {
       if (!currentData || !currentData.days) return;
 
       updateActiveFiltersBar();
+      cleanupCarousel();
       promotedContainer.innerHTML = '';
+
+      // 1. Escaparate de Campañas Destacadas (solo eventos del fin de semana cargado)
+      const weekendDates = currentData.days.map((d) => d.editorial_date);
+      const nowTime = Date.now();
+      const eligibleWeekendPromoted = filterEvents(
+        activePromotions.filter((ev) => {
+          if (ev.status === 'cancelled') return false;
+          if (!weekendDates.includes(ev.editorial_date)) return false;
+          if (ev.promotion_ends_at && new Date(ev.promotion_ends_at).getTime() <= nowTime) return false;
+          if (ev.promotion_starts_at && new Date(ev.promotion_starts_at).getTime() > nowTime) return false;
+          return true;
+        })
+      );
+      if (eligibleWeekendPromoted.length > 0) {
+        promotedContainer.innerHTML = renderPromotedShowcaseHtml(eligibleWeekendPromoted);
+        setupPromotedCarousel(promotedContainer, eligibleWeekendPromoted.length);
+      }
+
       viewTitleEl.innerText = currentFilter === 'all' ? 'Fin de semana en Palencia' : \`\${getCategoryTitle(currentFilter)} en el finde\`;
 
       let totalWeekendEvents = 0;
@@ -2222,6 +2655,10 @@ app.get('/', (c) => {
         clearAllFilters();
       } else if (action === 'remove-cat-filter') {
         setFilter('all');
+      } else if (action === 'prev-hero') {
+        if (window.__heroCarouselStep) window.__heroCarouselStep(-1);
+      } else if (action === 'next-hero') {
+        if (window.__heroCarouselStep) window.__heroCarouselStep(1);
       } else if (action === 'reload-data') {
         loadData();
       }
