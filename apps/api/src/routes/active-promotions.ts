@@ -5,7 +5,6 @@ import {
   computeEditorialLabel,
   formatPriceLabel,
   resolveGoogleMapsUrl,
-  resolveWhatsAppUrl,
 } from '@vayaplan/shared';
 import type {
   ActivePromotionsResponseContract,
@@ -203,8 +202,6 @@ activePromotionsRoutes.get('/cities/:citySlug/promotions/active', async (c) => {
       row.venue_longitude
     );
 
-    const whatsappUrl = resolveWhatsAppUrl(row.venue_whatsapp_contact);
-
     return {
       promotion_id: Number(row.promotion_id),
       starts_at: new Date(row.promotion_starts_at).toISOString(),
@@ -237,7 +234,7 @@ activePromotionsRoutes.get('/cities/:citySlug/promotions/active', async (c) => {
           maps_url: mapsUrl,
           booking_url: null,
           tickets_url: row.event_source_type === 'web' ? row.event_source_url : null,
-          whatsapp_url: whatsappUrl,
+          whatsapp_url: null,
         },
         verification: {
           source: row.event_source_type,

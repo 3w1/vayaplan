@@ -2409,14 +2409,6 @@ app.get('/', (c) => {
               \${(!isCancelled && ev.actions.tickets_url) ? '<div class="action-disclaimer">Compra en una web externa</div>' : ''}
             </div>
 
-            \${(!isCancelled && ev.actions.whatsapp_url) ? \`
-              <div style="margin-bottom:1.25rem;">
-                <a href="\${escapeHtml(ev.actions.whatsapp_url)}" target="_blank" rel="noopener" class="time-tab" style="width:100%;text-decoration:none;" data-metric="whatsapp_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
-                  💬 Contactar por WhatsApp con el local
-                </a>
-              </div>
-            \` : ''}
-
             \${ev.description ? \`
               <div style="margin-top:1.5rem;">
                 <h3 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h3>

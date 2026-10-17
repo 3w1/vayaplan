@@ -6,7 +6,6 @@ import {
   getCurrentDateInTimezone,
   isValidDateString,
   resolveGoogleMapsUrl,
-  resolveWhatsAppUrl,
 } from '@vayaplan/shared';
 import type {
   City,
@@ -133,8 +132,6 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       row.venue_longitude
     );
 
-    const whatsappUrl = resolveWhatsAppUrl(row.venue_whatsapp_contact);
-
     return {
       id: Number(row.id),
       title: row.title,
@@ -162,7 +159,7 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
         maps_url: mapsUrl,
         booking_url: null,
         tickets_url: row.source_type === 'web' ? row.source_url : null,
-        whatsapp_url: whatsappUrl,
+        whatsapp_url: null,
       },
       verification: {
         source: row.source_type,
