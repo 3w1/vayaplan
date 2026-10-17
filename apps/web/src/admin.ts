@@ -1183,6 +1183,53 @@ export function renderAdminHtml(): string {
       align-items: center;
     }
 
+    /* Códigos QR Responsive */
+    .qr-cards-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .qr-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.125rem;
+      box-shadow: 0 1px 3px rgba(11, 15, 59, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .qr-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .qr-card-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.35;
+    }
+    .qr-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+    .qr-card-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+      align-items: center;
+    }
+
     .btn-table-action {
       background: var(--bg-surface);
       color: var(--text-muted);
@@ -1306,14 +1353,16 @@ export function renderAdminHtml(): string {
       .promo-table-desktop,
       .venues-table-desktop,
       .recurrences-table-desktop,
-      .places-table-desktop {
+      .places-table-desktop,
+      .qr-table-desktop {
         display: none !important;
       }
       .events-cards-mobile,
       .promo-cards-mobile,
       .venues-cards-mobile,
       .recurrences-cards-mobile,
-      .places-cards-mobile {
+      .places-cards-mobile,
+      .qr-cards-mobile {
         display: flex !important;
       }
     }
@@ -1322,14 +1371,16 @@ export function renderAdminHtml(): string {
       .promo-table-desktop,
       .venues-table-desktop,
       .recurrences-table-desktop,
-      .places-table-desktop {
+      .places-table-desktop,
+      .qr-table-desktop {
         display: block !important;
       }
       .events-cards-mobile,
       .promo-cards-mobile,
       .venues-cards-mobile,
       .recurrences-cards-mobile,
-      .places-cards-mobile {
+      .places-cards-mobile,
+      .qr-cards-mobile {
         display: none !important;
       }
     }
@@ -1967,10 +2018,15 @@ export function renderAdminHtml(): string {
       <!-- SECCIÓN 5: QR ALOJAMIENTOS -->
       <section id="section-qr" style="display:none;">
         <div class="toolbar">
-          <h3>Captación Turística: Códigos QR para Alojamientos</h3>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <h3 style="margin:0; font-size:1.125rem; font-weight:800; color:var(--text-main);">Captación Turística: Códigos QR para Alojamientos</h3>
+            <span id="qr-count-badge" class="badge-count" style="display:none;">0</span>
+          </div>
           <button class="btn-primary" onclick="openNewQrModal()">+ Nuevo QR Alojamiento</button>
         </div>
-        <div class="table-container">
+
+        <!-- Vista Desktop: Tabla estructurada -->
+        <div class="table-container qr-table-desktop">
           <table>
             <thead>
               <tr>
@@ -1982,9 +2038,14 @@ export function renderAdminHtml(): string {
               </tr>
             </thead>
             <tbody id="qr-tbody">
-              <tr><td colspan="5" style="text-align:center;">Cargando fuentes QR...</td></tr>
+              <tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando fuentes QR...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales -->
+        <div id="qr-cards-container" class="qr-cards-mobile">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando fuentes QR...</div>
         </div>
       </section>
     </main>
@@ -2405,36 +2466,38 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
-  <!-- MODAL: NUEVO QR ALOJAMIENTO -->
+  <!-- MODAL: NUEVO QR ALOJAMIENTO (TEMA CLARO) -->
   <div id="modal-qr" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Nuevo QR para Alojamiento</h3>
-        <button class="modal-close" onclick="closeModal('modal-qr')">✕</button>
+        <h3 id="modal-qr-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nuevo QR para Alojamiento</h3>
+        <button class="modal-close" onclick="closeModal('modal-qr')" aria-label="Cerrar modal">✕</button>
       </div>
-      <form onsubmit="saveQrSource(event)">
-        <div class="form-group">
-          <label>Nombre del hotel / alojamiento *</label>
-          <input type="text" id="qr-name" required placeholder="Ej: Hotel San Antolín">
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
+      <form id="form-qr" onsubmit="saveQrSource(event)">
+        <div class="modal-body" style="padding: 1.25rem; display:flex; flex-direction:column; gap:0.875rem;">
           <div class="form-group">
-            <label>Tipo de establecimiento</label>
-            <select id="qr-type">
-              <option value="hotel">Hotel</option>
-              <option value="apartamento">Apartamento turístico</option>
-              <option value="hostal">Hostal</option>
-              <option value="casa_rural">Casa rural</option>
-            </select>
+            <label for="qr-name" style="font-weight:700; color:var(--text-main);">Nombre del hotel / alojamiento *</label>
+            <input type="text" id="qr-name" required placeholder="Ej: Hotel San Antolín">
           </div>
-          <div class="form-group">
-            <label>Código identificador (Opcional)</label>
-            <input type="text" id="qr-code-input" placeholder="palencia-hotel-san-antolin">
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="qr-type" style="font-weight:700; color:var(--text-main);">Tipo de establecimiento</label>
+              <select id="qr-type">
+                <option value="hotel">Hotel</option>
+                <option value="apartamento">Apartamento turístico</option>
+                <option value="hostal">Hostal</option>
+                <option value="casa_rural">Casa rural</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="qr-code-input" style="font-weight:700; color:var(--text-main);">Código identificador (Opcional)</label>
+              <input type="text" id="qr-code-input" placeholder="palencia-hotel-san-antolin">
+            </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-qr')">Cancelar</button>
-          <button type="submit" class="btn-primary">Generar QR</button>
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-qr')">Cancelar</button>
+          <button type="submit" id="btn-save-qr" class="btn-primary">Generar QR</button>
         </div>
       </form>
     </div>
@@ -4520,49 +4583,160 @@ export function renderAdminHtml(): string {
     // ==============================================================================
     // Gestión de Códigos QR
     // ==============================================================================
+    let cachedQrs = [];
+    let modalQrSaveInProgress = false;
+
     async function loadAdminQr() {
       const tbody = document.getElementById('qr-tbody');
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Cargando fuentes QR...</td></tr>';
+      const cardsContainer = document.getElementById('qr-cards-container');
+      const badge = document.getElementById('qr-count-badge');
+
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando fuentes QR...</td></tr>';
+      if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando fuentes QR...</div>';
+
       try {
         const res = await apiFetch('/api/v1/admin/qr-sources');
         const data = await res.json();
         const qrs = data.qr_sources || [];
+        cachedQrs = qrs;
 
-        tbody.innerHTML = qrs.map(q => \`
-          <tr>
-            <td><strong>\${escapeHtml(q.accommodation_name)}</strong></td>
-            <td><span class="status-pill status-published">\${q.accommodation_type || 'hotel'}</span></td>
-            <td>
-              <code>\${escapeHtml(q.qr_code)}</code><br>
-              <a href="https://vayaplan.com/qr/\${q.qr_code}" target="_blank" style="color:var(--accent-blue); font-size:0.75rem;">https://vayaplan.com/qr/\${q.qr_code}</a>
-            </td>
-            <td><strong style="color:var(--emerald); font-size:1.1rem;">\${q.total_scans}</strong> escaneos</td>
-            <td>
-              <div class="action-group">
-                <a href="/api/v1/admin/qr-sources/\${q.id}/svg?format=card" target="_blank" class="btn-act btn-metrics">Descargar Tarjeta SVG</a>
-                <button class="btn-act" onclick="navigator.clipboard.writeText('https://vayaplan.com/qr/\${q.qr_code}'); alert('Enlace copiado al portapapeles!');">Copiar Link</button>
+        if (badge) {
+          badge.textContent = String(qrs.length);
+          badge.style.display = qrs.length > 0 ? 'inline-block' : 'none';
+        }
+
+        if (qrs.length === 0) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">No hay fuentes QR registradas.</td></tr>';
+          if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No hay fuentes QR registradas.</div>';
+          return;
+        }
+
+        // Render Desktop Table
+        if (tbody) {
+          tbody.innerHTML = qrs.map(q => \`
+            <tr id="qr-row-\${q.id}">
+              <td>
+                <strong style="color:var(--text-main); font-size:0.9rem;">\${escapeHtml(q.accommodation_name)}</strong>
+              </td>
+              <td><span class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:800; text-transform:capitalize;">\${escapeHtml(q.accommodation_type || 'hotel')}</span></td>
+              <td>
+                <code style="background:var(--bg-subtle); padding:0.2rem 0.4rem; border-radius:4px; font-size:0.8125rem; border:1px solid var(--border); font-family:var(--font-mono, monospace);">\${escapeHtml(q.qr_code)}</code><br>
+                <a href="https://vayaplan.com/qr/\${escapeHtml(q.qr_code)}" target="_blank" rel="noopener" style="color:var(--primary); font-size:0.75rem; font-weight:600; text-decoration:underline;">https://vayaplan.com/qr/\${escapeHtml(q.qr_code)} ↗</a>
+              </td>
+              <td>
+                <strong style="color:var(--emerald); font-size:1.15rem; font-weight:800;">\${q.total_scans}</strong> <span style="font-size:0.8125rem; color:var(--text-muted);">escaneos</span>
+              </td>
+              <td>
+                <div class="action-group">
+                  <a href="/api/v1/admin/qr-sources/\${q.id}/svg?format=card" target="_blank" class="btn-table-action" style="text-decoration:none;">📥 Descargar Tarjeta SVG</a>
+                  <button type="button" class="btn-table-action" onclick="copyQrLink('\${escapeHtml(q.qr_code)}')">📋 Copiar Link</button>
+                </div>
+              </td>
+            </tr>
+          \`).join('');
+        }
+
+        // Render Mobile Cards
+        if (cardsContainer) {
+          cardsContainer.innerHTML = qrs.map(q => \`
+            <div class="qr-card" id="qr-card-\${q.id}">
+              <div class="qr-card-header">
+                <span class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:800; text-transform:capitalize;">\${escapeHtml(q.accommodation_type || 'hotel')}</span>
+                <span class="badge" style="background:var(--emerald-soft, #ecfdf5); color:var(--emerald, #059669); font-weight:800;">\${q.total_scans} escaneos</span>
               </div>
-            </td>
-          </tr>
-        \`).join('');
-      } catch {}
+              <h4 class="qr-card-title">\${escapeHtml(q.accommodation_name)}</h4>
+              <div class="qr-card-body">
+                <div>🏷️ <strong>Código:</strong> <code style="font-family:monospace; font-size:0.8rem;">\${escapeHtml(q.qr_code)}</code></div>
+                <div>🔗 <strong>Enlace directo:</strong> <a href="https://vayaplan.com/qr/\${escapeHtml(q.qr_code)}" target="_blank" rel="noopener" style="color:var(--primary); word-break:break-all; text-decoration:underline;">https://vayaplan.com/qr/\${escapeHtml(q.qr_code)} ↗</a></div>
+                <div>📊 <strong>Total de escaneos:</strong> <strong style="color:var(--emerald);">\${q.total_scans}</strong></div>
+              </div>
+              <div class="qr-card-actions">
+                <a href="/api/v1/admin/qr-sources/\${q.id}/svg?format=card" target="_blank" class="btn-table-action" style="text-decoration:none;">📥 Descargar Tarjeta SVG</a>
+                <button type="button" class="btn-table-action" onclick="copyQrLink('\${escapeHtml(q.qr_code)}')">📋 Copiar Link</button>
+              </div>
+            </div>
+          \`).join('');
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--red); padding:2rem;">Error al cargar fuentes QR.</td></tr>';
+        if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; color:var(--red); padding:2rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar fuentes QR.</div>';
+      }
     }
 
     window.openNewQrModal = function() {
+      modalQrSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
+      document.getElementById('modal-qr-title').innerText = 'Nuevo QR para Alojamiento';
+      const form = document.getElementById('form-qr');
+      if (form) form.reset();
+      const saveBtn = document.getElementById('btn-save-qr');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Generar QR';
+      }
       openModal('modal-qr');
+      const nameInput = document.getElementById('qr-name');
+      if (nameInput) nameInput.focus();
+    };
+
+    window.copyQrLink = function(code) {
+      const url = 'https://vayaplan.com/qr/' + code;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          alert('¡Enlace copiado al portapapeles!');
+        }).catch(() => {
+          prompt('Copia el enlace manualmente:', url);
+        });
+      } else {
+        prompt('Copia el enlace manualmente:', url);
+      }
     };
 
     window.saveQrSource = async function(e) {
       e.preventDefault();
+      if (modalQrSaveInProgress) return;
+      const saveBtn = document.getElementById('btn-save-qr');
+      const nameVal = document.getElementById('qr-name').value.trim();
+      if (!nameVal || nameVal.length < 3) {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = 'Generar QR';
+        }
+        alert('El nombre del alojamiento debe tener al menos 3 caracteres.');
+        return;
+      }
+
       const payload = {
-        accommodation_name: document.getElementById('qr-name').value.trim(),
+        accommodation_name: nameVal,
         accommodation_type: document.getElementById('qr-type').value,
         qr_code: document.getElementById('qr-code-input').value.trim() || undefined,
       };
 
-      await apiFetch('/api/v1/admin/qr-sources', { method: 'POST', body: JSON.stringify(payload) });
-      closeModal('modal-qr');
-      loadAdminQr();
+      modalQrSaveInProgress = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Generando...';
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/qr-sources', { method: 'POST', body: JSON.stringify(payload) });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || 'Error al guardar fuente QR.');
+          return;
+        }
+
+        closeModal('modal-qr');
+        loadAdminQr();
+      } catch (err) {
+        alert('Error de conexión al guardar fuente QR.');
+      } finally {
+        modalQrSaveInProgress = false;
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = 'Generar QR';
+        }
+      }
     };
 
     // ==============================================================================
@@ -5192,6 +5366,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           if (activeModal.id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
           if (activeModal.id === 'modal-exception' && modalExceptionSaveInProgress) return;
           if (activeModal.id === 'modal-place' && modalPlaceSaveInProgress) return;
+          if (activeModal.id === 'modal-qr' && modalQrSaveInProgress) return;
           closeModal(activeModal.id);
         } else {
           toggleMobileDrawer(false);
@@ -5219,6 +5394,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
       if (id === 'modal-exception' && modalExceptionSaveInProgress) return;
       if (id === 'modal-place' && modalPlaceSaveInProgress) return;
+      if (id === 'modal-qr' && modalQrSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
       const target = lastActiveElementBeforeModal;
