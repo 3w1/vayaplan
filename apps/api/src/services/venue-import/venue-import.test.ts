@@ -14,9 +14,17 @@ import {
   resolveDbUrl,
 } from '../../scripts/venue-import';
 
-const TEST_DB_URL =
-  process.env.VENUE_IMPORT_TEST_DB_URL ||
-  'postgresql://vayaplan_user:vayaplan_dev_secret_2026@172.20.0.2:5432/vayaplan_import_synthetic';
+const rawTestDbUrl = process.env.VENUE_IMPORT_TEST_DB_URL;
+if (!rawTestDbUrl || rawTestDbUrl.trim().length === 0) {
+  console.error(
+    'Error de configuración: Se requiere la variable de entorno VENUE_IMPORT_TEST_DB_URL para ejecutar la suite de pruebas.\n' +
+      'Ejemplo:\n' +
+      '  VENUE_IMPORT_TEST_DB_URL=postgresql://usuario:clave@host:5432/vayaplan_import_synthetic \\\n' +
+      '  bun run apps/api/src/services/venue-import/venue-import.test.ts'
+  );
+  process.exit(1);
+}
+const TEST_DB_URL = rawTestDbUrl.trim();
 
 async function runTestSuite() {
   console.log('========================================================');
@@ -24,13 +32,14 @@ async function runTestSuite() {
   console.log('BD objetivo:', redactDbUrl(TEST_DB_URL));
   console.log('========================================================\n');
 
-  // Comprobación de seguridad de entorno sintético
+  // Comprobación de seguridad preventiva (salvaguarda adicional, no garantía absoluta de aislamiento de red)
   try {
     const parsed = new URL(TEST_DB_URL);
     const dbName = parsed.pathname.replace(/^\//, '');
     if (!dbName.includes('test') && !dbName.includes('synthetic')) {
       console.error(
-        `Error de seguridad: La base de datos objetivo "${dbName}" no contiene "test" ni "synthetic". Ejecución abortada.`
+        `Error de seguridad preventiva: La base de datos objetivo "${dbName}" no contiene "test" ni "synthetic". ` +
+          `Esta comprobación es una salvaguarda adicional para prevenir ejecuciones accidentales contra bases no autorizadas. Ejecución abortada.`
       );
       process.exit(1);
     }
@@ -71,21 +80,24 @@ async function runTestSuite() {
     delete process.env.VENUE_IMPORT_DATABASE_URL;
     assert(resolveDbUrl(undefined) === null, 'Sin flag ni env var retorna null (falla antes de conectar)');
 
-    process.env.VENUE_IMPORT_DATABASE_URL = 'postgresql://env_user:env_pass@localhost:5432/env_db';
+    // Fixture sintético simulado para verificar precedencia de variable de entorno (sin conexión real)
+    process.env.VENUE_IMPORT_DATABASE_URL = 'postgresql://mock_env_user:mock_env_pass@localhost:5432/mock_env_db';
     assert(
-      resolveDbUrl(undefined) === 'postgresql://env_user:env_pass@localhost:5432/env_db',
+      resolveDbUrl(undefined) === 'postgresql://mock_env_user:mock_env_pass@localhost:5432/mock_env_db',
       'VENUE_IMPORT_DATABASE_URL utilizado si no hay flag'
     );
 
+    // Fixture sintético simulado para verificar precedencia de flag CLI (sin conexión real)
     assert(
-      resolveDbUrl('postgresql://cli_user:cli_pass@localhost:5432/cli_db') ===
-        'postgresql://cli_user:cli_pass@localhost:5432/cli_db',
+      resolveDbUrl('postgresql://mock_cli_user:mock_cli_pass@localhost:5432/mock_cli_db') ===
+        'postgresql://mock_cli_user:mock_cli_pass@localhost:5432/mock_cli_db',
       'Precedencia: flag --db-url prevalece sobre VENUE_IMPORT_DATABASE_URL'
     );
 
-    const secretUrl = 'postgresql://vayaplan_user:SuperSecretPassword123@172.20.0.2:5432/vayaplan_test';
+    // Fixture sintético simulado para verificar la ofuscación de contraseñas (sin conexión real)
+    const secretUrl = 'postgresql://mock_user:MockSecretPassword123@mock-db-host:5432/mock_test_db';
     const redacted = redactDbUrl(secretUrl);
-    assert(!redacted.includes('SuperSecretPassword123'), 'Contraseña eliminada en redacción de URL');
+    assert(!redacted.includes('MockSecretPassword123'), 'Contraseña eliminada en redacción de URL');
     assert(redacted.includes('***'), 'Contraseña sustituida por máscara ***');
   } finally {
     if (prevEnv) process.env.VENUE_IMPORT_DATABASE_URL = prevEnv;
