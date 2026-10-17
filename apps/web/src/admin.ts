@@ -1038,6 +1038,57 @@ export function renderAdminHtml(): string {
       align-items: center;
     }
 
+    /* Locales (Venues) Responsive */
+    .venues-cards-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .venue-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.125rem;
+      box-shadow: 0 1px 3px rgba(11, 15, 59, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .venue-card.venue-card-warning {
+      background: #fffdf5;
+      border-color: #fde68a;
+    }
+    .venue-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .venue-card-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.35;
+    }
+    .venue-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+    .venue-card-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+      align-items: center;
+    }
+
     .btn-table-action {
       background: var(--bg-surface);
       color: var(--text-muted);
@@ -1158,21 +1209,25 @@ export function renderAdminHtml(): string {
 
     @media (max-width: 768px) {
       .events-table-desktop,
-      .promo-table-desktop {
+      .promo-table-desktop,
+      .venues-table-desktop {
         display: none !important;
       }
       .events-cards-mobile,
-      .promo-cards-mobile {
+      .promo-cards-mobile,
+      .venues-cards-mobile {
         display: flex !important;
       }
     }
     @media (min-width: 769px) {
       .events-table-desktop,
-      .promo-table-desktop {
+      .promo-table-desktop,
+      .venues-table-desktop {
         display: block !important;
       }
       .events-cards-mobile,
-      .promo-cards-mobile {
+      .promo-cards-mobile,
+      .venues-cards-mobile {
         display: none !important;
       }
     }
@@ -1703,25 +1758,35 @@ export function renderAdminHtml(): string {
       <!-- SECCIÓN 2: LOCALES (VENUES) -->
       <section id="section-venues" style="display:none;">
         <div class="toolbar">
-          <h3>Locales Censados en Palencia</h3>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <h3 style="margin:0; font-size:1.125rem; font-weight:800; color:var(--text-main);">Locales Censados en Palencia</h3>
+            <span id="venues-count-badge" class="badge-count" style="display:none;">0</span>
+          </div>
           <button class="btn-primary" onclick="openNewVenueModal()">+ Nuevo Local</button>
         </div>
-        <div class="table-container">
+
+        <!-- Vista Desktop: Tabla estructurada -->
+        <div class="table-container venues-table-desktop">
           <table>
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Nombre</th>
+                <th>Local / Zona / Categoría</th>
                 <th>Dirección</th>
-                <th>WhatsApp</th>
+                <th>Contacto</th>
                 <th>Estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="venues-tbody">
-              <tr><td colspan="6" style="text-align:center;">Cargando locales...</td></tr>
+              <tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando locales...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales -->
+        <div id="venues-cards-container" class="venues-cards-mobile">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando locales...</div>
         </div>
       </section>
 
@@ -2028,40 +2093,49 @@ export function renderAdminHtml(): string {
         </div>
       </div>
     </div>
-  </div><!-- MODAL: NUEVO LOCAL (VENUE) -->
+  </div>
+
+  <!-- MODAL: NUEVO / EDITAR LOCAL (TEMA CLARO) -->
   <div id="modal-venue" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-venue-title">Nuevo Local</h3>
-        <button class="modal-close" onclick="closeModal('modal-venue')">✕</button>
+        <h3 id="modal-venue-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nuevo Local</h3>
+        <button class="modal-close" onclick="closeModal('modal-venue')" aria-label="Cerrar modal">✕</button>
       </div>
       <form id="form-venue" onsubmit="saveVenue(event)">
-        <input type="hidden" id="venue-id">
-        <div class="form-group">
-          <label>Nombre del local *</label>
-          <input type="text" id="venue-name" required placeholder="Ej: Bar Central">
-        </div>
-        <div class="form-group" style="margin-top:1rem;">
-          <label>Dirección</label>
-          <input type="text" id="venue-address" placeholder="Calle Mayor 12, Palencia">
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
+        <div class="modal-body">
+          <input type="hidden" id="venue-id">
+
           <div class="form-group">
-            <label>WhatsApp de contacto</label>
-            <input type="text" id="venue-whatsapp" placeholder="+34600112233">
+            <label for="venue-name" style="font-weight:700; color:var(--text-main);">Nombre del local *</label>
+            <input type="text" id="venue-name" required placeholder="Ej: Bar Central">
           </div>
+
           <div class="form-group">
-            <label>Instagram (@usuario)</label>
-            <input type="text" id="venue-instagram" placeholder="barcentral">
+            <label for="venue-address" style="font-weight:700; color:var(--text-main);">Dirección</label>
+            <input type="text" id="venue-address" placeholder="Calle Mayor 12, Palencia">
+          </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="venue-whatsapp" style="font-weight:700; color:var(--text-main);">WhatsApp de contacto</label>
+              <input type="text" id="venue-whatsapp" placeholder="+34600112233">
+            </div>
+            <div class="form-group">
+              <label for="venue-instagram" style="font-weight:700; color:var(--text-main);">Instagram (@usuario)</label>
+              <input type="text" id="venue-instagram" placeholder="barcentral">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="venue-maps-url" style="font-weight:700; color:var(--text-main);">Enlace Google Maps</label>
+            <input type="url" id="venue-maps-url" placeholder="https://maps.google.com/?cid=...">
           </div>
         </div>
-        <div class="form-group" style="margin-top:1rem;">
-          <label>Enlace Google Maps</label>
-          <input type="url" id="venue-maps-url" placeholder="https://maps.google.com/?cid=...">
-        </div>
+
         <div class="modal-footer">
-          <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-venue')">Cancelar</button>
-          <button type="submit" class="btn-primary">Guardar Local</button>
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-venue')">Cancelar</button>
+          <button type="submit" id="btn-save-venue" class="btn-primary">Guardar Local</button>
         </div>
       </form>
     </div>
@@ -2357,8 +2431,20 @@ export function renderAdminHtml(): string {
     let adminEventsRequestId = 0;
     const eventActionsInProgress = new Set();
     let modalEventSaveInProgress = false;
+    let modalVenueSaveInProgress = false;
     let currentEditingEvent = null;
     let editEventOrigin = 'events';
+
+    function formatVenueZone(zone) {
+      if (!zone) return '';
+      const map = {
+        'centro_puebla': 'Centro / Puebla',
+        'seminario': 'Seminario',
+        'salon': 'El Salón',
+        'otros': 'Otros recintos'
+      };
+      return map[zone] || zone;
+    }
 
     function getEventStatusBadge(status) {
       if (status === 'published') return '<span class="status-pill status-published">Publicado</span>';
@@ -3572,67 +3658,212 @@ export function renderAdminHtml(): string {
     // ==============================================================================
     async function loadAdminVenues() {
       const tbody = document.getElementById('venues-tbody');
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando locales...</td></tr>';
+      const cardsContainer = document.getElementById('venues-cards-container');
+      const countBadge = document.getElementById('venues-count-badge');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando locales...</td></tr>';
+      if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando locales...</div>';
+
       try {
         const res = await apiFetch('/api/v1/admin/venues');
         const data = await res.json();
         const venues = data.venues || [];
+        cachedVenues = venues;
 
-        tbody.innerHTML = venues.map(v => \`
-          <tr>
-            <td>#\${v.id}</td>
-            <td><strong>\${escapeHtml(v.name)}</strong></td>
-            <td>\${escapeHtml(v.address || '—')}</td>
-            <td>\${escapeHtml(v.whatsapp_contact || '—')}</td>
-            <td><span class="status-pill status-\${v.is_active ? 'published' : 'outdated'}">\${v.is_active ? 'Activo' : 'Inactivo'}</span></td>
-            <td>
-              <button class="btn-act" onclick="editVenue(\${v.id})">✏️ Editar</button>
-            </td>
-          </tr>
-        \`).join('');
-      } catch {}
+        if (countBadge) {
+          countBadge.innerText = venues.length;
+          countBadge.style.display = 'inline-block';
+        }
+
+        if (venues.length === 0) {
+          const emptyMsg = 'No hay locales censados registrados.';
+          if (tbody) tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem;">\${emptyMsg}</td></tr>\`;
+          if (cardsContainer) cardsContainer.innerHTML = \`<div style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">\${emptyMsg}</div>\`;
+          return;
+        }
+
+        // Render Desktop
+        if (tbody) {
+          tbody.innerHTML = venues.map(v => {
+            const is9999 = v.id === 9999;
+            const statusBadge = is9999
+              ? '<span class="badge-status" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">⚠️ Provisional</span>'
+              : \`<span class="badge-status \${v.is_active ? 'badge-active' : 'badge-cancelled'}">\${v.is_active ? 'Activo' : 'Inactivo'}</span>\`;
+
+            const contacts = [];
+            if (v.whatsapp_contact) {
+              const cleanWa = v.whatsapp_contact.replace(/[^0-9]/g, '');
+              contacts.push(\`<div>💬 <a href="https://wa.me/\${encodeURIComponent(cleanWa)}" target="_blank" rel="noopener" style="color:var(--text-main); font-weight:600; text-decoration:none;">\${escapeHtml(v.whatsapp_contact)}</a></div>\`);
+            }
+            if (v.instagram_handle) {
+              contacts.push(\`<div style="margin-top:0.2rem; font-size:0.8125rem;">📷 <a href="https://instagram.com/\${encodeURIComponent(v.instagram_handle)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:none;">@\${escapeHtml(v.instagram_handle)}</a></div>\`);
+            }
+            if (v.website_url) {
+              contacts.push(\`<div style="margin-top:0.2rem; font-size:0.75rem;"><a href="\${escapeHtml(v.website_url)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:none;">🌐 Web oficial ↗</a></div>\`);
+            }
+            const contactHtml = contacts.length > 0 ? contacts.join('') : '<span style="color:var(--text-dim);">—</span>';
+
+            return \`
+              <tr id="venue-row-\${v.id}">
+                <td><strong style="color:var(--text-dim); font-size:0.8125rem;">#\${v.id}</strong></td>
+                <td>
+                  <div style="font-weight:700; font-size:0.9375rem; color:var(--text-main); line-height:1.35;">\${escapeHtml(v.name)}</div>
+                  <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem; flex-wrap:wrap;">
+                    \${v.zone ? \`<span class="venue-badge">Zona: \${escapeHtml(formatVenueZone(v.zone))}</span>\` : ''}
+                    \${v.category ? \`<span class="venue-badge">Cat: \${escapeHtml(v.category)}</span>\` : ''}
+                  </div>
+                  \${is9999 ? \`
+                    <div style="margin-top:0.35rem;">
+                      <span class="badge-unverified">⚠️ Local provisional del sistema</span>
+                    </div>
+                  \` : ''}
+                </td>
+                <td>
+                  \${v.address ? \`<div>📍 <strong>\${escapeHtml(v.address)}</strong></div>\` : '<span style="color:var(--text-dim);">—</span>'}
+                  \${v.google_maps_url ? \`<a href="\${escapeHtml(v.google_maps_url)}" target="_blank" rel="noopener" class="link-source" style="display:inline-flex; align-items:center; gap:0.2rem; margin-top:0.25rem; font-size:0.75rem; color:var(--primary); text-decoration:none;">🗺️ Maps ↗</a>\` : ''}
+                </td>
+                <td>\${contactHtml}</td>
+                <td>\${statusBadge}</td>
+                <td>
+                  <button class="btn-table-action" onclick="editVenue(\${v.id})" aria-label="Editar local #\${v.id}" title="Editar local">✏️ Editar</button>
+                </td>
+              </tr>
+            \`;
+          }).join('');
+        }
+
+        // Render Móvil (Tarjetas)
+        if (cardsContainer) {
+          cardsContainer.innerHTML = venues.map(v => {
+            const is9999 = v.id === 9999;
+            const statusBadge = is9999
+              ? '<span class="badge-status" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">⚠️ Provisional</span>'
+              : \`<span class="badge-status \${v.is_active ? 'badge-active' : 'badge-cancelled'}">\${v.is_active ? 'Activo' : 'Inactivo'}</span>\`;
+
+            return \`
+              <article class="venue-card \${is9999 ? 'venue-card-warning' : ''}" id="venue-card-\${v.id}">
+                <div class="venue-card-header">
+                  <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    \${statusBadge}
+                    <span style="font-size:0.75rem; font-weight:700; color:var(--text-dim);">#\${v.id}</span>
+                    \${v.zone ? \`<span class="venue-badge">Zona: \${escapeHtml(formatVenueZone(v.zone))}</span>\` : ''}
+                    \${v.category ? \`<span class="venue-badge">Cat: \${escapeHtml(v.category)}</span>\` : ''}
+                  </div>
+                </div>
+                <h4 class="venue-card-title">\${escapeHtml(v.name)}</h4>
+                \${is9999 ? \`
+                  <div style="font-size:0.8125rem; color:#b45309; font-weight:600; line-height:1.4;">
+                    ⚠️ Local provisional del sistema para borradores sin asignar. No asignable en curación.
+                  </div>
+                \` : ''}
+                <div class="venue-card-body">
+                  \${v.address ? \`<div>📍 <strong>\${escapeHtml(v.address)}</strong></div>\` : ''}
+                  \${v.whatsapp_contact ? \`<div>💬 WhatsApp: <strong>\${escapeHtml(v.whatsapp_contact)}</strong></div>\` : ''}
+                  \${v.instagram_handle ? \`<div>📷 Instagram: <strong>@\${escapeHtml(v.instagram_handle)}</strong></div>\` : ''}
+                  \${v.google_maps_url ? \`<div>🗺️ <a href="\${escapeHtml(v.google_maps_url)}" target="_blank" rel="noopener" style="color:var(--primary); font-size:0.8125rem;">Ver en Google Maps ↗</a></div>\` : ''}
+                  \${v.website_url ? \`<div>🌐 <a href="\${escapeHtml(v.website_url)}" target="_blank" rel="noopener" style="color:var(--primary); font-size:0.8125rem;">Web oficial ↗</a></div>\` : ''}
+                </div>
+                <div class="venue-card-actions">
+                  <button class="btn-card-action" onclick="editVenue(\${v.id})" aria-label="Editar local #\${v.id}">✏️ Editar Local</button>
+                </div>
+              </article>
+            \`;
+          }).join('');
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--red); padding:2rem;">Error al cargar el censo de locales.</td></tr>';
+        if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; color:var(--red); padding:2rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar el censo de locales.</div>';
+      }
     }
 
     window.openNewVenueModal = function() {
+      modalVenueSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
       document.getElementById('modal-venue-title').innerText = 'Nuevo Local';
       document.getElementById('form-venue').reset();
       document.getElementById('venue-id').value = '';
+      const saveBtn = document.getElementById('btn-save-venue');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Guardar Local';
+      }
       openModal('modal-venue');
+      const input = document.getElementById('venue-name');
+      if (input) input.focus();
     };
 
     window.editVenue = function(id) {
       const v = cachedVenues.find(x => x.id === id);
       if (!v) return;
+      modalVenueSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
       document.getElementById('modal-venue-title').innerText = 'Editar Local #' + v.id;
       document.getElementById('venue-id').value = v.id;
-      document.getElementById('venue-name').value = v.name;
+      document.getElementById('venue-name').value = v.name || '';
       document.getElementById('venue-address').value = v.address || '';
       document.getElementById('venue-whatsapp').value = v.whatsapp_contact || '';
       document.getElementById('venue-instagram').value = v.instagram_handle || '';
       document.getElementById('venue-maps-url').value = v.google_maps_url || '';
+      const saveBtn = document.getElementById('btn-save-venue');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Guardar Cambios';
+      }
       openModal('modal-venue');
+      const nameInput = document.getElementById('venue-name');
+      if (nameInput) nameInput.focus();
     };
 
     window.saveVenue = async function(e) {
       e.preventDefault();
+      if (modalVenueSaveInProgress) return;
+      const saveBtn = document.getElementById('btn-save-venue');
       const id = document.getElementById('venue-id').value;
+      const nameVal = document.getElementById('venue-name').value.trim();
+      if (!nameVal) {
+        alert('El nombre del local es obligatorio.');
+        return;
+      }
+
       const payload = {
-        name: document.getElementById('venue-name').value.trim(),
+        name: nameVal,
         address: document.getElementById('venue-address').value.trim() || null,
         whatsapp_contact: document.getElementById('venue-whatsapp').value.trim() || null,
-        instagram_handle: document.getElementById('venue-instagram').value.trim() || null,
+        instagram_handle: document.getElementById('venue-instagram').value.trim()?.replace('@', '') || null,
         google_maps_url: document.getElementById('venue-maps-url').value.trim() || null,
       };
 
-      if (id) {
-        await apiFetch(\`/api/v1/admin/venues/\${id}\`, { method: 'PATCH', body: JSON.stringify(payload) });
-      } else {
-        await apiFetch('/api/v1/admin/venues', { method: 'POST', body: JSON.stringify(payload) });
+      modalVenueSaveInProgress = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Guardando...';
       }
 
-      closeModal('modal-venue');
-      await loadVenuesCache();
-      loadAdminVenues();
+      try {
+        let res;
+        if (id) {
+          res = await apiFetch(\`/api/v1/admin/venues/\${id}\`, { method: 'PATCH', body: JSON.stringify(payload) });
+        } else {
+          res = await apiFetch('/api/v1/admin/venues', { method: 'POST', body: JSON.stringify(payload) });
+        }
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || 'Error al guardar el local.');
+          return;
+        }
+
+        closeModal('modal-venue');
+        await loadVenuesCache();
+        loadAdminVenues();
+      } catch (err) {
+        alert('Error de conexión al guardar el local.');
+      } finally {
+        modalVenueSaveInProgress = false;
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = id ? 'Guardar Cambios' : 'Guardar Local';
+        }
+      }
     };
 
     // ==============================================================================
@@ -4433,6 +4664,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           if (activeModal.id === 'modal-reassign-venue' && modalSaveInProgress) return;
           if (activeModal.id === 'modal-promotion' && promoSaveInProgress) return;
           if (activeModal.id === 'modal-event' && modalEventSaveInProgress) return;
+          if (activeModal.id === 'modal-venue' && modalVenueSaveInProgress) return;
           closeModal(activeModal.id);
         } else {
           toggleMobileDrawer(false);
@@ -4456,6 +4688,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (id === 'modal-reassign-venue' && modalSaveInProgress) return;
       if (id === 'modal-promotion' && promoSaveInProgress) return;
       if (id === 'modal-event' && modalEventSaveInProgress) return;
+      if (id === 'modal-venue' && modalVenueSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
       const target = lastActiveElementBeforeModal;
