@@ -1089,6 +1089,53 @@ export function renderAdminHtml(): string {
       align-items: center;
     }
 
+    /* Recurrencias Responsive */
+    .recurrences-cards-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .recurrence-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.125rem;
+      box-shadow: 0 1px 3px rgba(11, 15, 59, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .recurrence-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .recurrence-card-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.35;
+    }
+    .recurrence-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+    .recurrence-card-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+      align-items: center;
+    }
+
     .btn-table-action {
       background: var(--bg-surface);
       color: var(--text-muted);
@@ -1210,24 +1257,28 @@ export function renderAdminHtml(): string {
     @media (max-width: 768px) {
       .events-table-desktop,
       .promo-table-desktop,
-      .venues-table-desktop {
+      .venues-table-desktop,
+      .recurrences-table-desktop {
         display: none !important;
       }
       .events-cards-mobile,
       .promo-cards-mobile,
-      .venues-cards-mobile {
+      .venues-cards-mobile,
+      .recurrences-cards-mobile {
         display: flex !important;
       }
     }
     @media (min-width: 769px) {
       .events-table-desktop,
       .promo-table-desktop,
-      .venues-table-desktop {
+      .venues-table-desktop,
+      .recurrences-table-desktop {
         display: block !important;
       }
       .events-cards-mobile,
       .promo-cards-mobile,
-      .venues-cards-mobile {
+      .venues-cards-mobile,
+      .recurrences-cards-mobile {
         display: none !important;
       }
     }
@@ -1793,27 +1844,36 @@ export function renderAdminHtml(): string {
       <!-- SECCIÓN 3: RECURRENCIAS -->
       <section id="section-recurrences" style="display:none;">
         <div class="toolbar">
-          <h3>Planes Semanales Periódicos</h3>
-          <div style="display:flex; gap:0.5rem;">
-            <button class="btn-primary" onclick="openNewRecurrenceModal()">+ Nueva Recurrencia</button>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <h3 style="margin:0; font-size:1.125rem; font-weight:800; color:var(--text-main);">Planes Semanales Periódicos</h3>
+            <span id="recurrences-count-badge" class="badge-count" style="display:none;">0</span>
           </div>
+          <button class="btn-primary" onclick="openNewRecurrenceModal()">+ Nueva Recurrencia</button>
         </div>
-        <div class="table-container">
+
+        <!-- Vista Desktop: Tabla estructurada -->
+        <div class="table-container recurrences-table-desktop">
           <table>
             <thead>
               <tr>
                 <th>Día</th>
-                <th>Título / Local</th>
+                <th>Actividad / Local</th>
                 <th>Horario</th>
                 <th>Precio</th>
+                <th>Estado</th>
                 <th>Excepciones</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="recurrences-tbody">
-              <tr><td colspan="6" style="text-align:center;">Cargando recurrencias...</td></tr>
+              <tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando recurrencias...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales -->
+        <div id="recurrences-cards-container" class="recurrences-cards-mobile">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando recurrencias...</div>
         </div>
       </section>
 
@@ -2141,74 +2201,86 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
-  <!-- MODAL: NUEVA RECURRENCIA -->
+  <!-- MODAL: NUEVA / EDITAR RECURRENCIA (TEMA CLARO) -->
   <div id="modal-recurrence" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Nueva Recurrencia Semanal</h3>
-        <button class="modal-close" onclick="closeModal('modal-recurrence')">✕</button>
+        <h3 id="modal-recurrence-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nueva Recurrencia Semanal</h3>
+        <button class="modal-close" onclick="closeModal('modal-recurrence')" aria-label="Cerrar modal">✕</button>
       </div>
-      <form onsubmit="saveRecurrence(event)">
-        <div class="form-group">
-          <label>Título de la actividad *</label>
-          <input type="text" id="rec-title" required placeholder="Ej: Tardeo Indie">
+      <form id="form-recurrence" onsubmit="saveRecurrence(event)">
+        <div class="modal-body">
+          <input type="hidden" id="rec-id">
+
+          <div class="form-group">
+            <label for="rec-title" style="font-weight:700; color:var(--text-main);">Título de la actividad *</label>
+            <input type="text" id="rec-title" required placeholder="Ej: Tardeo Indie">
+          </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="rec-venue-id" style="font-weight:700; color:var(--text-main);">Local *</label>
+              <select id="rec-venue-id" required></select>
+            </div>
+            <div class="form-group">
+              <label for="rec-dow" style="font-weight:700; color:var(--text-main);">Día de la semana *</label>
+              <select id="rec-dow" required>
+                <option value="5">Viernes</option>
+                <option value="6">Sábado</option>
+                <option value="0">Domingo</option>
+                <option value="4">Jueves</option>
+                <option value="3">Miércoles</option>
+                <option value="2">Martes</option>
+                <option value="1">Lunes</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="rec-start-time" style="font-weight:700; color:var(--text-main);">Hora de inicio *</label>
+              <input type="time" id="rec-start-time" required value="18:00">
+            </div>
+            <div class="form-group">
+              <label for="rec-end-time" style="font-weight:700; color:var(--text-main);">Hora de fin</label>
+              <input type="time" id="rec-end-time" value="22:00">
+            </div>
+          </div>
         </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
-          <div class="form-group">
-            <label>Local *</label>
-            <select id="rec-venue-id" required></select>
-          </div>
-          <div class="form-group">
-            <label>Día de la semana *</label>
-            <select id="rec-dow" required>
-              <option value="5">Viernes</option>
-              <option value="6">Sábado</option>
-              <option value="0">Domingo</option>
-              <option value="4">Jueves</option>
-              <option value="3">Miércoles</option>
-              <option value="2">Martes</option>
-              <option value="1">Lunes</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
-          <div class="form-group">
-            <label>Hora de inicio *</label>
-            <input type="time" id="rec-start-time" required value="18:00">
-          </div>
-          <div class="form-group">
-            <label>Hora de fin</label>
-            <input type="time" id="rec-end-time" value="22:00">
-          </div>
-        </div>
+
         <div class="modal-footer">
-          <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-recurrence')">Cancelar</button>
-          <button type="submit" class="btn-primary">Guardar Recurrencia</button>
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-recurrence')">Cancelar</button>
+          <button type="submit" id="btn-save-recurrence" class="btn-primary">Guardar Recurrencia</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL: EXCEPCIÓN DE RECURRENCIA -->
+  <!-- MODAL: EXCEPCIÓN DE RECURRENCIA (TEMA CLARO) -->
   <div id="modal-exception" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Excepción Puntual de Recurrencia</h3>
-        <button class="modal-close" onclick="closeModal('modal-exception')">✕</button>
+        <h3 id="modal-exception-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Excepción Puntual de Recurrencia</h3>
+        <button class="modal-close" onclick="closeModal('modal-exception')" aria-label="Cerrar modal">✕</button>
       </div>
-      <form onsubmit="saveException(event)">
-        <input type="hidden" id="exc-rec-id">
-        <div class="form-group">
-          <label>Fecha de la excepción (YYYY-MM-DD) *</label>
-          <input type="date" id="exc-date" required>
+      <form id="form-exception" onsubmit="saveException(event)">
+        <div class="modal-body">
+          <input type="hidden" id="exc-rec-id">
+
+          <div class="form-group">
+            <label for="exc-date" style="font-weight:700; color:var(--text-main);">Fecha de la excepción (YYYY-MM-DD) *</label>
+            <input type="date" id="exc-date" required>
+          </div>
+
+          <div class="form-group" style="margin-top:0.75rem;">
+            <label for="exc-reason" style="font-weight:700; color:var(--text-main);">Motivo *</label>
+            <input type="text" id="exc-reason" required value="Cancelación puntual por festivo" placeholder="Ej: Cancelación puntual por festivo">
+          </div>
         </div>
-        <div class="form-group" style="margin-top:1rem;">
-          <label>Motivo</label>
-          <input type="text" id="exc-reason" required value="Cancelación puntual por festivo">
-        </div>
+
         <div class="modal-footer">
-          <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-exception')">Cancelar</button>
-          <button type="submit" class="btn-primary">Registrar Excepción</button>
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-exception')">Cancelar</button>
+          <button type="submit" id="btn-save-exception" class="btn-primary">Registrar Excepción</button>
         </div>
       </form>
     </div>
@@ -3870,73 +3942,287 @@ export function renderAdminHtml(): string {
     // Gestión de Recurrencias
     // ==============================================================================
     const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    let cachedRecurrences = [];
+    let modalRecurrenceSaveInProgress = false;
+    let modalExceptionSaveInProgress = false;
 
     async function loadAdminRecurrences() {
       const tbody = document.getElementById('recurrences-tbody');
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando recurrencias...</td></tr>';
+      const cardsContainer = document.getElementById('recurrences-cards-container');
+      const badge = document.getElementById('recurrences-count-badge');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando recurrencias...</td></tr>';
+      if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando recurrencias...</div>';
+
       try {
         const res = await apiFetch('/api/v1/admin/recurrences');
         const data = await res.json();
         const recs = data.recurrences || [];
+        cachedRecurrences = recs;
 
-        tbody.innerHTML = recs.map(r => \`
-          <tr>
-            <td><strong>\${DAY_NAMES[r.day_of_week] || r.day_of_week}</strong></td>
-            <td>
-              <strong>\${escapeHtml(r.title)}</strong><br>
-              <small style="color:#94a3b8;">📍 \${escapeHtml(r.venue_name)}</small>
-            </td>
-            <td>\${r.start_time.slice(0, 5)} \${r.end_time ? '- ' + r.end_time.slice(0, 5) : ''}</td>
-            <td>\${r.is_free ? 'Gratis' : (r.price_cents/100).toFixed(2).replace('.', ',') + ' €'}</td>
-            <td><small>\${(r.exceptions && r.exceptions.length) ? r.exceptions.length + ' registrada(s)' : 'Ninguna'}</small></td>
-            <td>
-              <button class="btn-act" onclick="openExceptionModal(\${r.id})">+ Excepción</button>
-            </td>
-          </tr>
-        \`).join('');
-      } catch {}
+        if (badge) {
+          badge.textContent = String(recs.length);
+          badge.style.display = recs.length > 0 ? 'inline-block' : 'none';
+        }
+
+        if (recs.length === 0) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2.5rem; color:var(--text-muted);">No hay actividades periódicas configuradas.</td></tr>';
+          if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No hay actividades periódicas configuradas.</div>';
+          return;
+        }
+
+        // Render Desktop Rows
+        if (tbody) {
+          tbody.innerHTML = recs.map(r => {
+            const dayLabel = DAY_NAMES[r.day_of_week] !== undefined ? DAY_NAMES[r.day_of_week] : String(r.day_of_week);
+            const startTimeStr = r.start_time ? String(r.start_time).slice(0, 5) : '';
+            const endTimeStr = r.end_time ? String(r.end_time).slice(0, 5) : '';
+            const scheduleStr = startTimeStr ? (endTimeStr ? \`\${startTimeStr} – \${endTimeStr}\` : startTimeStr) : '—';
+            const priceStr = r.is_free ? 'Gratis' : (r.price_cents ? (r.price_cents / 100).toFixed(2).replace('.', ',') + ' €' : 'Gratis');
+            const excCount = (r.exceptions && Array.isArray(r.exceptions)) ? r.exceptions.length : 0;
+            const excStr = excCount > 0 ? \`\${excCount} registrada(s)\` : '—';
+            const isActive = r.is_active !== false;
+            const statusBadge = isActive
+              ? '<span class="badge badge-published">Activa</span>'
+              : '<span class="badge badge-outdated">Inactiva</span>';
+
+            return \`
+              <tr id="recurrence-row-\${r.id}">
+                <td>
+                  <span class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:800;">\${escapeHtml(dayLabel)}</span>
+                </td>
+                <td>
+                  <div style="font-weight:700; color:var(--text-main);">\${escapeHtml(r.title)}</div>
+                  <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.15rem;">📍 \${escapeHtml(r.venue_name || 'Sin local')}</div>
+                </td>
+                <td style="font-weight:600; color:var(--text-main); font-size:0.875rem;">\${escapeHtml(scheduleStr)}</td>
+                <td style="color:var(--text-muted); font-size:0.875rem;">\${escapeHtml(priceStr)}</td>
+                <td>\${statusBadge}</td>
+                <td style="font-size:0.8125rem; color:var(--text-dim);">\${escapeHtml(excStr)}</td>
+                <td>
+                  <div style="display:flex; gap:0.35rem; align-items:center;">
+                    <button type="button" class="btn-table-action" onclick="editRecurrence(\${r.id})">✏️ Editar</button>
+                    <button type="button" class="btn-table-action btn-secondary-action" onclick="openExceptionModal(\${r.id})">+ Excepción</button>
+                  </div>
+                </td>
+              </tr>
+            \`;
+          }).join('');
+        }
+
+        // Render Mobile Cards
+        if (cardsContainer) {
+          cardsContainer.innerHTML = recs.map(r => {
+            const dayLabel = DAY_NAMES[r.day_of_week] !== undefined ? DAY_NAMES[r.day_of_week] : String(r.day_of_week);
+            const startTimeStr = r.start_time ? String(r.start_time).slice(0, 5) : '';
+            const endTimeStr = r.end_time ? String(r.end_time).slice(0, 5) : '';
+            const scheduleStr = startTimeStr ? (endTimeStr ? \`\${startTimeStr} – \${endTimeStr}\` : startTimeStr) : '—';
+            const priceStr = r.is_free ? 'Gratis' : (r.price_cents ? (r.price_cents / 100).toFixed(2).replace('.', ',') + ' €' : 'Gratis');
+            const excCount = (r.exceptions && Array.isArray(r.exceptions)) ? r.exceptions.length : 0;
+            const excStr = excCount > 0 ? \`\${excCount} registrada(s)\` : '—';
+            const isActive = r.is_active !== false;
+            const statusBadge = isActive
+              ? '<span class="badge badge-published">Activa</span>'
+              : '<span class="badge badge-outdated">Inactiva</span>';
+
+            return \`
+              <div class="recurrence-card" id="recurrence-card-\${r.id}">
+                <div class="recurrence-card-header">
+                  <span class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:800;">\${escapeHtml(dayLabel)}</span>
+                  \${statusBadge}
+                </div>
+                <h4 class="recurrence-card-title">\${escapeHtml(r.title)}</h4>
+                <div class="recurrence-card-body">
+                  <div>📍 <strong>Local:</strong> \${escapeHtml(r.venue_name || 'Sin local')}</div>
+                  <div>⏰ <strong>Horario:</strong> \${escapeHtml(scheduleStr)}</div>
+                  <div>🏷️ <strong>Precio:</strong> \${escapeHtml(priceStr)}</div>
+                  <div>⚠️ <strong>Excepciones:</strong> \${escapeHtml(excStr)}</div>
+                </div>
+                <div class="recurrence-card-actions">
+                  <button type="button" class="btn-table-action" onclick="editRecurrence(\${r.id})">✏️ Editar Recurrencia</button>
+                  <button type="button" class="btn-table-action btn-secondary-action" onclick="openExceptionModal(\${r.id})">+ Excepción</button>
+                </div>
+              </div>
+            \`;
+          }).join('');
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--red); padding:2rem;">Error al cargar recurrencias.</td></tr>';
+        if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; color:var(--red); padding:2rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar recurrencias.</div>';
+      }
     }
 
     window.openNewRecurrenceModal = function() {
+      modalRecurrenceSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
+      document.getElementById('modal-recurrence-title').innerText = 'Nueva Recurrencia Semanal';
+      document.getElementById('form-recurrence').reset();
+      document.getElementById('rec-id').value = '';
+      const saveBtn = document.getElementById('btn-save-recurrence');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Guardar Recurrencia';
+      }
       openModal('modal-recurrence');
+      const titleInput = document.getElementById('rec-title');
+      if (titleInput) titleInput.focus();
+    };
+
+    window.editRecurrence = function(id) {
+      const r = cachedRecurrences.find(x => x.id === id);
+      if (!r) return;
+      modalRecurrenceSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
+      document.getElementById('modal-recurrence-title').innerText = 'Editar Recurrencia #' + r.id;
+      document.getElementById('rec-id').value = r.id;
+      document.getElementById('rec-title').value = r.title || '';
+      if (document.getElementById('rec-venue-id')) {
+        document.getElementById('rec-venue-id').value = r.venue_id;
+      }
+      if (document.getElementById('rec-dow')) {
+        document.getElementById('rec-dow').value = r.day_of_week;
+      }
+      document.getElementById('rec-start-time').value = r.start_time ? String(r.start_time).slice(0, 5) : '18:00';
+      document.getElementById('rec-end-time').value = r.end_time ? String(r.end_time).slice(0, 5) : '';
+      const saveBtn = document.getElementById('btn-save-recurrence');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Guardar Cambios';
+      }
+      openModal('modal-recurrence');
+      const titleInput = document.getElementById('rec-title');
+      if (titleInput) titleInput.focus();
     };
 
     window.saveRecurrence = async function(e) {
       e.preventDefault();
+      if (modalRecurrenceSaveInProgress) return;
+      const saveBtn = document.getElementById('btn-save-recurrence');
+      const id = document.getElementById('rec-id').value;
+      const titleVal = document.getElementById('rec-title').value.trim();
+      if (!titleVal) {
+        alert('El título de la actividad es obligatorio.');
+        return;
+      }
+      const venueId = Number(document.getElementById('rec-venue-id').value);
+      if (!venueId) {
+        alert('Debes seleccionar un local.');
+        return;
+      }
+      const startTimeVal = document.getElementById('rec-start-time').value;
+      if (!startTimeVal) {
+        alert('La hora de inicio es obligatoria.');
+        return;
+      }
+      const endTimeVal = document.getElementById('rec-end-time').value;
+
       const payload = {
-        title: document.getElementById('rec-title').value.trim(),
-        venue_id: Number(document.getElementById('rec-venue-id').value),
+        title: titleVal,
+        venue_id: venueId,
         day_of_week: Number(document.getElementById('rec-dow').value),
-        start_time: document.getElementById('rec-start-time').value + ':00',
-        end_time: document.getElementById('rec-end-time').value ? document.getElementById('rec-end-time').value + ':00' : null,
+        start_time: startTimeVal + (startTimeVal.length === 5 ? ':00' : ''),
+        end_time: endTimeVal ? endTimeVal + (endTimeVal.length === 5 ? ':00' : '') : null,
       };
 
-      await apiFetch('/api/v1/admin/recurrences', { method: 'POST', body: JSON.stringify(payload) });
-      closeModal('modal-recurrence');
-      loadAdminRecurrences();
+      modalRecurrenceSaveInProgress = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Guardando...';
+      }
+
+      try {
+        let res;
+        if (id) {
+          res = await apiFetch(\`/api/v1/admin/recurrences/\${id}\`, { method: 'PATCH', body: JSON.stringify(payload) });
+        } else {
+          res = await apiFetch('/api/v1/admin/recurrences', { method: 'POST', body: JSON.stringify(payload) });
+        }
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || 'Error al guardar la recurrencia.');
+          return;
+        }
+
+        closeModal('modal-recurrence');
+        loadAdminRecurrences();
+      } catch (err) {
+        alert('Error de conexión al guardar la recurrencia.');
+      } finally {
+        modalRecurrenceSaveInProgress = false;
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = id ? 'Guardar Cambios' : 'Guardar Recurrencia';
+        }
+      }
     };
 
     window.openExceptionModal = function(recId) {
+      modalExceptionSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
       document.getElementById('exc-rec-id').value = recId;
       document.getElementById('exc-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('exc-reason').value = 'Cancelación puntual por festivo';
+      const saveBtn = document.getElementById('btn-save-exception');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Registrar Excepción';
+      }
       openModal('modal-exception');
+      const dateInput = document.getElementById('exc-date');
+      if (dateInput) dateInput.focus();
     };
 
     window.saveException = async function(e) {
       e.preventDefault();
+      if (modalExceptionSaveInProgress) return;
+      const saveBtn = document.getElementById('btn-save-exception');
       const recId = document.getElementById('exc-rec-id').value;
+      const excDate = document.getElementById('exc-date').value.trim();
+      if (!excDate) {
+        alert('La fecha de la excepción es obligatoria.');
+        return;
+      }
+      const reasonVal = document.getElementById('exc-reason').value.trim();
+      if (!reasonVal) {
+        alert('El motivo de la excepción es obligatorio.');
+        return;
+      }
+
       const payload = {
-        exception_date: document.getElementById('exc-date').value,
-        reason: document.getElementById('exc-reason').value.trim(),
+        exception_date: excDate,
+        reason: reasonVal,
         status: 'cancelled',
       };
 
-      await apiFetch(\`/api/v1/admin/recurrences/\${recId}/exceptions\`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      closeModal('modal-exception');
-      loadAdminRecurrences();
+      modalExceptionSaveInProgress = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Registrando...';
+      }
+
+      try {
+        const res = await apiFetch(\`/api/v1/admin/recurrences/\${recId}/exceptions\`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || 'Error al registrar la excepción.');
+          return;
+        }
+
+        closeModal('modal-exception');
+        loadAdminRecurrences();
+      } catch (err) {
+        alert('Error de conexión al registrar la excepción.');
+      } finally {
+        modalExceptionSaveInProgress = false;
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = 'Registrar Excepción';
+        }
+      }
     };
 
     // ==============================================================================
@@ -4665,6 +4951,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           if (activeModal.id === 'modal-promotion' && promoSaveInProgress) return;
           if (activeModal.id === 'modal-event' && modalEventSaveInProgress) return;
           if (activeModal.id === 'modal-venue' && modalVenueSaveInProgress) return;
+          if (activeModal.id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
+          if (activeModal.id === 'modal-exception' && modalExceptionSaveInProgress) return;
           closeModal(activeModal.id);
         } else {
           toggleMobileDrawer(false);
@@ -4689,6 +4977,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (id === 'modal-promotion' && promoSaveInProgress) return;
       if (id === 'modal-event' && modalEventSaveInProgress) return;
       if (id === 'modal-venue' && modalVenueSaveInProgress) return;
+      if (id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
+      if (id === 'modal-exception' && modalExceptionSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
       const target = lastActiveElementBeforeModal;
