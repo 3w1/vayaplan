@@ -991,18 +991,187 @@ export function renderAdminHtml(): string {
       margin-top: 0.25rem;
     }
 
+    /* Agenda Responsive: Tabla en Desktop y Tarjetas en Móvil */
+    .events-cards-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .event-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.125rem;
+      box-shadow: 0 1px 3px rgba(11, 15, 59, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .event-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .event-card-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.35;
+    }
+    .event-card-meta {
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-subtle);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .event-card-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+      align-items: center;
+    }
+
+    .btn-table-action {
+      background: var(--bg-surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border-strong);
+      padding: 0.35rem 0.55rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: all 0.15s ease;
+    }
+    .btn-table-action:hover {
+      background: var(--bg-subtle);
+      color: var(--text-main);
+      border-color: #94a3b8;
+    }
+    .btn-table-action.btn-danger {
+      color: var(--red);
+      border-color: #fecaca;
+    }
+    .btn-table-action.btn-danger:hover {
+      background: #fef2f2;
+      border-color: #ef4444;
+    }
+    .btn-table-action.btn-primary-action {
+      background: var(--emerald);
+      color: #ffffff;
+      border-color: #047857;
+    }
+    .btn-table-action.btn-primary-action:hover {
+      background: #047857;
+    }
+    .btn-table-action.btn-cancel-action {
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
+    .btn-table-action.btn-cancel-action:hover {
+      background: #fef2f2;
+    }
+
+    .collision-box {
+      margin-top: 0.5rem;
+      padding: 0.625rem 0.75rem;
+      background: #fffbeb;
+      border: 1px solid #fef3c7;
+      border-left: 3px solid #f59e0b;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      color: #92400e;
+    }
+    .collision-title {
+      font-weight: 600;
+      line-height: 1.4;
+      margin-bottom: 0.35rem;
+    }
+    .collision-actions {
+      display: flex;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+      margin-top: 0.35rem;
+    }
+    .btn-publish-force {
+      background: #f59e0b;
+      color: #ffffff;
+      border: 1px solid #d97706;
+      padding: 0.35rem 0.65rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: all 0.15s ease;
+    }
+    .btn-publish-force:hover {
+      background: #d97706;
+    }
+
+    /* Modal de Métricas de Evento (Tema Claro) */
+    .metrics-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 0.875rem;
+    }
+    @media (max-width: 600px) {
+      .metrics-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    .metric-box {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.875rem 0.75rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .metric-box .metric-value {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1.2;
+    }
+    .metric-box .metric-lbl {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
     @media (max-width: 768px) {
+      .events-table-desktop,
       .promo-table-desktop {
         display: none !important;
       }
+      .events-cards-mobile,
       .promo-cards-mobile {
         display: flex !important;
       }
     }
     @media (min-width: 769px) {
+      .events-table-desktop,
       .promo-table-desktop {
         display: block !important;
       }
+      .events-cards-mobile,
       .promo-cards-mobile {
         display: none !important;
       }
@@ -1448,11 +1617,11 @@ export function renderAdminHtml(): string {
         </div>
       </section>
 
-      <!-- SECCIÓN AGENDA COMPLETA / PUBLICADA (TABLA) -->
+      <!-- SECCIÓN AGENDA COMPLETA / PUBLICADA (TABLA EN DESKTOP, TARJETAS EN MÓVIL) -->
       <section id="section-events" style="display:none;">
         <div class="toolbar">
           <div class="filter-group">
-            <select id="event-filter-status" onchange="onManualStatusFilterChange()">
+            <select id="event-filter-status" onchange="onManualStatusFilterChange()" aria-label="Filtrar por estado del evento">
               <option value="">Todos los estados</option>
               <option value="published">Publicados</option>
               <option value="tentative">Borradores Tentativos (WhatsApp/Web)</option>
@@ -1461,12 +1630,13 @@ export function renderAdminHtml(): string {
               <option value="archived">Archivados</option>
               <option value="duplicate">Duplicados</option>
             </select>
-            <input type="date" id="event-filter-date" onchange="loadAdminEvents()">
+            <input type="date" id="event-filter-date" onchange="loadAdminEvents()" aria-label="Filtrar por fecha editorial">
           </div>
           <button class="btn-primary" onclick="openNewEventModal()">+ Nuevo Evento</button>
         </div>
 
-        <div class="table-container">
+        <!-- Vista Desktop: Tabla estructurada -->
+        <div class="table-container events-table-desktop">
           <table>
             <thead>
               <tr>
@@ -1479,9 +1649,14 @@ export function renderAdminHtml(): string {
               </tr>
             </thead>
             <tbody id="events-tbody">
-              <tr><td colspan="6" style="text-align:center;">Cargando eventos...</td></tr>
+              <tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando eventos...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales -->
+        <div id="events-cards-container" class="events-cards-mobile" style="display:none; flex-direction:column; gap:0.875rem;">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando eventos...</div>
         </div>
       </section><!-- SECCIÓN PROMOCIONES -->
       <section id="section-promotions" style="display:none;">
@@ -1627,124 +1802,154 @@ export function renderAdminHtml(): string {
     </main>
   </div>
 
-  <!-- MODAL: CREAR / EDITAR EVENTO -->
+  <!-- MODAL: CREAR / EDITAR EVENTO (TEMA CLARO) -->
   <div id="modal-event" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-event-title">Nuevo Evento</h3>
-        <button class="modal-close" onclick="closeModal('modal-event')">✕</button>
+        <h3 id="modal-event-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nuevo Evento</h3>
+        <button class="modal-close" onclick="closeModal('modal-event')" aria-label="Cerrar modal">✕</button>
       </div>
       <form id="form-event" onsubmit="saveEvent(event)">
-        <input type="hidden" id="ev-id">
-        <div class="form-grid">
+        <div class="modal-body">
+          <input type="hidden" id="ev-id">
+
           <div class="form-group">
-            <label>Título del evento *</label>
+            <label for="ev-title" style="font-weight:700; color:var(--text-main);">Título del evento *</label>
             <input type="text" id="ev-title" required placeholder="Ej: Concierto acústico">
           </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="ev-venue-id" style="font-weight:700; color:var(--text-main);">Local (Venue) *</label>
+              <select id="ev-venue-id" required></select>
+            </div>
+            <div class="form-group">
+              <label for="ev-category" style="font-weight:700; color:var(--text-main);">Categoría *</label>
+              <select id="ev-category" required>
+                <option value="musica_directo">Música en directo</option>
+                <option value="dj_tardeo">DJ & Tardeo</option>
+                <option value="monologo">Monólogo</option>
+                <option value="cine">Cine</option>
+                <option value="teatro">Teatro</option>
+                <option value="exposicion">Exposición</option>
+                <option value="cultura">Cultura</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Bloque de Horarios (Europe/Madrid) -->
+          <div style="background:var(--bg-subtle); border:1px solid var(--border); border-radius:10px; padding:1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.625rem;">
+              <span style="font-size:0.8125rem; font-weight:800; text-transform:uppercase; color:var(--primary);">Horarios y Jornada Editorial</span>
+              <span style="font-size:0.75rem; color:var(--text-dim); background:#ffffff; border:1px solid var(--border); padding:0.15rem 0.5rem; border-radius:9999px;">🌐 Europe/Madrid</span>
+            </div>
+            <div class="form-grid two-cols" style="gap:0.75rem;">
+              <div class="form-group">
+                <label for="ev-start-time" style="font-weight:600; font-size:0.8125rem; color:var(--text-muted);">Fecha y hora de inicio *</label>
+                <input type="datetime-local" id="ev-start-time" required oninput="onEvStartTimeChange()">
+                <small style="font-size:0.6875rem; color:var(--text-dim); display:block; margin-top:0.25rem;">Hora oficial en Palencia</small>
+              </div>
+              <div class="form-group">
+                <label for="ev-editorial-date" style="font-weight:600; font-size:0.8125rem; color:var(--text-muted);">Fecha editorial (YYYY-MM-DD) *</label>
+                <input type="date" id="ev-editorial-date" required>
+                <small id="ev-editorial-date-hint" style="font-size:0.6875rem; color:var(--text-dim); display:block; margin-top:0.25rem;">Frontera editorial a las 06:00</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="ev-price-cents" style="font-weight:700; color:var(--text-main);">Precio en céntimos (0 = gratis)</label>
+              <input type="number" id="ev-price-cents" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label for="ev-status" style="font-weight:700; color:var(--text-main);">Estado</label>
+              <select id="ev-status">
+                <option value="published">Publicado</option>
+                <option value="tentative">Borrador Tentativo</option>
+                <option value="cancelled">Cancelado</option>
+                <option value="archived">Archivado</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="ev-description" style="font-weight:700; color:var(--text-main);">Descripción / Cartel texto</label>
+            <textarea id="ev-description" rows="3" placeholder="Detalles de la actuación..."></textarea>
+          </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="ev-source-url" style="font-weight:700; color:var(--text-main);">URL de entradas / reserva</label>
+              <input type="url" id="ev-source-url" placeholder="https://...">
+            </div>
+            <div class="form-group">
+              <label for="ev-image-url" style="font-weight:700; color:var(--text-main);">URL de imagen / cartel</label>
+              <input type="url" id="ev-image-url" placeholder="https://...">
+            </div>
+          </div>
         </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
-          <div class="form-group">
-            <label>Local (Venue) *</label>
-            <select id="ev-venue-id" required></select>
-          </div>
-          <div class="form-group">
-            <label>Categoría *</label>
-            <select id="ev-category" required>
-              <option value="musica_directo">Música en directo</option>
-              <option value="dj_tardeo">DJ & Tardeo</option>
-              <option value="monologo">Monólogo</option>
-              <option value="cine">Cine</option>
-              <option value="teatro">Teatro</option>
-              <option value="exposicion">Exposición</option>
-              <option value="cultura">Cultura</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
-          <div class="form-group">
-            <label>Fecha y hora de inicio *</label>
-            <input type="datetime-local" id="ev-start-time" required>
-          </div>
-          <div class="form-group">
-            <label>Fecha editorial (YYYY-MM-DD) *</label>
-            <input type="date" id="ev-editorial-date" required>
-          </div>
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
-          <div class="form-group">
-            <label>Precio en céntimos (0 = gratis)</label>
-            <input type="number" id="ev-price-cents" value="0" min="0">
-          </div>
-          <div class="form-group">
-            <label>Estado</label>
-            <select id="ev-status">
-              <option value="published">Publicado</option>
-              <option value="tentative">Borrador Tentativo</option>
-              <option value="cancelled">Cancelado</option>
-              <option value="archived">Archivado</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-group" style="margin-top:1rem;">
-          <label>Descripción / Cartel texto</label>
-          <textarea id="ev-description" rows="3" placeholder="Detalles de la actuación..."></textarea>
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
-          <div class="form-group">
-            <label>URL de entradas / reserva</label>
-            <input type="url" id="ev-source-url" placeholder="https://...">
-          </div>
-          <div class="form-group">
-            <label>URL de imagen / cartel</label>
-            <input type="url" id="ev-image-url" placeholder="https://...">
-          </div>
-        </div>
+
         <div class="modal-footer">
           <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-event')">Cancelar</button>
-          <button type="submit" class="btn-primary">Guardar Evento</button>
+          <button type="submit" class="btn-primary" id="btn-save-event">Guardar Evento</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- MODAL: MÉTRICAS DE EVENTO -->
+  <!-- MODAL: MÉTRICAS DE EVENTO (TEMA CLARO) -->
   <div id="modal-metrics" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-metrics-title">Métricas de Conversión</h3>
-        <button class="modal-close" onclick="closeModal('modal-metrics')">✕</button>
+        <h3 id="modal-metrics-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Métricas de Conversión</h3>
+        <button class="modal-close" onclick="closeModal('modal-metrics')" aria-label="Cerrar modal">✕</button>
       </div>
-      <div class="metrics-stats">
-        <div class="metric-box">
-          <div class="metric-value" id="m-impressions">0</div>
-          <div class="metric-lbl">Impresiones</div>
+      <div class="modal-body">
+        <div class="metrics-stats">
+          <div class="metric-box">
+            <div class="metric-value" id="m-impressions">0</div>
+            <div class="metric-lbl">Impresiones</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value" id="m-maps">0</div>
+            <div class="metric-lbl">Cómo llegar</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value" id="m-tickets">0</div>
+            <div class="metric-lbl">Entradas / Web</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value" id="m-whatsapp">0</div>
+            <div class="metric-lbl">WhatsApp</div>
+          </div>
         </div>
-        <div class="metric-box">
-          <div class="metric-value" id="m-maps">0</div>
-          <div class="metric-lbl">Cómo llegar</div>
+
+        <div style="background:var(--bg-subtle); padding:0.875rem 1rem; border-radius:8px; border:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.875rem;">
+            <span style="color:var(--text-dim); font-weight:600;">Sesiones Únicas Anónimas:</span>
+            <strong id="m-sessions" style="color:var(--emerald); font-size:1.1rem;">0</strong>
+          </div>
         </div>
-        <div class="metric-box">
-          <div class="metric-value" id="m-tickets">0</div>
-          <div class="metric-lbl">Entradas / Web</div>
+
+        <div style="font-weight:700; font-size:0.8125rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-top:0.25rem;">
+          Desglose de Interacciones por Canal
         </div>
-        <div class="metric-box">
-          <div class="metric-value" id="m-whatsapp">0</div>
-          <div class="metric-lbl">WhatsApp</div>
+
+        <div class="table-container" style="max-height:240px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Canal</th>
+                <th>Acción</th>
+                <th style="text-align:right;">Total</th>
+              </tr>
+            </thead>
+            <tbody id="metrics-breakdown-tbody">
+              <tr><td colspan="3" style="text-align:center; color:var(--text-dim); padding:1rem;">Cargando desglose...</td></tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-      <div style="background:#162035; padding:0.875rem; border-radius:8px; border:1px solid var(--border); margin-bottom:1rem;">
-        <div style="display:flex; justify-content:space-between; font-size:0.875rem;">
-          <span>Sesiones Únicas Anónimas:</span>
-          <strong id="m-sessions" style="color:var(--emerald)">0</strong>
-        </div>
-      </div>
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr><th>Canal</th><th>Acción</th><th>Total</th></tr>
-          </thead>
-          <tbody id="metrics-breakdown-tbody"></tbody>
-        </table>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-primary" onclick="closeModal('modal-metrics')">Cerrar</button>
@@ -2149,6 +2354,45 @@ export function renderAdminHtml(): string {
     let promoSaveInProgress = false; // Guarda contra clics repetidos en guardado de promociones
     let promoUserModifiedStartsAt = false;
     let promoUserModifiedEndsAt = false;
+    let adminEventsRequestId = 0;
+    const eventActionsInProgress = new Set();
+    let modalEventSaveInProgress = false;
+    let currentEditingEvent = null;
+    let editEventOrigin = 'events';
+
+    function getEventStatusBadge(status) {
+      if (status === 'published') return '<span class="status-pill status-published">Publicado</span>';
+      if (status === 'tentative') return '<span class="status-pill status-tentative">Borrador</span>';
+      if (status === 'cancelled') return '<span class="status-pill status-cancelled">Cancelado</span>';
+      if (status === 'outdated') return '<span class="status-pill status-outdated">Caducado</span>';
+      if (status === 'archived') return '<span class="status-pill status-archived">Archivado</span>';
+      if (status === 'duplicate') return '<span class="status-pill status-duplicate">Duplicado</span>';
+      return \`<span class="status-pill">\${escapeHtml(status)}</span>\`;
+    }
+
+    window.onEvStartTimeChange = function() {
+      const startVal = document.getElementById('ev-start-time').value;
+      if (!startVal) return;
+      const [datePart, timePart] = startVal.split('T');
+      if (!datePart || !timePart) return;
+      const [h] = timePart.split(':').map(Number);
+      let editDate = datePart;
+      if (h < 6) {
+        const [y, m, d] = datePart.split('-').map(Number);
+        const prev = new Date(Date.UTC(y, m - 1, d - 1));
+        const py = prev.getUTCFullYear();
+        const pm = String(prev.getUTCMonth() + 1).padStart(2, '0');
+        const pd = String(prev.getUTCDate()).padStart(2, '0');
+        editDate = \`\${py}-\${pm}-\${pd}\`;
+      }
+      document.getElementById('ev-editorial-date').value = editDate;
+      const hint = document.getElementById('ev-editorial-date-hint');
+      if (hint) {
+        hint.textContent = h < 6
+          ? \`Madrugada (<06:00): jornada anterior (\${editDate})\`
+          : \`Jornada del mismo día (\${editDate})\`;
+      }
+    };
 
     // Control de Drawer Móvil (con focus trap para D1-D4)
     let drawerTrapAttached = false;
@@ -2650,24 +2894,33 @@ export function renderAdminHtml(): string {
     }
 
     async function loadAdminEvents() {
+      const currentReqId = ++adminEventsRequestId;
       const tbody = document.getElementById('events-tbody');
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando...</td></tr>';
+      const cardsContainer = document.getElementById('events-cards-container');
 
-      const status = document.getElementById('event-filter-status').value;
-      const date = document.getElementById('event-filter-date').value;
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando eventos...</td></tr>';
+      if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando eventos...</div>';
+
+      const statusEl = document.getElementById('event-filter-status');
+      const dateEl = document.getElementById('event-filter-date');
+      const status = statusEl ? statusEl.value : '';
+      const date = dateEl ? dateEl.value : '';
 
       let url = '/api/v1/admin/events?';
       if (status) url += 'status=' + encodeURIComponent(status) + '&';
       if (date) url += 'date=' + encodeURIComponent(date) + '&';
 
-      if (curationSubfilter === 'tentative_unassigned') {
-        url += 'venue_id=9999&';
-      } else if (curationSubfilter === 'tentative_collisions') {
-        url += 'has_collision=true&';
+      if (status === 'tentative') {
+        if (curationSubfilter === 'tentative_unassigned') {
+          url += 'venue_id=9999&';
+        } else if (curationSubfilter === 'tentative_collisions') {
+          url += 'has_collision=true&';
+        }
       }
 
       try {
         const res = await apiFetch(url);
+        if (currentReqId !== adminEventsRequestId) return; // Descartar respuesta obsoleta
         const data = await res.json();
         const events = data.events || [];
         currentLoadedEvents = events;
@@ -2675,92 +2928,192 @@ export function renderAdminHtml(): string {
         updateCurationCounts();
 
         if (events.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#94a3b8;">No se encontraron eventos con los filtros seleccionados.</td></tr>';
+          const emptyMsg = 'No se encontraron eventos con los filtros seleccionados.';
+          if (tbody) tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem;">\${emptyMsg}</td></tr>\`;
+          if (cardsContainer) cardsContainer.innerHTML = \`<div style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">\${emptyMsg}</div>\`;
           return;
         }
 
-        tbody.innerHTML = events.map(e => {
-          const isTentative = e.status === 'tentative';
-          const isUnassigned = e.venue_id === 9999;
-          const hasCollision = Boolean(e.collision_alert);
+        // Render Desktop (Tabla)
+        if (tbody) {
+          tbody.innerHTML = events.map(e => {
+            const isTentative = e.status === 'tentative';
+            const isUnassigned = e.venue_id === 9999;
+            const hasCollision = Boolean(e.collision_alert);
+            const statusBadge = getEventStatusBadge(e.status);
 
-          return \`
-            <tr id="event-row-\${e.id}">
-              <td><span class="status-pill status-\${e.status}">\${e.status}</span></td>
-              <td>
-                <div style="font-weight:700; font-size:0.9375rem; color:#ffffff;">\${escapeHtml(e.title)}</div>
-                <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.25rem;">
-                  <span class="badge-tag">\${formatCategory(e.category)}</span>
+            return \`
+              <tr id="event-row-\${e.id}">
+                <td>\${statusBadge}</td>
+                <td>
+                  <div style="font-weight:700; font-size:0.9375rem; color:var(--text-main); line-height:1.35;">\${escapeHtml(e.title)}</div>
+                  <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem;">
+                    <span class="badge-tag">\${formatCategory(e.category)}</span>
+                  </div>
+                  \${isUnassigned ? \`
+                    <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                      <span class="badge-unverified">⚠️ Local por verificar</span>
+                      <button class="btn-card-reassign" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openReassignModal(\${e.id})">🏢 Asignar Local</button>
+                    </div>
+                  \` : \`
+                    <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; font-size:0.8125rem;">
+                      <span>📍 <strong>\${escapeHtml(e.venue_name)}</strong></span>
+                      <span class="venue-badge">Zona: \${escapeHtml(e.venue_zone || 'otros')}</span>
+                      <span class="venue-badge">Cat: \${escapeHtml(e.venue_category || 'general')}</span>
+                      <button class="btn-card-action" style="padding:0.15rem 0.45rem; font-size:0.6875rem;" onclick="openReassignModal(\${e.id})" title="Reasignar local">✏️ Cambiar</button>
+                    </div>
+                  \`}
+                  \${hasCollision ? \`
+                    <div class="collision-box">
+                      <div class="collision-title">
+                        ⚠️ <strong>Posible colisión con:</strong> "\${escapeHtml(e.collision_alert.colliding_title)}" (\${formatMadridTime(e.collision_alert.colliding_start_time)}) — Diferencia: \${e.collision_alert.diff_minutes} min
+                      </div>
+                      <div class="collision-actions">
+                        \${!isUnassigned && isTentative ? \`
+                          <button class="btn-publish-force" onclick="publishEvent(\${e.id}, \${e.venue_id})">✓ Publicar de todos modos</button>
+                        \` : ''}
+                        <button class="btn-table-action" onclick="archiveEvent(\${e.id})">📦 Descartar / Archivar</button>
+                        <button class="btn-table-action" onclick="markDuplicate(\${e.id})">⧉ Marcar duplicado</button>
+                        <button class="btn-table-action" onclick="editEvent(\${e.id})">✏️ Ajustar hora</button>
+                      </div>
+                    </div>
+                  \` : ''}
+                </td>
+                <td>
+                  <div>📅 <strong>\${e.editorial_date}</strong></div>
+                  <div style="margin-top:0.25rem; font-size:0.8125rem;">⏰ <strong style="color:var(--primary); font-size:0.875rem;">\${formatMadridTime(e.start_time)}</strong> <span style="font-size:0.6875rem; color:var(--text-dim);">(Madrid)</span></div>
+                </td>
+                <td>
+                  <strong style="font-size:0.875rem; color:var(--text-main);">\${e.is_free ? '<span style="color:var(--emerald);">Gratis</span>' : ((e.price_cents || 0) / 100).toFixed(2).replace('.', ',') + ' €'}</strong>
+                </td>
+                <td>
+                  <div style="font-size:0.75rem; color:var(--text-muted); text-transform:capitalize;">\${escapeHtml(e.source_type || 'manual')}</div>
+                  \${e.source_url ? \`<a href="\${escapeHtml(e.source_url)}" target="_blank" rel="noopener" class="link-source" style="font-size:0.75rem; color:var(--primary); text-decoration:none; display:inline-flex; align-items:center; gap:0.2rem; margin-top:0.25rem;">🔗 Fuente oficial ↗</a>\` : ''}
+                </td>
+                <td>
+                  <div style="display:flex; gap:0.35rem; flex-wrap:wrap; align-items:center;">
+                    \${isTentative ? \`
+                      <button class="btn-table-action btn-primary-action" onclick="publishEvent(\${e.id}, \${e.venue_id})">✓ Publicar</button>
+                      <button class="btn-table-action" onclick="openReassignModal(\${e.id})">🏢 Asignar</button>
+                      <button class="btn-table-action" onclick="markDuplicate(\${e.id})">⧉ Duplicado</button>
+                      <button class="btn-table-action" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
+                    \` : ''}
+                    \${e.status === 'published' ? \`
+                      <button class="btn-table-action btn-cancel-action" onclick="cancelEvent(\${e.id})">✕ Cancelar</button>
+                      <button class="btn-table-action" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
+                    \` : ''}
+                    <button class="btn-table-action" onclick="viewMetrics(\${e.id})" title="Ver métricas de conversión" aria-label="Ver métricas del evento #\${e.id}">📊</button>
+                    <button class="btn-table-action" onclick="editEvent(\${e.id})" title="Editar evento" aria-label="Editar evento #\${e.id}">✏️</button>
+                    <button class="btn-table-action btn-danger" onclick="deleteEvent(\${e.id})" title="Eliminar evento" aria-label="Eliminar evento #\${e.id}">🗑️</button>
+                  </div>
+                </td>
+              </tr>
+            \`;
+          }).join('');
+        }
+
+        // Render Móvil (Tarjetas)
+        if (cardsContainer) {
+          cardsContainer.innerHTML = events.map(e => {
+            const isTentative = e.status === 'tentative';
+            const isUnassigned = e.venue_id === 9999;
+            const hasCollision = Boolean(e.collision_alert);
+            const statusBadge = getEventStatusBadge(e.status);
+
+            return \`
+              <div class="event-card" id="event-card-\${e.id}">
+                <div class="event-card-header">
+                  <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    \${statusBadge}
+                    <span class="badge-tag">\${formatCategory(e.category)}</span>
+                    <span style="font-size:0.75rem; font-weight:700; color:var(--text-dim);">#\${e.id}</span>
+                  </div>
+                  <div style="font-size:0.9375rem; font-weight:800; color:var(--text-main);">
+                    \${e.is_free ? '<span style="color:var(--emerald);">Gratis</span>' : ((e.price_cents || 0) / 100).toFixed(2).replace('.', ',') + ' €'}
+                  </div>
                 </div>
-                \${isUnassigned ? \`
-                  <div style="margin-top:0.4rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                    <span class="badge-unverified">⚠️ Local por verificar</span>
-                    <button class="btn-sm btn-reassign" onclick="openReassignModal(\${e.id})">🏢 Asignar Local</button>
-                  </div>
-                \` : \`
-                  <div style="margin-top:0.4rem; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; font-size:0.8125rem;">
-                    <span>📍 <strong>\${escapeHtml(e.venue_name)}</strong></span>
-                    <span class="venue-badge">Zona: \${escapeHtml(e.venue_zone || 'otros')}</span>
-                    <span class="venue-badge">Cat: \${escapeHtml(e.venue_category || 'general')}</span>
-                    <button class="btn-act" style="padding:0.15rem 0.4rem; font-size:0.6875rem;" onclick="openReassignModal(\${e.id})" title="Reasignar local">✏️ Cambiar</button>
-                  </div>
-                \`}
+
+                <div>
+                  <h4 class="event-card-title">\${escapeHtml(e.title)}</h4>
+                  \${isUnassigned ? \`
+                    <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                      <span class="badge-unverified">⚠️ Local por verificar</span>
+                      <button class="btn-card-reassign" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openReassignModal(\${e.id})">🏢 Asignar Local</button>
+                    </div>
+                  \` : \`
+                    <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap; font-size:0.8125rem;">
+                      <span>📍 <strong>\${escapeHtml(e.venue_name)}</strong></span>
+                      <span class="venue-badge">Zona: \${escapeHtml(e.venue_zone || 'otros')}</span>
+                      <span class="venue-badge">Cat: \${escapeHtml(e.venue_category || 'general')}</span>
+                      <button class="btn-card-action" style="padding:0.15rem 0.45rem; font-size:0.6875rem;" onclick="openReassignModal(\${e.id})" title="Reasignar local">✏️ Cambiar</button>
+                    </div>
+                  \`}
+                </div>
+
                 \${hasCollision ? \`
                   <div class="collision-box">
                     <div class="collision-title">
-                      ⚠️ <strong>Posible colisión con:</strong> \${escapeHtml(e.collision_alert.colliding_title)} (\${formatMadridTime(e.collision_alert.colliding_start_time)}) — Diferencia: \${e.collision_alert.diff_minutes} min
+                      ⚠️ <strong>Posible colisión con:</strong> "\${escapeHtml(e.collision_alert.colliding_title)}" (\${formatMadridTime(e.collision_alert.colliding_start_time)}) — Diferencia: \${e.collision_alert.diff_minutes} min
                     </div>
                     <div class="collision-actions">
                       \${!isUnassigned && isTentative ? \`
                         <button class="btn-publish-force" onclick="publishEvent(\${e.id}, \${e.venue_id})">✓ Publicar de todos modos</button>
                       \` : ''}
-                      <button class="btn-act" onclick="archiveEvent(\${e.id})">📦 Descartar / Archivar</button>
-                      <button class="btn-act" onclick="markDuplicate(\${e.id})">⧉ Marcar duplicado</button>
-                      <button class="btn-act" onclick="editEvent(\${e.id})">✏️ Ajustar hora</button>
+                      <button class="btn-card-action" onclick="archiveEvent(\${e.id})">📦 Descartar / Archivar</button>
+                      <button class="btn-card-action" onclick="markDuplicate(\${e.id})">⧉ Marcar duplicado</button>
+                      <button class="btn-card-action" onclick="editEvent(\${e.id})">✏️ Ajustar hora</button>
                     </div>
                   </div>
                 \` : ''}
-              </td>
-              <td>
-                <div>📅 <strong>\${e.editorial_date}</strong></div>
-                <div style="margin-top:0.2rem;">⏰ <span style="color:var(--accent-blue); font-weight:600;">\${formatMadridTime(e.start_time)}</span> <small style="color:#94a3b8;">(Madrid)</small></div>
-              </td>
-              <td>\${e.is_free ? '<span style="color:var(--emerald); font-weight:700;">Gratis</span>' : (e.price_cents/100).toFixed(2).replace('.', ',') + ' €'}</td>
-              <td>
-                <div><small style="color:#94a3b8;">\${escapeHtml(e.source_type || 'manual')}</small></div>
-                \${e.source_url ? \`<a href="\${escapeHtml(e.source_url)}" target="_blank" rel="noopener" class="link-source" style="font-size:0.75rem; color:var(--accent-blue); text-decoration:none; display:inline-block; margin-top:0.2rem;">🔗 Fuente oficial ↗</a>\` : ''}
-              </td>
-              <td>
-                <div class="action-group">
+
+                <div class="event-card-meta">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                    <div>
+                      <span>📅 <strong>\${e.editorial_date}</strong></span> •
+                      <span>⏰ <strong style="color:var(--primary);">\${formatMadridTime(e.start_time)}</strong> <span style="font-size:0.6875rem; color:var(--text-dim);">(Madrid)</span></span>
+                    </div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">
+                      Fuente: <span style="text-transform:capitalize;">\${escapeHtml(e.source_type || 'manual')}</span>
+                      \${e.source_url ? \` · <a href="\${escapeHtml(e.source_url)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:none;">Oficial ↗</a>\` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="event-card-actions">
                   \${isTentative ? \`
-                    <button class="btn-act btn-publish" onclick="publishEvent(\${e.id}, \${e.venue_id})">✓ Publicar</button>
-                    <button class="btn-act btn-reassign" onclick="openReassignModal(\${e.id})">🏢 Asignar</button>
-                    <button class="btn-act" onclick="markDuplicate(\${e.id})">⧉ Duplicado</button>
-                    <button class="btn-act" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
+                    <button class="btn-card-publish" style="flex:1;" onclick="publishEvent(\${e.id}, \${e.venue_id})">✓ Publicar</button>
+                    <button class="btn-card-reassign-subtle" style="flex:1;" onclick="openReassignModal(\${e.id})">🏢 Asignar</button>
+                    <button class="btn-card-action" onclick="markDuplicate(\${e.id})" title="Marcar como duplicado">⧉ Duplicado</button>
+                    <button class="btn-card-action" onclick="archiveEvent(\${e.id})" title="Archivar borrador">📦 Archivar</button>
                   \` : ''}
                   \${e.status === 'published' ? \`
-                    <button class="btn-act btn-cancel" onclick="cancelEvent(\${e.id})">✕ Cancelar</button>
-                    <button class="btn-act" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
+                    <button class="btn-table-action btn-cancel-action" style="flex:1; justify-content:center; padding:0.45rem;" onclick="cancelEvent(\${e.id})">✕ Cancelar</button>
+                    <button class="btn-card-action" onclick="archiveEvent(\${e.id})">📦 Archivar</button>
                   \` : ''}
-                  <button class="btn-act btn-metrics" onclick="viewMetrics(\${e.id})">📊</button>
-                  <button class="btn-act" onclick="editEvent(\${e.id})">✏️</button>
-                  <button class="btn-act" onclick="deleteEvent(\${e.id})" style="color:#f87171;">🗑️</button>
+                  <button class="btn-card-action" onclick="viewMetrics(\${e.id})" title="Métricas de conversión" aria-label="Ver métricas del evento #\${e.id}">📊</button>
+                  <button class="btn-card-action" onclick="editEvent(\${e.id})" title="Editar datos" aria-label="Editar evento #\${e.id}">✏️</button>
+                  <button class="btn-card-action" style="color:var(--red); border-color:#fecaca;" onclick="deleteEvent(\${e.id})" title="Eliminar definitivamente" aria-label="Eliminar evento #\${e.id}">🗑️</button>
                 </div>
-              </td>
-            </tr>
-          \`;
-        }).join('');
+              </div>
+            \`;
+          }).join('');
+        }
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#ef4444;">Error al cargar eventos.</td></tr>';
+        if (currentReqId !== adminEventsRequestId) return;
+        const errMsg = 'Error al cargar los eventos de la agenda.';
+        if (tbody) tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center; color:var(--red); padding:2rem;">\${errMsg}</td></tr>\`;
+        if (cardsContainer) cardsContainer.innerHTML = \`<div style="text-align:center; color:var(--red); padding:2rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">\${errMsg}</div>\`;
       }
     }
 
     window.publishEvent = async function(id, venueId) {
+      if (eventActionsInProgress.has(id)) return;
       if (venueId === 9999) {
         alert('No se puede publicar un evento con Local por verificar (venue 9999). Asigna un local del censo primero.');
         return;
       }
       if (!confirm('¿Confirmar publicación del evento? Pasará a ser visible en la agenda pública.')) return;
+      eventActionsInProgress.add(id);
       try {
         const res = await apiFetch(\`/api/v1/admin/events/\${id}/publish\`, { method: 'POST' });
         const data = await res.json();
@@ -2768,34 +3121,97 @@ export function renderAdminHtml(): string {
           alert(data.message || 'Error al publicar evento.');
           return;
         }
-        await loadAdminEvents(); if (currentSection === 'inbox') await loadAdminInbox(); updateCurationCounts();
+        await loadAdminEvents();
+        if (currentSection === 'inbox') await loadAdminInbox();
+        updateCurationCounts();
       } catch (err) {
         alert(err.message || 'Error al conectar con el servidor.');
+      } finally {
+        eventActionsInProgress.delete(id);
       }
     };
 
     window.cancelEvent = async function(id) {
+      if (eventActionsInProgress.has(id)) return;
       if (!confirm('¿Marcar este evento como cancelado?')) return;
-      await apiFetch(\`/api/v1/admin/events/\${id}/cancel\`, { method: 'POST' });
-      loadAdminEvents();
+      eventActionsInProgress.add(id);
+      try {
+        const res = await apiFetch(\`/api/v1/admin/events/\${id}/cancel\`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Error al cancelar evento.');
+          return;
+        }
+        await loadAdminEvents();
+        if (currentSection === 'inbox') await loadAdminInbox();
+        updateCurationCounts();
+      } catch (err) {
+        alert(err.message || 'Error al conectar con el servidor.');
+      } finally {
+        eventActionsInProgress.delete(id);
+      }
     };
 
     window.archiveEvent = async function(id) {
-      await apiFetch(\`/api/v1/admin/events/\${id}/archive\`, { method: 'POST' });
-      loadAdminEvents();
+      if (eventActionsInProgress.has(id)) return;
+      eventActionsInProgress.add(id);
+      try {
+        const res = await apiFetch(\`/api/v1/admin/events/\${id}/archive\`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Error al archivar evento.');
+          return;
+        }
+        await loadAdminEvents();
+        if (currentSection === 'inbox') await loadAdminInbox();
+        updateCurationCounts();
+      } catch (err) {
+        alert(err.message || 'Error al conectar con el servidor.');
+      } finally {
+        eventActionsInProgress.delete(id);
+      }
     };
 
     window.markDuplicate = async function(id) {
-      await apiFetch(\`/api/v1/admin/events/\${id}/duplicate\`, { method: 'POST' });
-      loadAdminEvents();
+      if (eventActionsInProgress.has(id)) return;
+      eventActionsInProgress.add(id);
+      try {
+        const res = await apiFetch(\`/api/v1/admin/events/\${id}/duplicate\`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Error al marcar duplicado.');
+          return;
+        }
+        await loadAdminEvents();
+        if (currentSection === 'inbox') await loadAdminInbox();
+        updateCurationCounts();
+      } catch (err) {
+        alert(err.message || 'Error al conectar con el servidor.');
+      } finally {
+        eventActionsInProgress.delete(id);
+      }
     };
 
     window.deleteEvent = async function(id) {
+      if (eventActionsInProgress.has(id)) return;
       if (!confirm('¿Estás seguro de eliminar este evento definitivamente?')) return;
-      await apiFetch(\`/api/v1/admin/events/\${id}\`, { method: 'DELETE' });
-      loadAdminEvents();
+      eventActionsInProgress.add(id);
+      try {
+        const res = await apiFetch(\`/api/v1/admin/events/\${id}\`, { method: 'DELETE' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Error al eliminar evento.');
+          return;
+        }
+        await loadAdminEvents();
+        if (currentSection === 'inbox') await loadAdminInbox();
+        updateCurationCounts();
+      } catch (err) {
+        alert(err.message || 'Error al conectar con el servidor.');
+      } finally {
+        eventActionsInProgress.delete(id);
+      }
     };
-
     // ==============================================================================
     // Lógica del Modal de Reasignación Rápida de Local
     // ==============================================================================
@@ -2963,46 +3379,93 @@ export function renderAdminHtml(): string {
     };
 
     window.openNewEventModal = function() {
+      currentEditingEvent = null;
+      editEventOrigin = 'events';
+      lastActiveElementBeforeModal = document.activeElement;
+
       document.getElementById('modal-event-title').innerText = 'Nuevo Evento';
       document.getElementById('form-event').reset();
       document.getElementById('ev-id').value = '';
 
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('ev-editorial-date').value = today;
-      document.getElementById('ev-start-time').value = today + 'T22:00';
+      // Fecha y hora de inicio por defecto en Europe/Madrid a las 22:00
+      const nowMadrid = formatToMadridDatetimeLocal(new Date());
+      const todayMadridDate = nowMadrid ? nowMadrid.split('T')[0] : new Date().toISOString().split('T')[0];
+      document.getElementById('ev-editorial-date').value = todayMadridDate;
+      document.getElementById('ev-start-time').value = todayMadridDate + 'T22:00';
+
+      const hint = document.getElementById('ev-editorial-date-hint');
+      if (hint) hint.textContent = 'Frontera editorial a las 06:00 (Europe/Madrid)';
+
+      const saveBtn = document.getElementById('btn-save-event');
+      if (saveBtn) { saveBtn.textContent = 'Guardar Evento'; saveBtn.disabled = false; }
+
       openModal('modal-event');
+      const titleInput = document.getElementById('ev-title');
+      if (titleInput) titleInput.focus();
     };
 
     window.editEvent = async function(id) {
-      const res = await apiFetch(\`/api/v1/admin/events/\${id}\`);
-      const data = await res.json();
-      const ev = data.event;
+      lastActiveElementBeforeModal = document.activeElement;
+      editEventOrigin = currentSection === 'inbox' ? 'inbox' : 'events';
 
-      document.getElementById('modal-event-title').innerText = 'Editar Evento #' + ev.id;
-      document.getElementById('ev-id').value = ev.id;
-      document.getElementById('ev-title').value = ev.title;
-      document.getElementById('ev-venue-id').value = ev.venue_id;
-      document.getElementById('ev-category').value = ev.category;
-      document.getElementById('ev-editorial-date').value = ev.editorial_date;
-      document.getElementById('ev-start-time').value = ev.start_time.slice(0, 16);
-      document.getElementById('ev-price-cents').value = ev.price_cents;
-      document.getElementById('ev-status').value = ev.status;
-      document.getElementById('ev-description').value = ev.description || '';
-      document.getElementById('ev-source-url').value = ev.source_url || '';
-      document.getElementById('ev-image-url').value = ev.image_url || '';
+      const saveBtn = document.getElementById('btn-save-event');
+      if (saveBtn) { saveBtn.textContent = 'Guardar Evento'; saveBtn.disabled = false; }
 
-      openModal('modal-event');
+      try {
+        const res = await apiFetch(\`/api/v1/admin/events/\${id}\`);
+        const data = await res.json();
+        const ev = data.event;
+        currentEditingEvent = ev;
+
+        document.getElementById('modal-event-title').innerText = 'Editar Evento #' + ev.id;
+        document.getElementById('ev-id').value = ev.id;
+        document.getElementById('ev-title').value = ev.title || '';
+        document.getElementById('ev-venue-id').value = ev.venue_id;
+        document.getElementById('ev-category').value = ev.category;
+        document.getElementById('ev-editorial-date').value = ev.editorial_date;
+        document.getElementById('ev-start-time').value = formatToMadridDatetimeLocal(ev.start_time);
+        document.getElementById('ev-price-cents').value = ev.price_cents || 0;
+        document.getElementById('ev-status').value = ev.status;
+        document.getElementById('ev-description').value = ev.description || '';
+        document.getElementById('ev-source-url').value = ev.source_url || '';
+        document.getElementById('ev-image-url').value = ev.image_url || '';
+
+        const hint = document.getElementById('ev-editorial-date-hint');
+        if (hint) hint.textContent = 'Frontera editorial a las 06:00 (Europe/Madrid)';
+
+        openModal('modal-event');
+        const titleInput = document.getElementById('ev-title');
+        if (titleInput) titleInput.focus();
+      } catch (err) {
+        alert('Error al cargar datos del evento.');
+      }
     };
 
     window.saveEvent = async function(e) {
       e.preventDefault();
+      if (modalEventSaveInProgress) return;
+
       const id = document.getElementById('ev-id').value;
+      const startVal = document.getElementById('ev-start-time').value;
+      if (!startVal) {
+        alert('Debes indicar una fecha y hora de inicio.');
+        return;
+      }
+
+      // Si no se editó start_time, preservamos el timestamp ISO exacto original
+      let startTimeIso;
+      if (currentEditingEvent && id && formatToMadridDatetimeLocal(currentEditingEvent.start_time) === startVal) {
+        startTimeIso = currentEditingEvent.start_time;
+      } else {
+        startTimeIso = parseMadridToUtcIso(startVal);
+      }
+
       const payload = {
         title: document.getElementById('ev-title').value.trim(),
         venue_id: Number(document.getElementById('ev-venue-id').value),
         category: document.getElementById('ev-category').value,
         editorial_date: document.getElementById('ev-editorial-date').value,
-        start_time: new Date(document.getElementById('ev-start-time').value).toISOString(),
+        start_time: startTimeIso,
         price_cents: Number(document.getElementById('ev-price-cents').value),
         status: document.getElementById('ev-status').value,
         description: document.getElementById('ev-description').value.trim() || null,
@@ -3010,58 +3473,100 @@ export function renderAdminHtml(): string {
         image_url: document.getElementById('ev-image-url').value.trim() || null,
       };
 
-      if (id) {
-        await apiFetch(\`/api/v1/admin/events/\${id}\`, {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
-        });
-      } else {
-        await apiFetch('/api/v1/admin/events', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-      }
+      const saveBtn = document.getElementById('btn-save-event');
+      const cancelBtn = document.querySelector('#modal-event .btn-logout');
+      modalEventSaveInProgress = true;
+      if (saveBtn) { saveBtn.textContent = 'Guardando…'; saveBtn.disabled = true; }
+      if (cancelBtn) cancelBtn.disabled = true;
 
-      closeModal('modal-event');
-      loadAdminEvents();
+      try {
+        let res;
+        if (id) {
+          res = await apiFetch(\`/api/v1/admin/events/\${id}\`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          });
+        } else {
+          res = await apiFetch('/api/v1/admin/events', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+        }
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || 'Error al guardar el evento.');
+          return;
+        }
+
+        modalEventSaveInProgress = false;
+        closeModal('modal-event');
+
+        // Refrescar según origen
+        if (editEventOrigin === 'inbox') {
+          await loadAdminInbox();
+          updateCurationCounts();
+        } else {
+          await loadAdminEvents();
+        }
+      } catch (err) {
+        alert(err.message || 'Error de conexión al guardar el evento.');
+      } finally {
+        modalEventSaveInProgress = false;
+        if (saveBtn) { saveBtn.textContent = 'Guardar Evento'; saveBtn.disabled = false; }
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
     };
 
     // ==============================================================================
     // Métricas por Evento
     // ==============================================================================
     window.viewMetrics = async function(id) {
+      lastActiveElementBeforeModal = document.activeElement;
       openModal('modal-metrics');
       document.getElementById('modal-metrics-title').innerText = 'Cargando métricas...';
+      document.getElementById('m-impressions').innerText = '—';
+      document.getElementById('m-maps').innerText = '—';
+      document.getElementById('m-tickets').innerText = '—';
+      document.getElementById('m-whatsapp').innerText = '—';
+      document.getElementById('m-sessions').innerText = '—';
+
+      const breakdownTbody = document.getElementById('metrics-breakdown-tbody');
+      breakdownTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim); padding:1rem;">Cargando desglose...</td></tr>';
 
       try {
         const res = await apiFetch(\`/api/v1/admin/metrics/events/\${id}\`);
+        if (!res.ok) {
+          document.getElementById('modal-metrics-title').innerText = 'Error al cargar métricas';
+          breakdownTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--red); padding:1rem;">No se pudieron obtener las métricas del evento.</td></tr>';
+          return;
+        }
         const data = await res.json();
-        const s = data.summary;
+        const s = data.summary || {};
 
-        document.getElementById('modal-metrics-title').innerText = 'Métricas: ' + data.event.title;
-        document.getElementById('m-impressions').innerText = s.total_impressions;
-        document.getElementById('m-maps').innerText = s.total_map_clicks;
-        document.getElementById('m-tickets').innerText = s.total_ticket_clicks;
-        document.getElementById('m-whatsapp').innerText = s.total_whatsapp_clicks;
-        document.getElementById('m-sessions').innerText = s.unique_sessions;
+        document.getElementById('modal-metrics-title').innerText = 'Métricas: ' + (data.event?.title || ('#' + id));
+        document.getElementById('m-impressions').innerText = s.total_impressions ?? 0;
+        document.getElementById('m-maps').innerText = s.total_map_clicks ?? 0;
+        document.getElementById('m-tickets').innerText = s.total_ticket_clicks ?? 0;
+        document.getElementById('m-whatsapp').innerText = s.total_whatsapp_clicks ?? 0;
+        document.getElementById('m-sessions').innerText = s.unique_sessions ?? 0;
 
-        const breakdownTbody = document.getElementById('metrics-breakdown-tbody');
         if (data.breakdown && data.breakdown.length > 0) {
           breakdownTbody.innerHTML = data.breakdown.map(b => \`
             <tr>
-              <td>\${escapeHtml(b.channel)}</td>
-              <td>\${escapeHtml(b.metric_type)}</td>
-              <td><strong>\${b.count}</strong></td>
+              <td><span class="venue-badge">\${escapeHtml(b.channel || 'web')}</span></td>
+              <td><strong>\${escapeHtml(b.metric_type || '—')}</strong></td>
+              <td style="text-align:right;"><strong style="color:var(--text-main); font-size:0.9375rem;">\${b.count ?? 0}</strong></td>
             </tr>
           \`).join('');
         } else {
-          breakdownTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8;">Sin interacciones registradas aún.</td></tr>';
+          breakdownTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-dim); padding:1.25rem;">Sin interacciones registradas aún para este evento.</td></tr>';
         }
-      } catch {
+      } catch (err) {
         document.getElementById('modal-metrics-title').innerText = 'Error al cargar métricas';
+        breakdownTbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--red); padding:1rem;">Error de conexión con el servidor.</td></tr>';
       }
     };
-
     // ==============================================================================
     // Gestión de Locales (Venues)
     // ==============================================================================
@@ -3927,6 +4432,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           // Bloquear Escape si hay una petición de reasignación en vuelo
           if (activeModal.id === 'modal-reassign-venue' && modalSaveInProgress) return;
           if (activeModal.id === 'modal-promotion' && promoSaveInProgress) return;
+          if (activeModal.id === 'modal-event' && modalEventSaveInProgress) return;
           closeModal(activeModal.id);
         } else {
           toggleMobileDrawer(false);
@@ -3949,6 +4455,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       // Bloquear cierre del modal de reasignación si hay petición activa en vuelo
       if (id === 'modal-reassign-venue' && modalSaveInProgress) return;
       if (id === 'modal-promotion' && promoSaveInProgress) return;
+      if (id === 'modal-event' && modalEventSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
       const target = lastActiveElementBeforeModal;
