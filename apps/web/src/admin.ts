@@ -1910,12 +1910,45 @@ export function renderAdminHtml(): string {
 
       <!-- SECCIÓN 2: LOCALES (VENUES) -->
       <section id="section-venues" style="display:none;">
-        <div class="toolbar">
+        <div class="toolbar" style="margin-bottom:0.75rem;">
           <div style="display:flex; align-items:center; gap:0.75rem;">
-            <h3 style="margin:0; font-size:1.125rem; font-weight:800; color:var(--text-main);">Locales Censados en Palencia</h3>
+            <h3 style="margin:0; font-size:1.125rem; font-weight:800; color:var(--text-main);">Locales Censados</h3>
             <span id="venues-count-badge" class="badge-count" style="display:none;">0</span>
           </div>
           <button class="btn-primary" onclick="openNewVenueModal()">+ Nuevo Local</button>
+        </div>
+
+        <!-- Filtros y Búsqueda -->
+        <div class="toolbar" style="background:var(--bg-subtle); padding:0.875rem; border-radius:var(--radius); border:1px solid var(--border); margin-bottom:1rem; gap:0.75rem; align-items:stretch;">
+          <div style="flex:1; min-width:220px;">
+            <input type="text" id="venue-filter-search" placeholder="🔍 Buscar por nombre, ciudad, teléfono..." oninput="onVenueSearchInput(this.value)" style="width:100%; box-sizing:border-box;" aria-label="Buscar locales">
+          </div>
+          <div class="filter-group" style="flex-wrap:wrap; gap:0.5rem;">
+            <select id="venue-filter-city" onchange="onVenueFilterChange()" aria-label="Filtrar por ciudad">
+              <option value="">Todas las ciudades</option>
+            </select>
+            <select id="venue-filter-category" onchange="onVenueFilterChange()" aria-label="Filtrar por categoría">
+              <option value="">Todas las categorías</option>
+            </select>
+            <select id="venue-filter-status" onchange="onVenueFilterChange()" aria-label="Filtrar por estado">
+              <option value="">Todos los estados</option>
+              <option value="active">Activos</option>
+              <option value="inactive">Inactivos</option>
+            </select>
+            <select id="venue-filter-whatsapp" onchange="onVenueFilterChange()" aria-label="Filtrar por WhatsApp">
+              <option value="">WhatsApp (Todos)</option>
+              <option value="yes">Con WhatsApp</option>
+              <option value="no">Sin WhatsApp</option>
+            </select>
+            <select id="venue-filter-sort" onchange="onVenueSortChange()" aria-label="Ordenar locales">
+              <option value="name_asc">Nombre (A-Z)</option>
+              <option value="name_desc">Nombre (Z-A)</option>
+              <option value="city_asc">Ciudad (A-Z)</option>
+              <option value="created_at_desc">Más recientes</option>
+              <option value="created_at_asc">Más antiguos</option>
+            </select>
+            <button type="button" class="btn-table-action" onclick="resetVenueFilters()" title="Restablecer filtros" style="padding:0.55rem 0.75rem;">↺ Limpiar</button>
+          </div>
         </div>
 
         <!-- Vista Desktop: Tabla estructurada -->
@@ -1923,16 +1956,18 @@ export function renderAdminHtml(): string {
           <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Local / Zona / Categoría</th>
-                <th>Dirección</th>
-                <th>Contacto</th>
+                <th>Nombre</th>
+                <th>Ciudad</th>
+                <th>Categoría</th>
+                <th>Teléfono</th>
+                <th>WhatsApp</th>
                 <th>Estado</th>
+                <th>Fecha Creación</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="venues-tbody">
-              <tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando locales...</td></tr>
+              <tr><td colspan="8" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando locales...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1940,6 +1975,18 @@ export function renderAdminHtml(): string {
         <!-- Vista Móvil: Tarjetas individuales -->
         <div id="venues-cards-container" class="venues-cards-mobile">
           <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando locales...</div>
+        </div>
+
+        <!-- Paginación Server-Side -->
+        <div id="venues-pagination-container" style="display:flex; justify-content:space-between; align-items:center; padding:1rem 0; margin-top:0.75rem; flex-wrap:wrap; gap:0.75rem;">
+          <div id="venues-pagination-info" style="font-size:0.875rem; color:var(--text-muted);">
+            Cargando información de páginas...
+          </div>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <button type="button" id="venues-prev-page-btn" class="btn-table-action" onclick="changeVenuePage(-1)" disabled>◀ Anterior</button>
+            <span id="venues-page-indicator" style="font-size:0.875rem; font-weight:700; color:var(--text-main); padding:0 0.5rem;">Página 1 de 1</span>
+            <button type="button" id="venues-next-page-btn" class="btn-table-action" onclick="changeVenuePage(1)" disabled>Siguiente ▶</button>
+          </div>
         </div>
       </section>
 
@@ -2295,6 +2342,17 @@ export function renderAdminHtml(): string {
             <input type="text" id="venue-name" required placeholder="Ej: Bar Central">
           </div>
 
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="venue-category" style="font-weight:700; color:var(--text-main);">Categoría</label>
+              <input type="text" id="venue-category" placeholder="Ej: bar, restaurante, café">
+            </div>
+            <div class="form-group">
+              <label for="venue-phone" style="font-weight:700; color:var(--text-main);">Teléfono</label>
+              <input type="text" id="venue-phone" placeholder="Ej: +34 979 12 34 56">
+            </div>
+          </div>
+
           <div class="form-group">
             <label for="venue-address" style="font-weight:700; color:var(--text-main);">Dirección</label>
             <input type="text" id="venue-address" placeholder="Calle Mayor 12, Palencia">
@@ -2322,6 +2380,23 @@ export function renderAdminHtml(): string {
           <button type="submit" id="btn-save-venue" class="btn-primary">Guardar Local</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ELIMINAR LOCAL (BORRADO SEGURO CON COMPROBACIÓN DE DEPENDENCIAS) -->
+  <div id="modal-delete-venue" class="modal-overlay">
+    <div class="modal-card" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 id="modal-delete-venue-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Eliminar Local</h3>
+        <button class="modal-close" onclick="closeModal('modal-delete-venue')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" id="modal-delete-venue-body">
+        <div style="text-align:center; padding:1.5rem; color:var(--text-muted);">Comprobando dependencias del local...</div>
+      </div>
+      <div class="modal-footer" id="modal-delete-venue-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-delete-venue')">Cancelar</button>
+        <button type="button" id="btn-confirm-delete-venue" class="btn-primary" style="background:var(--red); border-color:#dc2626; display:none;" onclick="executeDeleteVenue()">Eliminar definitivamente</button>
+      </div>
     </div>
   </div>
 
@@ -2960,7 +3035,7 @@ export function renderAdminHtml(): string {
     // ==============================================================================
     async function loadVenuesCache() {
       try {
-        const res = await apiFetch('/api/v1/admin/venues');
+        const res = await apiFetch('/api/v1/admin/venues?all=true');
         const data = await res.json();
         cachedVenues = data.venues || [];
 
@@ -3860,75 +3935,251 @@ export function renderAdminHtml(): string {
     // ==============================================================================
     // Gestión de Locales (Venues)
     // ==============================================================================
+    let currentVenuesList = [];
+    let venueCurrentPage = 1;
+    const venuePageLimit = 15;
+    let venueSearchQuery = '';
+    let venueFilterCategory = '';
+    let venueFilterCity = '';
+    let venueFilterStatus = '';
+    let venueFilterWhatsapp = '';
+    let venueSortBy = 'name';
+    let venueSortOrder = 'asc';
+    let venueTotalPages = 1;
+    let venueTotalCount = 0;
+    let venueSearchDebounceTimer = null;
+    let venueDeletingId = null;
+    let modalVenueDeleteInProgress = false;
+
+    function formatMadridDate(isoStr) {
+      if (!isoStr) return '—';
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return '—';
+      return new Intl.DateTimeFormat('es-ES', {
+        timeZone: 'Europe/Madrid',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(d);
+    }
+
+    window.onVenueSearchInput = function(val) {
+      venueSearchQuery = (val || '').trim();
+      if (venueSearchDebounceTimer) clearTimeout(venueSearchDebounceTimer);
+      venueSearchDebounceTimer = setTimeout(() => {
+        venueCurrentPage = 1;
+        loadAdminVenues();
+      }, 300);
+    };
+
+    window.onVenueFilterChange = function() {
+      venueFilterCity = document.getElementById('venue-filter-city')?.value || '';
+      venueFilterCategory = document.getElementById('venue-filter-category')?.value || '';
+      venueFilterStatus = document.getElementById('venue-filter-status')?.value || '';
+      venueFilterWhatsapp = document.getElementById('venue-filter-whatsapp')?.value || '';
+      venueCurrentPage = 1;
+      loadAdminVenues();
+    };
+
+    window.onVenueSortChange = function() {
+      const val = document.getElementById('venue-filter-sort')?.value || 'name_asc';
+      if (val === 'name_asc') { venueSortBy = 'name'; venueSortOrder = 'asc'; }
+      else if (val === 'name_desc') { venueSortBy = 'name'; venueSortOrder = 'desc'; }
+      else if (val === 'city_asc') { venueSortBy = 'city'; venueSortOrder = 'asc'; }
+      else if (val === 'created_at_desc') { venueSortBy = 'created_at'; venueSortOrder = 'desc'; }
+      else if (val === 'created_at_asc') { venueSortBy = 'created_at'; venueSortOrder = 'asc'; }
+      venueCurrentPage = 1;
+      loadAdminVenues();
+    };
+
+    window.resetVenueFilters = function() {
+      venueSearchQuery = '';
+      venueFilterCategory = '';
+      venueFilterCity = '';
+      venueFilterStatus = '';
+      venueFilterWhatsapp = '';
+      venueSortBy = 'name';
+      venueSortOrder = 'asc';
+      venueCurrentPage = 1;
+
+      const searchEl = document.getElementById('venue-filter-search');
+      if (searchEl) searchEl.value = '';
+      const cityEl = document.getElementById('venue-filter-city');
+      if (cityEl) cityEl.value = '';
+      const catEl = document.getElementById('venue-filter-category');
+      if (catEl) catEl.value = '';
+      const statusEl = document.getElementById('venue-filter-status');
+      if (statusEl) statusEl.value = '';
+      const waEl = document.getElementById('venue-filter-whatsapp');
+      if (waEl) waEl.value = '';
+      const sortEl = document.getElementById('venue-filter-sort');
+      if (sortEl) sortEl.value = 'name_asc';
+
+      loadAdminVenues();
+    };
+
+    window.changeVenuePage = function(delta) {
+      const newPage = venueCurrentPage + delta;
+      if (newPage >= 1 && newPage <= venueTotalPages) {
+        venueCurrentPage = newPage;
+        loadAdminVenues();
+      }
+    };
+
     async function loadAdminVenues() {
       const tbody = document.getElementById('venues-tbody');
       const cardsContainer = document.getElementById('venues-cards-container');
       const countBadge = document.getElementById('venues-count-badge');
-      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando locales...</td></tr>';
-      if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando locales...</div>';
+      const paginationContainer = document.getElementById('venues-pagination-container');
+      const prevBtn = document.getElementById('venues-prev-page-btn');
+      const nextBtn = document.getElementById('venues-next-page-btn');
+      const pageIndicator = document.getElementById('venues-page-indicator');
+      const pageInfo = document.getElementById('venues-pagination-info');
+
+      if (tbody) tbody.innerHTML = '<tr><td colspan=\"8\" style=\"text-align:center; padding:2rem; color:var(--text-muted);\">Cargando locales...</td></tr>';
+      if (cardsContainer) cardsContainer.innerHTML = '<div style=\"text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);\">Cargando locales...</div>';
 
       try {
-        const res = await apiFetch('/api/v1/admin/venues');
+        const params = new URLSearchParams();
+        params.set('page', String(venueCurrentPage));
+        params.set('limit', String(venuePageLimit));
+        params.set('sort_by', venueSortBy);
+        params.set('sort_order', venueSortOrder);
+        if (venueSearchQuery) params.set('q', venueSearchQuery);
+        if (venueFilterCategory) params.set('category', venueFilterCategory);
+        if (venueFilterCity) params.set('city', venueFilterCity);
+        if (venueFilterStatus) params.set('status', venueFilterStatus);
+        if (venueFilterWhatsapp) params.set('has_whatsapp', venueFilterWhatsapp);
+
+        const res = await apiFetch(\`/api/v1/admin/venues?\${params.toString()}\`);
+        if (!res.ok) {
+          throw new Error('Error al consultar el censo de locales.');
+        }
+
         const data = await res.json();
         const venues = data.venues || [];
-        cachedVenues = venues;
+        currentVenuesList = venues;
+        venueTotalCount = typeof data.total === 'number' ? data.total : venues.length;
+        venueTotalPages = data.total_pages || 1;
 
         if (countBadge) {
-          countBadge.innerText = venues.length;
+          countBadge.innerText = venueTotalCount;
           countBadge.style.display = 'inline-block';
         }
 
+        // Población dinámica de selectores de filtros
+        if (data.filters) {
+          const citySelect = document.getElementById('venue-filter-city');
+          if (citySelect && citySelect.options.length <= 1 && Array.isArray(data.filters.cities)) {
+            data.filters.cities.forEach(c => {
+              const opt = document.createElement('option');
+              opt.value = c.slug || String(c.id);
+              opt.textContent = c.name;
+              citySelect.appendChild(opt);
+            });
+            if (venueFilterCity) citySelect.value = venueFilterCity;
+          }
+
+          const catSelect = document.getElementById('venue-filter-category');
+          if (catSelect && catSelect.options.length <= 1 && Array.isArray(data.filters.categories)) {
+            data.filters.categories.forEach(cat => {
+              if (cat) {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+                catSelect.appendChild(opt);
+              }
+            });
+            if (venueFilterCategory) catSelect.value = venueFilterCategory;
+          }
+        }
+
+        // Paginación UI
+        if (prevBtn) prevBtn.disabled = venueCurrentPage <= 1;
+        if (nextBtn) nextBtn.disabled = venueCurrentPage >= venueTotalPages;
+        if (pageIndicator) pageIndicator.textContent = \`Página \${venueCurrentPage} de \${venueTotalPages}\`;
+
+        const startItem = venueTotalCount === 0 ? 0 : (venueCurrentPage - 1) * venuePageLimit + 1;
+        const endItem = Math.min(venueCurrentPage * venuePageLimit, venueTotalCount);
+        if (pageInfo) pageInfo.textContent = \`Mostrando \${startItem} - \${endItem} de \${venueTotalCount} locales\`;
+        if (paginationContainer) paginationContainer.style.display = 'flex';
+
         if (venues.length === 0) {
-          const emptyMsg = 'No hay locales censados registrados.';
-          if (tbody) tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem;">\${emptyMsg}</td></tr>\`;
-          if (cardsContainer) cardsContainer.innerHTML = \`<div style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">\${emptyMsg}</div>\`;
+          const emptyMsg = venueSearchQuery || venueFilterCategory || venueFilterCity || venueFilterStatus || venueFilterWhatsapp
+            ? 'No se encontraron locales con los filtros aplicados.'
+            : 'No hay locales censados registrados.';
+          if (tbody) tbody.innerHTML = \`<tr><td colspan=\"8\" style=\"text-align:center; color:var(--text-dim); padding:2.5rem 1rem;\">\${emptyMsg}</td></tr>\`;
+          if (cardsContainer) cardsContainer.innerHTML = \`<div style=\"text-align:center; color:var(--text-dim); padding:2.5rem 1rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);\">\${emptyMsg}</div>\`;
           return;
         }
 
-        // Render Desktop
+        // Render Desktop (8 columnas: nombre, ciudad, categoría, teléfono, WhatsApp, estado, fecha de creación, acciones)
         if (tbody) {
           tbody.innerHTML = venues.map(v => {
             const is9999 = v.id === 9999;
             const statusBadge = is9999
-              ? '<span class="badge-status" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">⚠️ Provisional</span>'
-              : \`<span class="badge-status \${v.is_active ? 'badge-active' : 'badge-cancelled'}">\${v.is_active ? 'Activo' : 'Inactivo'}</span>\`;
+              ? '<span class=\"badge-status\" style=\"background:#fef3c7; color:#92400e; border:1px solid #fde68a;\">⚠️ Provisional</span>'
+              : \`<span class=\"badge-status \${v.is_active ? 'badge-active' : 'badge-cancelled'}\">\${v.is_active ? 'Activo' : 'Inactivo'}</span>\`;
 
-            const contacts = [];
+            // Contacto WhatsApp
+            let waHtml = '<span style=\"color:var(--text-dim);\">—</span>';
             if (v.whatsapp_contact) {
               const cleanWa = v.whatsapp_contact.replace(/[^0-9]/g, '');
-              contacts.push(\`<div>💬 <a href="https://wa.me/\${encodeURIComponent(cleanWa)}" target="_blank" rel="noopener" style="color:var(--text-main); font-weight:600; text-decoration:none;">\${escapeHtml(v.whatsapp_contact)}</a></div>\`);
+              waHtml = \`<div>💬 <a href=\"https://wa.me/\${encodeURIComponent(cleanWa)}\" target=\"_blank\" rel=\"noopener\" style=\"color:#059669; font-weight:600; text-decoration:none;\">\${escapeHtml(v.whatsapp_contact)}</a></div>\`;
+            }
+
+            // Contacto Teléfono
+            const phoneHtml = v.phone
+              ? \`<a href=\"tel:\${escapeHtml(v.phone)}\" style=\"color:var(--text-main); font-weight:600; text-decoration:none;\">📞 \${escapeHtml(v.phone)}</a>\`
+              : '<span style=\"color:var(--text-dim);\">—</span>';
+
+            // Ciudad
+            const cityName = v.city_name || '—';
+
+            // Categoría
+            const categoryBadge = \`<span class=\"venue-badge\" style=\"text-transform:capitalize;\">\${escapeHtml(v.category || 'general')}</span>\`;
+
+            // Fecha de creación
+            const createdFormatted = formatMadridDate(v.created_at);
+
+            // Enlaces externos de nombre
+            const extLinks = [];
+            if (v.google_maps_url) {
+              extLinks.push(\`<a href=\"\${escapeHtml(v.google_maps_url)}\" target=\"_blank\" rel=\"noopener\" class=\"link-source\" style=\"display:inline-flex; align-items:center; gap:0.2rem; font-size:0.75rem; color:var(--primary); text-decoration:none;\">🗺️ Maps ↗</a>\`);
             }
             if (v.instagram_handle) {
-              contacts.push(\`<div style="margin-top:0.2rem; font-size:0.8125rem;">📷 <a href="https://instagram.com/\${encodeURIComponent(v.instagram_handle)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:none;">@\${escapeHtml(v.instagram_handle)}</a></div>\`);
+              extLinks.push(\`<a href=\"https://instagram.com/\${encodeURIComponent(v.instagram_handle)}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-flex; align-items:center; gap:0.2rem; font-size:0.75rem; color:var(--primary); text-decoration:none;\">📷 @\${escapeHtml(v.instagram_handle)}</a>\`);
             }
             if (v.website_url) {
-              contacts.push(\`<div style="margin-top:0.2rem; font-size:0.75rem;"><a href="\${escapeHtml(v.website_url)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:none;">🌐 Web oficial ↗</a></div>\`);
+              extLinks.push(\`<a href=\"\${escapeHtml(v.website_url)}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-flex; align-items:center; gap:0.2rem; font-size:0.75rem; color:var(--primary); text-decoration:none;\">🌐 Web ↗</a>\`);
             }
-            const contactHtml = contacts.length > 0 ? contacts.join('') : '<span style="color:var(--text-dim);">—</span>';
 
             return \`
-              <tr id="venue-row-\${v.id}">
-                <td><strong style="color:var(--text-dim); font-size:0.8125rem;">#\${v.id}</strong></td>
+              <tr id=\"venue-row-\${v.id}\">
                 <td>
-                  <div style="font-weight:700; font-size:0.9375rem; color:var(--text-main); line-height:1.35;">\${escapeHtml(v.name)}</div>
-                  <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem; flex-wrap:wrap;">
-                    \${v.zone ? \`<span class="venue-badge">Zona: \${escapeHtml(formatVenueZone(v.zone))}</span>\` : ''}
-                    \${v.category ? \`<span class="venue-badge">Cat: \${escapeHtml(v.category)}</span>\` : ''}
+                  <div style=\"font-weight:700; font-size:0.9375rem; color:var(--text-main); line-height:1.35;\">
+                    \${escapeHtml(v.name)}
+                    <span style=\"color:var(--text-dim); font-size:0.75rem; font-weight:500; margin-left:0.25rem;\">#\${v.id}</span>
                   </div>
-                  \${is9999 ? \`
-                    <div style="margin-top:0.35rem;">
-                      <span class="badge-unverified">⚠️ Local provisional del sistema</span>
-                    </div>
-                  \` : ''}
+                  \${v.address ? \`<div style=\"font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;\">📍 \${escapeHtml(v.address)}</div>\` : ''}
+                  \${extLinks.length > 0 ? \`<div style=\"display:flex; gap:0.5rem; margin-top:0.25rem; flex-wrap:wrap;\">\${extLinks.join('')}</div>\` : ''}
+                  \${is9999 ? \`<div style=\"margin-top:0.35rem;\"><span class=\"badge-unverified\">⚠️ Local provisional del sistema</span></div>\` : ''}
                 </td>
-                <td>
-                  \${v.address ? \`<div>📍 <strong>\${escapeHtml(v.address)}</strong></div>\` : '<span style="color:var(--text-dim);">—</span>'}
-                  \${v.google_maps_url ? \`<a href="\${escapeHtml(v.google_maps_url)}" target="_blank" rel="noopener" class="link-source" style="display:inline-flex; align-items:center; gap:0.2rem; margin-top:0.25rem; font-size:0.75rem; color:var(--primary); text-decoration:none;">🗺️ Maps ↗</a>\` : ''}
-                </td>
-                <td>\${contactHtml}</td>
+                <td><strong style=\"color:var(--text-main); font-size:0.875rem;\">\${escapeHtml(cityName)}</strong></td>
+                <td>\${categoryBadge}</td>
+                <td>\${phoneHtml}</td>
+                <td>\${waHtml}</td>
                 <td>\${statusBadge}</td>
+                <td><span style=\"font-size:0.8125rem; color:var(--text-muted); white-space:nowrap;\">\${createdFormatted}</span></td>
                 <td>
-                  <button class="btn-table-action" onclick="editVenue(\${v.id})" aria-label="Editar local #\${v.id}" title="Editar local">✏️ Editar</button>
+                  <div style=\"display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;\">
+                    <button class=\"btn-table-action\" onclick=\"editVenue(\${v.id})\" aria-label=\"Editar local #\${v.id}\" title=\"Editar local\">✏️ Editar</button>
+                    \${is9999 ? \`
+                      <button class=\"btn-table-action btn-danger\" disabled title=\"El local provisional no se puede eliminar\" style=\"opacity:0.4; cursor:not-allowed;\">🔒 Protegido</button>
+                    \` : \`
+                      <button class=\"btn-table-action btn-danger\" onclick=\"openDeleteVenueModal(\${v.id})\" aria-label=\"Eliminar local #\${v.id}\" title=\"Eliminar local\">🗑️ Eliminar</button>
+                    \`}
+                  </div>
                 </td>
               </tr>
             \`;
@@ -3940,42 +4191,49 @@ export function renderAdminHtml(): string {
           cardsContainer.innerHTML = venues.map(v => {
             const is9999 = v.id === 9999;
             const statusBadge = is9999
-              ? '<span class="badge-status" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">⚠️ Provisional</span>'
-              : \`<span class="badge-status \${v.is_active ? 'badge-active' : 'badge-cancelled'}">\${v.is_active ? 'Activo' : 'Inactivo'}</span>\`;
+              ? '<span class=\"badge-status\" style=\"background:#fef3c7; color:#92400e; border:1px solid #fde68a;\">⚠️ Provisional</span>'
+              : \`<span class=\"badge-status \${v.is_active ? 'badge-active' : 'badge-cancelled'}\">\${v.is_active ? 'Activo' : 'Inactivo'}</span>\`;
 
             return \`
-              <article class="venue-card \${is9999 ? 'venue-card-warning' : ''}" id="venue-card-\${v.id}">
-                <div class="venue-card-header">
-                  <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+              <article class=\"venue-card \${is9999 ? 'venue-card-warning' : ''}\" id=\"venue-card-\${v.id}\">
+                <div class=\"venue-card-header\">
+                  <div style=\"display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;\">
                     \${statusBadge}
-                    <span style="font-size:0.75rem; font-weight:700; color:var(--text-dim);">#\${v.id}</span>
-                    \${v.zone ? \`<span class="venue-badge">Zona: \${escapeHtml(formatVenueZone(v.zone))}</span>\` : ''}
-                    \${v.category ? \`<span class="venue-badge">Cat: \${escapeHtml(v.category)}</span>\` : ''}
+                    <span style=\"font-size:0.75rem; font-weight:700; color:var(--text-dim);\">#\${v.id}</span>
+                    <span class=\"venue-badge\" style=\"font-weight:600;\">📍 \${escapeHtml(v.city_name || '—')}</span>
+                    <span class=\"venue-badge\">Cat: \${escapeHtml(v.category || 'general')}</span>
                   </div>
                 </div>
-                <h4 class="venue-card-title">\${escapeHtml(v.name)}</h4>
+                <h4 class=\"venue-card-title\">\${escapeHtml(v.name)}</h4>
                 \${is9999 ? \`
-                  <div style="font-size:0.8125rem; color:#b45309; font-weight:600; line-height:1.4;">
+                  <div style=\"font-size:0.8125rem; color:#b45309; font-weight:600; line-height:1.4;\">
                     ⚠️ Local provisional del sistema para borradores sin asignar. No asignable en curación.
                   </div>
                 \` : ''}
-                <div class="venue-card-body">
-                  \${v.address ? \`<div>📍 <strong>\${escapeHtml(v.address)}</strong></div>\` : ''}
+                <div class=\"venue-card-body\" style=\"display:flex; flex-direction:column; gap:0.35rem; font-size:0.875rem;\">
+                  \${v.address ? \`<div>📍 Dirección: <strong>\${escapeHtml(v.address)}</strong></div>\` : ''}
+                  \${v.phone ? \`<div>📞 Teléfono: <strong>\${escapeHtml(v.phone)}</strong></div>\` : ''}
                   \${v.whatsapp_contact ? \`<div>💬 WhatsApp: <strong>\${escapeHtml(v.whatsapp_contact)}</strong></div>\` : ''}
                   \${v.instagram_handle ? \`<div>📷 Instagram: <strong>@\${escapeHtml(v.instagram_handle)}</strong></div>\` : ''}
-                  \${v.google_maps_url ? \`<div>🗺️ <a href="\${escapeHtml(v.google_maps_url)}" target="_blank" rel="noopener" style="color:var(--primary); font-size:0.8125rem;">Ver en Google Maps ↗</a></div>\` : ''}
-                  \${v.website_url ? \`<div>🌐 <a href="\${escapeHtml(v.website_url)}" target="_blank" rel="noopener" style="color:var(--primary); font-size:0.8125rem;">Web oficial ↗</a></div>\` : ''}
+                  \${v.google_maps_url ? \`<div>🗺️ <a href=\"\${escapeHtml(v.google_maps_url)}\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--primary); font-size:0.8125rem;\">Ver en Google Maps ↗</a></div>\` : ''}
+                  \${v.website_url ? \`<div>🌐 <a href=\"\${escapeHtml(v.website_url)}\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--primary); font-size:0.8125rem;\">Web oficial ↗</a></div>\` : ''}
+                  <div style=\"font-size:0.75rem; color:var(--text-dim); margin-top:0.25rem;\">📅 Alta: \${formatMadridDate(v.created_at)}</div>
                 </div>
-                <div class="venue-card-actions">
-                  <button class="btn-card-action" onclick="editVenue(\${v.id})" aria-label="Editar local #\${v.id}">✏️ Editar Local</button>
+                <div class=\"venue-card-actions\" style=\"display:flex; gap:0.5rem; margin-top:0.5rem;\">
+                  <button class=\"btn-card-action\" onclick=\"editVenue(\${v.id})\" aria-label=\"Editar local #\${v.id}\" style=\"flex:1;\">✏️ Editar Local</button>
+                  \${is9999 ? \`
+                    <button class=\"btn-card-action\" disabled style=\"opacity:0.4; cursor:not-allowed; color:var(--text-dim);\">🔒 Protegido</button>
+                  \` : \`
+                    <button class=\"btn-card-action\" style=\"color:var(--red); border-color:#fecaca;\" onclick=\"openDeleteVenueModal(\${v.id})\" aria-label=\"Eliminar local #\${v.id}\">🗑️ Eliminar</button>
+                  \`}
                 </div>
               </article>
             \`;
           }).join('');
         }
       } catch (err) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--red); padding:2rem;">Error al cargar el censo de locales.</td></tr>';
-        if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; color:var(--red); padding:2rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar el censo de locales.</div>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan=\"8\" style=\"text-align:center; color:var(--red); padding:2rem;\">Error al cargar el censo de locales.</td></tr>';
+        if (cardsContainer) cardsContainer.innerHTML = '<div style=\"text-align:center; color:var(--red); padding:2rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);\">Error al cargar el censo de locales.</div>';
       }
     }
 
@@ -3996,7 +4254,7 @@ export function renderAdminHtml(): string {
     };
 
     window.editVenue = function(id) {
-      const v = cachedVenues.find(x => x.id === id);
+      const v = currentVenuesList.find(x => x.id === id) || cachedVenues.find(x => x.id === id);
       if (!v) return;
       modalVenueSaveInProgress = false;
       lastActiveElementBeforeModal = document.activeElement;
@@ -4004,6 +4262,10 @@ export function renderAdminHtml(): string {
       document.getElementById('venue-id').value = v.id;
       document.getElementById('venue-name').value = v.name || '';
       document.getElementById('venue-address').value = v.address || '';
+      const phoneEl = document.getElementById('venue-phone');
+      if (phoneEl) phoneEl.value = v.phone || '';
+      const catEl = document.getElementById('venue-category');
+      if (catEl) catEl.value = v.category || '';
       document.getElementById('venue-whatsapp').value = v.whatsapp_contact || '';
       document.getElementById('venue-instagram').value = v.instagram_handle || '';
       document.getElementById('venue-maps-url').value = v.google_maps_url || '';
@@ -4031,6 +4293,8 @@ export function renderAdminHtml(): string {
       const payload = {
         name: nameVal,
         address: document.getElementById('venue-address').value.trim() || null,
+        phone: document.getElementById('venue-phone')?.value.trim() || null,
+        category: document.getElementById('venue-category')?.value.trim() || null,
         whatsapp_contact: document.getElementById('venue-whatsapp').value.trim() || null,
         instagram_handle: document.getElementById('venue-instagram').value.trim()?.replace('@', '') || null,
         google_maps_url: document.getElementById('venue-maps-url').value.trim() || null,
@@ -4067,6 +4331,143 @@ export function renderAdminHtml(): string {
           saveBtn.disabled = false;
           saveBtn.innerText = id ? 'Guardar Cambios' : 'Guardar Local';
         }
+      }
+    };
+
+    window.openDeleteVenueModal = async function(id) {
+      venueDeletingId = id;
+      const modalBody = document.getElementById('modal-delete-venue-body');
+      const confirmBtn = document.getElementById('btn-confirm-delete-venue');
+
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.style.display = 'none';
+      }
+      if (modalBody) {
+        modalBody.innerHTML = '<div style=\"text-align:center; padding:2rem; color:var(--text-muted);\">Comprobando dependencias del local...</div>';
+      }
+
+      openModal('modal-delete-venue');
+
+      try {
+        const res = await apiFetch(\`/api/v1/admin/venues/\${id}/dependencies\`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          if (modalBody) {
+            modalBody.innerHTML = \`<div style=\"padding:1rem; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; font-size:0.875rem;\">\${escapeHtml(errData.message || 'Error al comprobar dependencias.')}</div>\`;
+          }
+          return;
+        }
+
+        const data = await res.json();
+        const venue = data.venue || {};
+        const isProtected = data.is_protected;
+        const canDelete = data.can_delete;
+        const deps = data.dependencies || [];
+
+        if (modalBody) {
+          let statusHtml = '';
+          if (isProtected) {
+            statusHtml = \`
+              <div style=\"padding:0.875rem; background:#fef3c7; border:1px solid #fde68a; border-radius:8px; color:#92400e; font-size:0.875rem; line-height:1.4;\">
+                <strong>⚠️ Local protegido por el sistema</strong>
+                <p style=\"margin:0.4rem 0 0 0;\">El local provisional ID 9999 es un recurso esencial del sistema y no puede eliminarse bajo ninguna circunstancia.</p>
+              </div>
+            \`;
+          } else if (deps.length > 0) {
+            statusHtml = \`
+              <div style=\"padding:0.875rem; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; color:#92400e; font-size:0.875rem; line-height:1.4;\">
+                <strong>🚫 Borrado bloqueado por dependencias activas</strong>
+                <p style=\"margin:0.4rem 0 0.5rem 0;\">No se puede eliminar el local porque contiene datos asociados en la base de datos:</p>
+                <ul style=\"margin:0; padding-left:1.25rem;\">
+                  \${deps.map(d => \`<li style=\"margin-bottom:0.25rem; font-weight:600;\">\${escapeHtml(d)}</li>\`).join('')}
+                </ul>
+                <p style=\"margin:0.5rem 0 0 0; font-size:0.8125rem; color:#78350f;\">
+                  Para proteger la integridad referencial, primero deben eliminarse o desvincularse estas referencias antes de poder borrar el local.
+                </p>
+              </div>
+            \`;
+          } else {
+            statusHtml = \`
+              <div style=\"padding:0.875rem; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; font-size:0.875rem; line-height:1.4;\">
+                <strong>⚠️ Confirmar eliminación definitiva</strong>
+                <p style=\"margin:0.4rem 0 0 0;\">
+                  El local no tiene dependencias activas. Esta acción ejecutará un borrado definitivo e irreversible de la base de datos.
+                </p>
+              </div>
+            \`;
+          }
+
+          modalBody.innerHTML = \`
+            <div style=\"display:flex; flex-direction:column; gap:0.875rem;\">
+              <div style=\"background:var(--bg-subtle); padding:0.875rem; border-radius:8px; border:1px solid var(--border);\">
+                <div style=\"font-size:0.75rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;\">Local seleccionado</div>
+                <div style=\"font-size:1.15rem; font-weight:800; color:var(--text-main); margin-top:0.25rem;\">
+                  \${escapeHtml(venue.name || 'Local')}
+                </div>
+                <div style=\"font-size:0.875rem; color:var(--text-muted); margin-top:0.35rem; display:flex; gap:1.25rem; flex-wrap:wrap;\">
+                  <span><strong>ID:</strong> #\${venue.id}</span>
+                  <span><strong>Ciudad:</strong> \${escapeHtml(venue.city_name || 'Desconocida')}</span>
+                </div>
+              </div>
+              \${statusHtml}
+            </div>
+          \`;
+        }
+
+        if (confirmBtn) {
+          if (canDelete) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.display = 'inline-block';
+            confirmBtn.innerText = 'Eliminar definitivamente';
+          } else {
+            confirmBtn.disabled = true;
+            confirmBtn.style.display = 'none';
+          }
+        }
+      } catch (err) {
+        if (modalBody) {
+          modalBody.innerHTML = '<div style=\"padding:1rem; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; font-size:0.875rem;\">Error de conexión al verificar dependencias.</div>';
+        }
+      }
+    };
+
+    window.executeDeleteVenue = async function() {
+      if (!venueDeletingId || modalVenueDeleteInProgress) return;
+      modalVenueDeleteInProgress = true;
+      const confirmBtn = document.getElementById('btn-confirm-delete-venue');
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerText = 'Eliminando...';
+      }
+
+      try {
+        const res = await apiFetch(\`/api/v1/admin/venues/\${venueDeletingId}\`, {
+          method: 'DELETE',
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(data.message || 'Error al eliminar el local.');
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerText = 'Eliminar definitivamente';
+          }
+          return;
+        }
+
+        closeModal('modal-delete-venue');
+        await loadVenuesCache();
+        await loadAdminVenues();
+      } catch (err) {
+        alert('Error al conectar con el servidor.');
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerText = 'Eliminar definitivamente';
+        }
+      } finally {
+        modalVenueDeleteInProgress = false;
+        venueDeletingId = null;
       }
     };
 
@@ -5363,6 +5764,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           if (activeModal.id === 'modal-promotion' && promoSaveInProgress) return;
           if (activeModal.id === 'modal-event' && modalEventSaveInProgress) return;
           if (activeModal.id === 'modal-venue' && modalVenueSaveInProgress) return;
+          if (activeModal.id === 'modal-delete-venue' && modalVenueDeleteInProgress) return;
           if (activeModal.id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
           if (activeModal.id === 'modal-exception' && modalExceptionSaveInProgress) return;
           if (activeModal.id === 'modal-place' && modalPlaceSaveInProgress) return;
@@ -5391,6 +5793,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (id === 'modal-promotion' && promoSaveInProgress) return;
       if (id === 'modal-event' && modalEventSaveInProgress) return;
       if (id === 'modal-venue' && modalVenueSaveInProgress) return;
+      if (id === 'modal-delete-venue' && modalVenueDeleteInProgress) return;
       if (id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
       if (id === 'modal-exception' && modalExceptionSaveInProgress) return;
       if (id === 'modal-place' && modalPlaceSaveInProgress) return;
