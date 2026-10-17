@@ -261,7 +261,6 @@ adminVenuesRoutes.get('/venues/:id/dependencies', async (c) => {
   }
 
   const venue = venueRes.rows[0];
-  const isProtected = id === 9999;
   const depCheck = await checkVenueDependencies(id);
 
   return c.json({
@@ -271,8 +270,8 @@ adminVenuesRoutes.get('/venues/:id/dependencies', async (c) => {
       city_id: venue.city_id,
       city_name: venue.city_name,
     },
-    is_protected: isProtected,
-    can_delete: !isProtected && !depCheck.hasDependencies,
+    is_protected: false,
+    can_delete: !depCheck.hasDependencies,
     has_dependencies: depCheck.hasDependencies,
     dependencies: depCheck.dependencies,
   });
@@ -291,21 +290,7 @@ adminVenuesRoutes.delete('/venues/:id', async (c) => {
     return c.json({ error: 'invalid_parameter', message: 'ID de local inválido.' }, 400);
   }
 
-  // 1. Protección estricta del local provisional ID 9999
-  if (id === 9999) {
-    console.warn(
-      `[AUDIT_VENUE_DELETE] User: ${userEmail} | VenueID: 9999 | Result: BLOCKED | Reason: Local provisional protegido | Timestamp: ${new Date().toISOString()}`
-    );
-    return c.json(
-      {
-        error: 'forbidden',
-        message: 'El local provisional ID 9999 es un recurso esencial protegido del sistema y no puede eliminarse.',
-      },
-      403
-    );
-  }
-
-  // 2. Borrado transaccional protegido con bloqueo de fila frente a condiciones de carrera
+  // 1. Borrado transaccional protegido con bloqueo de fila frente a condiciones de carrera
   const client = await getClient();
   try {
     await client.query('BEGIN');

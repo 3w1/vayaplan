@@ -122,7 +122,7 @@ whatsappWebhookRoutes.post('/whatsapp', async (c) => {
   }
 
   // 3. Resolución del local (venue)
-  let venueId = 9999; // Local de contingencia por defecto
+  let venueId: number | null = null; // Pendiente de asignación por defecto
   if (customVenueId && customVenueId > 0) {
     venueId = customVenueId;
   } else if (senderNumber) {
@@ -147,7 +147,7 @@ whatsappWebhookRoutes.post('/whatsapp', async (c) => {
   const editorialDate = today;
   const startTime = `${editorialDate}T22:30:00.000Z`;
 
-  const dedupeKey = `wa-${venueId}-${Date.now()}`;
+  const dedupeKey = `wa-${venueId ?? 'unassigned'}-${Date.now()}`;
   const sourceUrl = senderNumber ? `https://wa.me/${senderNumber.replace(/[^0-9]/g, '')}` : null;
 
   // 6. Insertar evento SIEMPRE como 'tentative' (regla estricta anti-publicación automática)

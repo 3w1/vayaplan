@@ -1811,7 +1811,7 @@ export function renderAdminHtml(): string {
             📝 Todos los borradores <span id="inbox-badge-all" class="badge-count" style="display:none;">0</span>
           </button>
           <button id="inbox-subfilter-unassigned" class="subfilter-pill" onclick="setCurationSubfilter('tentative_unassigned')">
-            ⚠️ Locales por verificar (9999) <span id="inbox-badge-unassigned" class="badge-count badge-warning" style="display:none;">0</span>
+            ⚠️ Pendientes de local <span id="inbox-badge-unassigned" class="badge-count badge-warning" style="display:none;">0</span>
           </button>
           <button id="inbox-subfilter-collisions" class="subfilter-pill" onclick="setCurationSubfilter('tentative_collisions')">
             💥 Posibles colisiones <span id="inbox-badge-collisions" class="badge-count badge-danger" style="display:none;">0</span>
@@ -3082,7 +3082,7 @@ export function renderAdminHtml(): string {
         const drafts = data.events || [];
 
         const totalTentative = drafts.length;
-        const totalUnassigned = drafts.filter(e => e.venue_id === 9999).length;
+        const totalUnassigned = drafts.filter(e => !e.venue_id || Number(e.venue_id) === 9999).length;
         const totalCollisions = drafts.filter(e => Boolean(e.collision_alert)).length;
 
         // Actualizar badges en Sidebar Escritorio y Drawer Móvil
@@ -3133,7 +3133,7 @@ export function renderAdminHtml(): string {
 
       let url = '/api/v1/admin/events?status=tentative&';
       if (curationSubfilter === 'tentative_unassigned') {
-        url += 'venue_id=9999&';
+        url += 'venue_id=unassigned&';
       } else if (curationSubfilter === 'tentative_collisions') {
         url += 'has_collision=true&';
       }
@@ -3166,7 +3166,7 @@ export function renderAdminHtml(): string {
 
         // RENDERIZADO DE TARJETAS DIFERENCIADAS (TEMA CLARO)
         grid.innerHTML = events.map(e => {
-          const isUnassigned = e.venue_id === 9999;
+          const isUnassigned = !e.venue_id || Number(e.venue_id) === 9999;
           const hasCollision = Boolean(e.collision_alert);
 
           let cardClass = 'inbox-card';
@@ -3177,7 +3177,7 @@ export function renderAdminHtml(): string {
             <article class="\${cardClass}" id="inbox-card-\${e.id}">
               \${isUnassigned ? \`
                 <div class="card-banner-warning">
-                  <span>⚠️ Local por verificar (9999) — Asignación obligatoria</span>
+                  <span>⚠️ Local pendiente de asignación</span>
                 </div>
               \` : ''}
 
@@ -3277,7 +3277,7 @@ export function renderAdminHtml(): string {
 
       if (status === 'tentative') {
         if (curationSubfilter === 'tentative_unassigned') {
-          url += 'venue_id=9999&';
+          url += 'venue_id=unassigned&';
         } else if (curationSubfilter === 'tentative_collisions') {
           url += 'has_collision=true&';
         }
@@ -3303,7 +3303,7 @@ export function renderAdminHtml(): string {
         if (tbody) {
           tbody.innerHTML = events.map(e => {
             const isTentative = e.status === 'tentative';
-            const isUnassigned = e.venue_id === 9999;
+            const isUnassigned = !e.venue_id || Number(e.venue_id) === 9999;
             const hasCollision = Boolean(e.collision_alert);
             const statusBadge = getEventStatusBadge(e.status);
 
@@ -3317,12 +3317,12 @@ export function renderAdminHtml(): string {
                   </div>
                   \${isUnassigned ? \`
                     <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                      <span class="badge-unverified">⚠️ Local por verificar</span>
+                      <span class="badge-unverified">⚠️ Local pendiente de asignación</span>
                       <button class="btn-card-reassign" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openReassignModal(\${e.id})">🏢 Asignar Local</button>
                     </div>
                   \` : \`
                     <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap; font-size:0.8125rem;">
-                      <span>📍 <strong>\${escapeHtml(e.venue_name)}</strong></span>
+                      <span>📍 <strong>\${escapeHtml(e.venue_name || 'Sin local')}</strong></span>
                       <span class="venue-badge">Zona: \${escapeHtml(e.venue_zone || 'otros')}</span>
                       <span class="venue-badge">Cat: \${escapeHtml(e.venue_category || 'general')}</span>
                       <button class="btn-card-action" style="padding:0.15rem 0.45rem; font-size:0.6875rem;" onclick="openReassignModal(\${e.id})" title="Reasignar local">✏️ Cambiar</button>
@@ -3381,7 +3381,7 @@ export function renderAdminHtml(): string {
         if (cardsContainer) {
           cardsContainer.innerHTML = events.map(e => {
             const isTentative = e.status === 'tentative';
-            const isUnassigned = e.venue_id === 9999;
+            const isUnassigned = !e.venue_id || Number(e.venue_id) === 9999;
             const hasCollision = Boolean(e.collision_alert);
             const statusBadge = getEventStatusBadge(e.status);
 
@@ -3402,12 +3402,12 @@ export function renderAdminHtml(): string {
                   <h4 class="event-card-title">\${escapeHtml(e.title)}</h4>
                   \${isUnassigned ? \`
                     <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                      <span class="badge-unverified">⚠️ Local por verificar</span>
+                      <span class="badge-unverified">⚠️ Local pendiente de asignación</span>
                       <button class="btn-card-reassign" style="padding:0.25rem 0.6rem; font-size:0.75rem;" onclick="openReassignModal(\${e.id})">🏢 Asignar Local</button>
                     </div>
                   \` : \`
                     <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap; font-size:0.8125rem;">
-                      <span>📍 <strong>\${escapeHtml(e.venue_name)}</strong></span>
+                      <span>📍 <strong>\${escapeHtml(e.venue_name || 'Sin local')}</strong></span>
                       <span class="venue-badge">Zona: \${escapeHtml(e.venue_zone || 'otros')}</span>
                       <span class="venue-badge">Cat: \${escapeHtml(e.venue_category || 'general')}</span>
                       <button class="btn-card-action" style="padding:0.15rem 0.45rem; font-size:0.6875rem;" onclick="openReassignModal(\${e.id})" title="Reasignar local">✏️ Cambiar</button>
@@ -3473,8 +3473,8 @@ export function renderAdminHtml(): string {
 
     window.publishEvent = async function(id, venueId) {
       if (eventActionsInProgress.has(id)) return;
-      if (venueId === 9999) {
-        alert('No se puede publicar un evento con Local por verificar (venue 9999). Asigna un local del censo primero.');
+      if (!venueId || Number(venueId) === 9999) {
+        alert('No se puede publicar un evento sin local asignado. Asigna un local del censo primero.');
         return;
       }
       if (!confirm('¿Confirmar publicación del evento? Pasará a ser visible en la agenda pública.')) return;
@@ -3608,7 +3608,7 @@ export function renderAdminHtml(): string {
         <div style="display:flex; gap:1rem; margin-top:0.35rem; color:#94a3b8; font-size:0.8125rem; flex-wrap:wrap;">
           <span>📅 Fecha: <strong>\${ev.editorial_date}</strong></span>
           <span>⏰ Hora: <strong>\${formatMadridTime(ev.start_time)}</strong></span>
-          <span>Local actual: \${ev.venue_id === 9999 ? '<span style="color:#fbbf24; font-weight:700;">⚠️ Local por verificar (9999)</span>' : '<strong>' + escapeHtml(ev.venue_name) + '</strong>'}</span>
+          <span>Local actual: \${(!ev.venue_id || Number(ev.venue_id) === 9999) ? '<span style="color:#fbbf24; font-weight:700;">⚠️ Local pendiente de asignación</span>' : '<strong>' + escapeHtml(ev.venue_name || '') + '</strong>'}</span>
         </div>
       \`;
 
@@ -4163,7 +4163,7 @@ export function renderAdminHtml(): string {
                   </div>
                   \${v.address ? \`<div style=\"font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;\">📍 \${escapeHtml(v.address)}</div>\` : ''}
                   \${extLinks.length > 0 ? \`<div style=\"display:flex; gap:0.5rem; margin-top:0.25rem; flex-wrap:wrap;\">\${extLinks.join('')}</div>\` : ''}
-                  \${is9999 ? \`<div style=\"margin-top:0.35rem;\"><span class=\"badge-unverified\">⚠️ Local provisional del sistema</span></div>\` : ''}
+                  \${is9999 ? \`<div style=\"margin-top:0.35rem;\"><span class=\"badge-unverified\">⚠️ Registro técnico para eventos pendientes de asignación</span></div>\` : ''}
                 </td>
                 <td><strong style=\"color:var(--text-main); font-size:0.875rem;\">\${escapeHtml(cityName)}</strong></td>
                 <td>\${categoryBadge}</td>
@@ -4174,11 +4174,7 @@ export function renderAdminHtml(): string {
                 <td>
                   <div style=\"display:flex; gap:0.35rem; align-items:center; flex-wrap:wrap;\">
                     <button class=\"btn-table-action\" onclick=\"editVenue(\${v.id})\" aria-label=\"Editar local #\${v.id}\" title=\"Editar local\">✏️ Editar</button>
-                    \${is9999 ? \`
-                      <button class=\"btn-table-action btn-danger\" disabled title=\"El local provisional no se puede eliminar\" style=\"opacity:0.4; cursor:not-allowed;\">🔒 Protegido</button>
-                    \` : \`
-                      <button class=\"btn-table-action btn-danger\" onclick=\"openDeleteVenueModal(\${v.id})\" aria-label=\"Eliminar local #\${v.id}\" title=\"Eliminar local\">🗑️ Eliminar</button>
-                    \`}
+                    <button class=\"btn-table-action btn-danger\" onclick=\"openDeleteVenueModal(\${v.id})\" aria-label=\"Eliminar local #\${v.id}\" title=\"Eliminar local\">🗑️ Eliminar</button>
                   </div>
                 </td>
               </tr>
@@ -4207,7 +4203,7 @@ export function renderAdminHtml(): string {
                 <h4 class=\"venue-card-title\">\${escapeHtml(v.name)}</h4>
                 \${is9999 ? \`
                   <div style=\"font-size:0.8125rem; color:#b45309; font-weight:600; line-height:1.4;\">
-                    ⚠️ Local provisional del sistema para borradores sin asignar. No asignable en curación.
+                    ⚠️ Registro técnico para eventos pendientes de asignación.
                   </div>
                 \` : ''}
                 <div class=\"venue-card-body\" style=\"display:flex; flex-direction:column; gap:0.35rem; font-size:0.875rem;\">
@@ -4221,11 +4217,7 @@ export function renderAdminHtml(): string {
                 </div>
                 <div class=\"venue-card-actions\" style=\"display:flex; gap:0.5rem; margin-top:0.5rem;\">
                   <button class=\"btn-card-action\" onclick=\"editVenue(\${v.id})\" aria-label=\"Editar local #\${v.id}\" style=\"flex:1;\">✏️ Editar Local</button>
-                  \${is9999 ? \`
-                    <button class=\"btn-card-action\" disabled style=\"opacity:0.4; cursor:not-allowed; color:var(--text-dim);\">🔒 Protegido</button>
-                  \` : \`
-                    <button class=\"btn-card-action\" style=\"color:var(--red); border-color:#fecaca;\" onclick=\"openDeleteVenueModal(\${v.id})\" aria-label=\"Eliminar local #\${v.id}\">🗑️ Eliminar</button>
-                  \`}
+                  <button class=\"btn-card-action\" style=\"color:var(--red); border-color:#fecaca;\" onclick=\"openDeleteVenueModal(\${v.id})\" aria-label=\"Eliminar local #\${v.id}\">🗑️ Eliminar</button>
                 </div>
               </article>
             \`;
@@ -4367,14 +4359,7 @@ export function renderAdminHtml(): string {
 
         if (modalBody) {
           let statusHtml = '';
-          if (isProtected) {
-            statusHtml = \`
-              <div style=\"padding:0.875rem; background:#fef3c7; border:1px solid #fde68a; border-radius:8px; color:#92400e; font-size:0.875rem; line-height:1.4;\">
-                <strong>⚠️ Local protegido por el sistema</strong>
-                <p style=\"margin:0.4rem 0 0 0;\">El local provisional ID 9999 es un recurso esencial del sistema y no puede eliminarse bajo ninguna circunstancia.</p>
-              </div>
-            \`;
-          } else if (deps.length > 0) {
+          if (deps.length > 0) {
             statusHtml = \`
               <div style=\"padding:0.875rem; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; color:#92400e; font-size:0.875rem; line-height:1.4;\">
                 <strong>🚫 Borrado bloqueado por dependencias activas</strong>
@@ -5488,8 +5473,8 @@ export function renderAdminHtml(): string {
         return;
       }
 
-      if (Number(ev.venue_id) === 9999) {
-        alert('No se puede promocionar un evento con Local por verificar (venue provisional). Debes asignarle un local censado antes de promocionarlo.');
+      if (!ev.venue_id || Number(ev.venue_id) === 9999) {
+        alert('No se puede promocionar un evento sin local asignado. Debes asignarle un local censado antes de promocionarlo.');
         return;
       }
 

@@ -11,7 +11,11 @@ import {
 } from '@vayaplan/shared';
 import type { AdminEventItem, AdminUser, EventCategory, EventSourceType, EventStatus } from '@vayaplan/types';
 
-export const adminEventsRoutes = new Hono();
+export const adminEventsRoutes = new Hono<{
+  Variables: {
+    user?: AdminUser;
+  };
+}>();
 
 // Proteger todas las rutas administrativas de eventos
 adminEventsRoutes.use('*', requireAdminAuth);
@@ -48,12 +52,13 @@ adminEventsRoutes.get('/events', async (c) => {
           AND c.editorial_date = e.editorial_date
           AND c.id != e.id
           AND c.status NOT IN ('cancelled', 'duplicate')
+          AND e.venue_id IS NOT NULL
           AND e.venue_id != 9999
           AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
         LIMIT 1
       ) AS collision_alert
     FROM events e
-    INNER JOIN venues v ON e.venue_id = v.id
+    LEFT JOIN venues v ON e.venue_id = v.id
     LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
     WHERE 1=1
   `;
@@ -68,7 +73,9 @@ adminEventsRoutes.get('/events', async (c) => {
     sql += ` AND e.editorial_date = $${queryParams.length}`;
   }
 
-  if (venueIdFilter && !Number.isNaN(Number(venueIdFilter))) {
+  if (venueIdFilter === 'unassigned' || venueIdFilter === 'null' || venueIdFilter === '9999') {
+    sql += ` AND (e.venue_id IS NULL OR e.venue_id = 9999)`;
+  } else if (venueIdFilter && !Number.isNaN(Number(venueIdFilter))) {
     queryParams.push(Number(venueIdFilter));
     sql += ` AND e.venue_id = $${queryParams.length}`;
   }
@@ -80,6 +87,7 @@ adminEventsRoutes.get('/events', async (c) => {
         AND c.editorial_date = e.editorial_date
         AND c.id != e.id
         AND c.status NOT IN ('cancelled', 'duplicate')
+        AND e.venue_id IS NOT NULL
         AND e.venue_id != 9999
         AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
     )`;
@@ -108,7 +116,7 @@ adminEventsRoutes.get('/events', async (c) => {
   const events: AdminEventItem[] = result.rows.map((row) => ({
     id: Number(row.id),
     city_id: Number(row.city_id),
-    venue_id: Number(row.venue_id),
+    venue_id: row.venue_id !== null && row.venue_id !== undefined ? Number(row.venue_id) : null,
     title: row.title,
     description: row.description,
     category: row.category,
@@ -129,8 +137,8 @@ adminEventsRoutes.get('/events', async (c) => {
     verified_by: row.verified_by,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
-    venue_name: row.venue_name,
-    venue_slug: row.venue_slug,
+    venue_name: row.venue_name || null,
+    venue_slug: row.venue_slug || null,
     venue_zone: row.venue_zone || null,
     venue_category: row.venue_category || null,
     venue_address: row.venue_address || null,
@@ -175,12 +183,13 @@ adminEventsRoutes.get('/events/:id', async (c) => {
           AND c.editorial_date = e.editorial_date
           AND c.id != e.id
           AND c.status NOT IN ('cancelled', 'duplicate')
+          AND e.venue_id IS NOT NULL
           AND e.venue_id != 9999
           AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
         LIMIT 1
       ) AS collision_alert
     FROM events e
-    INNER JOIN venues v ON e.venue_id = v.id
+    LEFT JOIN venues v ON e.venue_id = v.id
     LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
     WHERE e.id = $1
     LIMIT 1;
@@ -195,7 +204,7 @@ adminEventsRoutes.get('/events/:id', async (c) => {
   const event: AdminEventItem = {
     id: Number(row.id),
     city_id: Number(row.city_id),
-    venue_id: Number(row.venue_id),
+    venue_id: row.venue_id !== null && row.venue_id !== undefined ? Number(row.venue_id) : null,
     title: row.title,
     description: row.description,
     category: row.category,
@@ -216,8 +225,8 @@ adminEventsRoutes.get('/events/:id', async (c) => {
     verified_by: row.verified_by,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
-    venue_name: row.venue_name,
-    venue_slug: row.venue_slug,
+    venue_name: row.venue_name || null,
+    venue_slug: row.venue_slug || null,
     venue_zone: row.venue_zone || null,
     venue_category: row.venue_category || null,
     venue_address: row.venue_address || null,
@@ -327,7 +336,7 @@ adminEventsRoutes.post('/events/draft', async (c) => {
   }
 
   const cityId = Number(body.city_id || 1);
-  const venueId = Number(body.venue_id || 9999); // 9999 = Local por verificar si no viene definido
+  const venueId = body.venue_id !== undefined && body.venue_id !== null ? Number(body.venue_id) : null;
   const title = body.title?.trim() || 'Borrador sin título';
   const category = (body.category as EventCategory) || 'cultura';
   const startTime = body.start_time || new Date().toISOString();
@@ -391,9 +400,20 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
   }
 
   // Comprobar que existe
-  const check = await query(`SELECT id FROM events WHERE id = $1 LIMIT 1;`, [id]);
+  const check = await query(`SELECT id, venue_id, status FROM events WHERE id = $1 LIMIT 1;`, [id]);
   if (check.rows.length === 0) {
     return c.json({ error: 'event_not_found', message: `Evento ${id} no encontrado.` }, 404);
+  }
+
+  const existing = check.rows[0];
+  const targetStatus = body.status !== undefined ? body.status : existing.status;
+  const targetVenueId = body.venue_id !== undefined ? body.venue_id : existing.venue_id;
+
+  if (targetStatus === 'published' && (!targetVenueId || Number(targetVenueId) === 9999)) {
+    return c.json({
+      error: 'venue_not_assigned',
+      message: 'No se puede publicar un evento sin local asignado del censo.',
+    }, 400);
   }
 
   const allowedFields = [
@@ -491,10 +511,10 @@ adminEventsRoutes.post('/events/:id/publish', async (c) => {
   }
 
   const currentEvent = check.rows[0];
-  if (Number(currentEvent.venue_id) === 9999) {
+  if (!currentEvent.venue_id || Number(currentEvent.venue_id) === 9999) {
     return c.json({
       error: 'venue_not_assigned',
-      message: 'No se puede publicar un evento con Local por verificar (venue 9999). Asigna un local del censo primero.',
+      message: 'No se puede publicar un evento sin local asignado del censo. Asigna un local válido antes de publicar.',
     }, 400);
   }
 
