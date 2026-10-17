@@ -170,61 +170,112 @@ El venue `9999` **no se borra durante esta ventana**. Su retirada requiere:
 
 > [!WARNING]
 > Ningún procedimiento de recuperación se ejecutará sin autorización explícita de la dirección.
-> Un `UPDATE` global indiscriminado sobre `events WHERE venue_id IS NULL` es peligroso porque alteraría de forma indebida nuevos eventos creados por el nuevo código.
+> Está terminantemente prohibido ejecutar un `UPDATE` global ciego sobre `events WHERE venue_id IS NULL`. Cualquier reasignación de vuelta a `9999` debe realizarse exclusivamente sobre una lista explícita de IDs previamente inventariados y autorizados.
+
+### Reglas Generales de Recuperación
+- **Pausa obligatoria de escritores**: Los productores (webhooks, cron/workers de ingesta, endpoints de escritura admin) deben permanecer completamente bloqueados durante toda la secuencia de recuperación.
+- **Comprobación de eventos NULL**: Antes de intentar revertir al código anterior o re-imponer la restricción `NOT NULL`, es obligatorio auditar si existen eventos con `venue_id IS NULL`. Incluso si el fallo ocurre durante el despliegue antes del DML, la nueva versión del código podría haber recibido peticiones y creado borradores con local nulo. Si existe cualquier evento con `venue_id IS NULL`, **NO** se asume compatibilidad automática; debe aplicarse el procedimiento de recuperación de datos antes de revertir el esquema.
+
+---
 
 ### Caso A: Fallo durante Fase 3 (DDL)
 Si la migración DDL falla o se aborta antes de desplegar código:
 - La transacción `BEGIN ... COMMIT` garantiza reversión automática de cambios parciales.
-- No se requiere acción adicional de datos. El código antiguo sigue funcionando normalmente con `venue_id = 9999`.
+- No se requiere acción de datos. El código antiguo sigue funcionando normalmente con `venue_id = 9999`.
+
+---
 
 ### Caso B: Fallo durante Fase 4 (Despliegue de Código)
-Si los contenedores nuevos no inician correctamente:
-1. Revertir contenedores a la imagen previa.
-2. Como los registros aún conservan `venue_id = 9999` (el DML no se ha ejecutado), el código antiguo sigue leyendo y operando con normalidad.
-3. Si se desea retirar el DDL:
+Si los contenedores nuevos no inician correctamente o fallan las comprobaciones de salud:
+1. **Mantener pausa de escritores** en ingress / reverse proxy.
+2. **Comprobar si se crearon eventos con venue_id IS NULL**:
    ```bash
-   psql -v ON_ERROR_STOP=1 -c "
-   ALTER TABLE events DROP CONSTRAINT IF EXISTS chk_events_published_venue_not_null;
-   ALTER TABLE events ALTER COLUMN venue_id SET NOT NULL;
-   "
+   psql -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) AS null_count FROM events WHERE venue_id IS NULL;"
    ```
+3. **Decisión**:
+   - **Si `null_count > 0`**: La nueva versión llegó a procesar peticiones y generó registros con local nulo. **NO** asumir compatibilidad automática ni revertir DDL. Pasar obligatoriamente al procedimiento de recuperación de datos (**Caso C**).
+   - **Si `null_count == 0`**: No se generaron eventos con local nulo y los registros existentes conservan `venue_id = 9999`. Proseguir:
+     a) Revertir contenedores de API y Web a la imagen previa.
+     b) Si se decide retirar el DDL:
+        ```bash
+        psql -v ON_ERROR_STOP=1 -c "
+        ALTER TABLE events DROP CONSTRAINT IF EXISTS chk_events_published_venue_not_null;
+        ALTER TABLE events ALTER COLUMN venue_id SET NOT NULL;
+        "
+        ```
+     c) Reabrir tráfico tras verificar salud.
 
-### Caso C: Rollback tras Fase 5 (Post-DML) o tras Ventana Operativa
-Si se requiere volver a la versión anterior tras haber ejecutado el DML o tras haber tenido tráfico con el nuevo código:
+---
 
-1. **Pausar productores y drenar tráfico** (repetir Fase 2).
-2. **Auditar e inventariar eventos con venue_id = NULL**, distinguiendo entre eventos históricos y eventos nuevos:
+### Caso C: Procedimiento de Recuperación de Datos (Post-DML o tras Tráfico con Código Nuevo)
+Si se requiere volver a la versión anterior de código y esquema tras haber ejecutado el DML o tras haberse generado eventos con local nulo:
+
+1. **Pausar productores y drenar tráfico** (repetir Fase 2):
+   - Ingress con retorno 503 para endpoints mutadores.
+   - Workers y tareas programadas suspendidas.
+   - Esperar drenaje de peticiones en vuelo.
+
+2. **Auditar e inventariar eventos con venue_id IS NULL**:
    ```bash
    psql -v ON_ERROR_STOP=1 -c "
-   SELECT id, title, status, created_at, source_type
+   SELECT id, title, status, created_at, updated_at, source_type
    FROM events
    WHERE venue_id IS NULL
-   ORDER BY created_at ASC;
+   ORDER BY id ASC;
    "
    ```
-3. **Tratamiento de eventos nuevos creados post-despliegue**:
-   - Los eventos creados mientras el nuevo código estuvo activo pueden legítimamente tener `venue_id = NULL`.
-   - Para poder re-imponer la restricción `NOT NULL`, **todos los registros con `venue_id IS NULL` deben resolverse**.
-   - Con autorización expresa, asignar temporalmente el venue provisional `9999` (o descartar si son pruebas verificadas):
-     ```bash
-     psql -v ON_ERROR_STOP=1 -c "
-     UPDATE events
-     SET venue_id = 9999
-     WHERE venue_id IS NULL;
-     "
-     ```
-   - El venue `9999` **debe existir en la base de datos** para que esta asignación respete la clave foránea `events_venue_id_fkey`.
-4. **Verificar que no quedan registros con `venue_id IS NULL`**:
+   *Punto de parada*: Presentar el inventario detallado a la dirección para obtener la lista autorizada de IDs a reasignar temporalmente.
+
+3. **Comprobar existencia del venue provisional 9999**:
    ```bash
-   psql -v ON_ERROR_STOP=1 -c "SELECT COUNT(*) FROM events WHERE venue_id IS NULL;"
-   # Debe retornar 0 antes de re-imponer NOT NULL
+   psql -v ON_ERROR_STOP=1 -c "SELECT id, name FROM venues WHERE id = 9999;"
    ```
-5. **Re-imponer restricciones del esquema anterior**:
+   *Punto de parada*: El registro con `id = 9999` **debe existir** en la tabla `venues`. Si fue retirado, cualquier UPDATE fallará por violación de la clave foránea `events_venue_id_fkey`. Si no existe, debe restituirse antes de continuar.
+
+4. **Reasignación selectiva por lista explícita de IDs autorizados**:
+   - **Efecto del trigger `trg_events_updated_at`**:
+     Un `UPDATE` estándar sobre `events` dispara el trigger `trg_events_updated_at` actualizando `updated_at = now()`.
+     - Si por política operativa se requiere **preservar los timestamps históricos originales**, debe desactivarse el trigger dentro de la transacción de recuperación:
+       ```bash
+       psql -v ON_ERROR_STOP=1 -c "
+       BEGIN;
+       ALTER TABLE events DISABLE TRIGGER trg_events_updated_at;
+       UPDATE events
+       SET venue_id = 9999
+       WHERE venue_id IS NULL AND id IN (<id_autorizado_1>, <id_autorizado_2>);
+       ALTER TABLE events ENABLE TRIGGER trg_events_updated_at;
+       COMMIT;
+       "
+       ```
+     - Si por auditoría se prefiere registrar el momento exacto del rollback, se ejecuta el UPDATE directo sin alterar el trigger:
+       ```bash
+       psql -v ON_ERROR_STOP=1 -c "
+       UPDATE events
+       SET venue_id = 9999
+       WHERE venue_id IS NULL AND id IN (<id_autorizado_1>, <id_autorizado_2>);
+       "
+       ```
+
+5. **Verificación estricta de eventos con venue_id IS NULL (Punto de parada crítico)**:
+   ```bash
+   psql -v ON_ERROR_STOP=1 -c "SELECT id, title, status FROM events WHERE venue_id IS NULL;"
+   ```
+   > [!CAUTION]
+   > Si la consulta anterior devuelve **cualquier registro** (`COUNT(*) > 0`):
+   > **DETENERSE INMEDIATAMENTE**.
+   > - **NO** ejecutar `ALTER TABLE events ALTER COLUMN venue_id SET NOT NULL` (PostgreSQL abortará con error).
+   > - **NO** declarar recuperada la versión anterior.
+   > - Resolver individualmente con la dirección cada evento remanente antes de proseguir.
+
+6. **Re-imponer restricciones del esquema anterior**:
+   Una vez verificado que no queda ningún registro con `venue_id IS NULL`:
    ```bash
    psql -v ON_ERROR_STOP=1 -c "
    ALTER TABLE events DROP CONSTRAINT IF EXISTS chk_events_published_venue_not_null;
    ALTER TABLE events ALTER COLUMN venue_id SET NOT NULL;
    "
    ```
-6. **Revertir contenedores de API y Web a la versión anterior**.
-7. **Reanudar tráfico y verificar servicios**.
+
+7. **Revertir contenedores de API y Web a la versión anterior**.
+8. **Verificar salud en endpoints reales** (`/api/health`, `/api/health/db`, `/health`).
+9. **Reanudar tráfico en ingress y reactivar workers**.

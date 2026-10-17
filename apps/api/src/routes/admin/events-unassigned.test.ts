@@ -98,8 +98,43 @@ afterAll(async () => {
     ON CONFLICT (id) DO NOTHING;
   `);
 
+  // Verificar que la limpieza concluye sin conexiones retenidas en transacción
+  const txCheck = await testPool.query<{ count: string }>(
+    `SELECT count(*) FROM pg_stat_activity
+     WHERE state IN ('idle in transaction', 'idle in transaction (aborted)')
+       AND datname = current_database();`
+  );
+  expect(Number(txCheck.rows[0].count)).toBe(0);
+
   await testPool.end();
 });
+
+/**
+ * Ejecuta un archivo SQL con transacción propia (BEGIN/COMMIT) sobre un cliente
+ * dedicado reservado de testPool. Si falla, ejecuta ROLLBACK explícito sobre el
+ * mismo cliente. Si el rollback falla, descarta la conexión (release(true)) para
+ * no reintroducir una conexión corrupta en el pool.
+ */
+async function executeSqlFileWithClient(sqlContent: string): Promise<void> {
+  const client = await testPool.connect();
+  let rollbackFailed = false;
+  try {
+    await client.query(sqlContent);
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rbErr) {
+      rollbackFailed = true;
+      client.release(true); // Descartar conexión dañada
+      throw err;
+    }
+    throw err;
+  } finally {
+    if (!rollbackFailed) {
+      client.release();
+    }
+  }
+}
 
 // ==============================================================================
 // 2. PRUEBAS DE SCRIPTS REALES (DDL Y DML)
@@ -110,8 +145,8 @@ describe('1. Ejecución de Scripts Reales (DDL 007 y DML de Transición)', () =>
     const ddlContent = readFileSync(ddlFilePath, 'utf-8');
     expect(ddlContent.length).toBeGreaterThan(0);
 
-    // Ejecutar el archivo SQL real
-    await testPool.query(ddlContent);
+    // Ejecutar el archivo SQL real sobre cliente dedicado
+    await executeSqlFileWithClient(ddlContent);
 
     // Comprobar que events.venue_id es nullable en information_schema
     const colRes = await testPool.query<{ is_nullable: string }>(
@@ -152,15 +187,27 @@ describe('1. Ejecución de Scripts Reales (DDL 007 y DML de Transición)', () =>
       );
       ctrlId = insCtrl.rows[0].id;
 
-      // Ejecutar el script DDL real en una transacción
+      // Ejecutar el script DDL real sobre cliente dedicado esperando aborto
       let errorCaught = false;
       try {
-        await testPool.query(ddlContent);
+        await executeSqlFileWithClient(ddlContent);
       } catch (err: any) {
         errorCaught = true;
         expect(err.message).toContain('Migración 007 abortada');
       }
       expect(errorCaught).toBe(true);
+
+      // Verificar que tras el aborto puede ejecutarse una consulta normal sobre testPool
+      const probeRes = await testPool.query<{ count: string }>('SELECT count(*) FROM events;');
+      expect(Number(probeRes.rows[0].count)).toBeGreaterThan(0);
+
+      // Verificar que no quedan conexiones en transacción fallida en el pool
+      const txCheck = await testPool.query<{ count: string }>(
+        `SELECT count(*) FROM pg_stat_activity
+         WHERE state IN ('idle in transaction', 'idle in transaction (aborted)')
+           AND datname = current_database();`
+      );
+      expect(Number(txCheck.rows[0].count)).toBe(0);
 
       // Comprobar que no hubo cambios parciales: el control conserva venue_id = 9999
       const ctrlCheck = await testPool.query<{ venue_id: number }>(
@@ -214,14 +261,22 @@ describe('1. Ejecución de Scripts Reales (DDL 007 y DML de Transición)', () =>
       );
       expect(preTrg.rows[0].tgenabled).toBe('O');
 
-      // Ejecutar el script DML real
-      await testPool.query(dmlContent);
+      // Ejecutar el script DML real sobre cliente dedicado
+      await executeSqlFileWithClient(dmlContent);
 
       // Verificar que tras el script DML el trigger permanece habilitado ('O')
       const postTrg = await testPool.query<{ tgenabled: string }>(
         `SELECT tgenabled FROM pg_trigger WHERE tgname = 'trg_events_updated_at' AND tgrelid = 'events'::regclass;`
       );
       expect(postTrg.rows[0].tgenabled).toBe('O');
+
+      // Verificar que no quedan conexiones en transacción fallida en el pool
+      const txCheck = await testPool.query<{ count: string }>(
+        `SELECT count(*) FROM pg_stat_activity
+         WHERE state IN ('idle in transaction', 'idle in transaction (aborted)')
+           AND datname = current_database();`
+      );
+      expect(Number(txCheck.rows[0].count)).toBe(0);
 
       // Comprobar cada registro: venue_id pasó a NULL pero created_at y updated_at están intactos
       for (const original of insertedEvents) {
@@ -268,6 +323,7 @@ describe('1. Ejecución de Scripts Reales (DDL 007 y DML de Transición)', () =>
       await expect(
         (async () => {
           const client = await testPool.connect();
+          let rollbackFailed = false;
           try {
             await client.query('BEGIN');
             await client.query('ALTER TABLE events DISABLE TRIGGER trg_events_updated_at');
@@ -285,13 +341,33 @@ describe('1. Ejecución de Scripts Reales (DDL 007 y DML de Transición)', () =>
             await client.query(`SELECT 1 / 0;`);
             await client.query('COMMIT');
           } catch (err) {
-            await client.query('ROLLBACK');
+            try {
+              await client.query('ROLLBACK');
+            } catch (rbErr) {
+              rollbackFailed = true;
+              client.release(true); // Descartar cliente si el rollback falla
+              throw err;
+            }
             throw err;
           } finally {
-            client.release();
+            if (!rollbackFailed) {
+              client.release();
+            }
           }
         })()
       ).rejects.toThrow();
+
+      // Verificar que tras el aborto puede ejecutarse una consulta normal sobre testPool
+      const probeRes = await testPool.query<{ count: string }>('SELECT count(*) FROM events;');
+      expect(Number(probeRes.rows[0].count)).toBeGreaterThan(0);
+
+      // Verificar que no quedan conexiones en transacción fallida en el pool
+      const txCheck = await testPool.query<{ count: string }>(
+        `SELECT count(*) FROM pg_stat_activity
+         WHERE state IN ('idle in transaction', 'idle in transaction (aborted)')
+           AND datname = current_database();`
+      );
+      expect(Number(txCheck.rows[0].count)).toBe(0);
 
       // Verificar que fuera de la transacción fallida, el trigger sigue habilitado ('O')
       const outerTrg = await testPool.query<{ tgenabled: string }>(
