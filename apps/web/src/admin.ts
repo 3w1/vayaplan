@@ -1136,6 +1136,53 @@ export function renderAdminHtml(): string {
       align-items: center;
     }
 
+    /* Lugares Permanentes (Places) Responsive */
+    .places-cards-mobile {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .place-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.125rem;
+      box-shadow: 0 1px 3px rgba(11, 15, 59, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .place-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .place-card-title {
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.35;
+    }
+    .place-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+    .place-card-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
+      border-top: 1px solid var(--border);
+      padding-top: 0.75rem;
+      align-items: center;
+    }
+
     .btn-table-action {
       background: var(--bg-surface);
       color: var(--text-muted);
@@ -1258,13 +1305,15 @@ export function renderAdminHtml(): string {
       .events-table-desktop,
       .promo-table-desktop,
       .venues-table-desktop,
-      .recurrences-table-desktop {
+      .recurrences-table-desktop,
+      .places-table-desktop {
         display: none !important;
       }
       .events-cards-mobile,
       .promo-cards-mobile,
       .venues-cards-mobile,
-      .recurrences-cards-mobile {
+      .recurrences-cards-mobile,
+      .places-cards-mobile {
         display: flex !important;
       }
     }
@@ -1272,13 +1321,15 @@ export function renderAdminHtml(): string {
       .events-table-desktop,
       .promo-table-desktop,
       .venues-table-desktop,
-      .recurrences-table-desktop {
+      .recurrences-table-desktop,
+      .places-table-desktop {
         display: block !important;
       }
       .events-cards-mobile,
       .promo-cards-mobile,
       .venues-cards-mobile,
-      .recurrences-cards-mobile {
+      .recurrences-cards-mobile,
+      .places-cards-mobile {
         display: none !important;
       }
     }
@@ -1880,24 +1931,36 @@ export function renderAdminHtml(): string {
       <!-- SECCIÓN 4: LUGARES PERMANENTES (PLACES) -->
       <section id="section-places" style="display:none;">
         <div class="toolbar">
-          <h3>Lugares y Oferta Estable (Cine, Teatros, Salas)</h3>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <h3 style="margin:0; font-size:1.125rem; font-weight:800; color:var(--text-main);">Lugares y Oferta Estable (Cine, Teatros, Salas)</h3>
+            <span id="places-count-badge" class="badge-count" style="display:none;">0</span>
+          </div>
           <button class="btn-primary" onclick="openNewPlaceModal()">+ Nuevo Lugar</button>
         </div>
-        <div class="table-container">
+
+        <!-- Vista Desktop: Tabla estructurada -->
+        <div class="table-container places-table-desktop">
           <table>
             <thead>
               <tr>
-                <th>Nombre</th>
+                <th>Lugar</th>
                 <th>Categoría</th>
                 <th>Destacado</th>
                 <th>Horario / Precio</th>
+                <th>Ubicación</th>
+                <th>Estado</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody id="places-tbody">
-              <tr><td colspan="5" style="text-align:center;">Cargando lugares...</td></tr>
+              <tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando lugares...</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales -->
+        <div id="places-cards-container" class="places-cards-mobile">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando lugares...</div>
         </div>
       </section>
 
@@ -2286,51 +2349,57 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
-  <!-- MODAL: NUEVO LUGAR PERMANENTE -->
+  <!-- MODAL: LUGAR PERMANENTE (TEMA CLARO) -->
   <div id="modal-place" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-place-title">Nuevo Lugar Permanente</h3>
-        <button class="modal-close" onclick="closeModal('modal-place')">✕</button>
+        <h3 id="modal-place-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nuevo Lugar Permanente</h3>
+        <button class="modal-close" onclick="closeModal('modal-place')" aria-label="Cerrar modal">✕</button>
       </div>
       <form id="form-place" onsubmit="savePlace(event)">
-        <input type="hidden" id="place-id">
-        <div class="form-group">
-          <label>Nombre del lugar *</label>
-          <input type="text" id="place-name" required placeholder="Ej: Cine Ortega">
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
+        <div class="modal-body" style="padding: 1.25rem; display:flex; flex-direction:column; gap:0.875rem;">
+          <input type="hidden" id="place-id">
           <div class="form-group">
-            <label>Categoría *</label>
-            <select id="place-category" required>
-              <option value="cine">Cine</option>
-              <option value="teatro">Teatro</option>
-              <option value="exposicion">Exposición</option>
-              <option value="cultura">Cultura</option>
-            </select>
+            <label for="place-name" style="font-weight:700; color:var(--text-main);">Nombre del lugar *</label>
+            <input type="text" id="place-name" required placeholder="Ej: Cine Ortega">
+          </div>
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="place-category" style="font-weight:700; color:var(--text-main);">Categoría *</label>
+              <select id="place-category" required>
+                <option value="cine">Cine</option>
+                <option value="teatro">Teatro</option>
+                <option value="exposicion">Exposición</option>
+                <option value="cultura">Cultura</option>
+                <option value="museo">Museo</option>
+                <option value="monumento">Monumento</option>
+                <option value="sala_conciertos">Sala de conciertos</option>
+                <option value="ocio">Ocio</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="place-highlight" style="font-weight:700; color:var(--text-main);">Texto destacado *</label>
+              <input type="text" id="place-highlight" required placeholder="Ej: Salas históricas de estreno">
+            </div>
+          </div>
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="place-hours" style="font-weight:700; color:var(--text-main);">Horario</label>
+              <input type="text" id="place-hours" placeholder="Miércoles a Domingo de 17:00 a 22:30">
+            </div>
+            <div class="form-group">
+              <label for="place-price" style="font-weight:700; color:var(--text-main);">Precio orientativo</label>
+              <input type="text" id="place-price" placeholder="6,50 € / 8,00 €">
+            </div>
           </div>
           <div class="form-group">
-            <label>Texto destacado *</label>
-            <input type="text" id="place-highlight" required placeholder="Ej: Salas históricas de estreno">
+            <label for="place-maps-url" style="font-weight:700; color:var(--text-main);">Enlace Google Maps</label>
+            <input type="url" id="place-maps-url" placeholder="https://maps.google.com/?cid=...">
           </div>
-        </div>
-        <div class="form-grid two-cols" style="margin-top:1rem;">
-          <div class="form-group">
-            <label>Horario</label>
-            <input type="text" id="place-hours" placeholder="Miércoles a Domingo de 17:00 a 22:30">
-          </div>
-          <div class="form-group">
-            <label>Precio orientativo</label>
-            <input type="text" id="place-price" placeholder="6,50 € / 8,00 €">
-          </div>
-        </div>
-        <div class="form-group" style="margin-top:1rem;">
-          <label>Enlace Google Maps</label>
-          <input type="url" id="place-maps-url" placeholder="https://maps.google.com/?cid=...">
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-place')">Cancelar</button>
-          <button type="submit" class="btn-primary">Guardar Lugar</button>
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-place')">Cancelar</button>
+          <button type="submit" id="btn-save-place" class="btn-primary">Guardar Lugar</button>
         </div>
       </form>
     </div>
@@ -4228,55 +4297,224 @@ export function renderAdminHtml(): string {
     // ==============================================================================
     // Gestión de Lugares Permanentes (Places)
     // ==============================================================================
+    let cachedPlaces = [];
+    let modalPlaceSaveInProgress = false;
+
     async function loadAdminPlaces() {
       const tbody = document.getElementById('places-tbody');
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Cargando lugares...</td></tr>';
+      const cardsContainer = document.getElementById('places-cards-container');
+      const badge = document.getElementById('places-count-badge');
+
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando lugares...</td></tr>';
+      if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando lugares...</div>';
+
       try {
         const res = await apiFetch('/api/v1/admin/places');
         const data = await res.json();
         const places = data.places || [];
+        cachedPlaces = places;
 
-        tbody.innerHTML = places.map(p => \`
-          <tr>
-            <td><strong>\${escapeHtml(p.name)}</strong></td>
-            <td><small>\${escapeHtml(p.category)}</small></td>
-            <td>\${escapeHtml(p.highlight_text)}</td>
-            <td><small>\${escapeHtml(p.opening_hours_text || '—')}<br>\${escapeHtml(p.price_text || '')}</small></td>
-            <td>
-              <button class="btn-act" onclick="editPlace(\${p.id})">✏️ Editar</button>
-            </td>
-          </tr>
-        \`).join('');
-      } catch {}
+        if (badge) {
+          badge.textContent = String(places.length);
+          badge.style.display = places.length > 0 ? 'inline-block' : 'none';
+        }
+
+        if (places.length === 0) {
+          if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">No hay lugares permanentes registrados.</td></tr>';
+          if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No hay lugares permanentes registrados.</div>';
+          return;
+        }
+
+        // Render Desktop Table
+        if (tbody) {
+          tbody.innerHTML = places.map(p => {
+            const hasCoords = p.latitude !== null && p.latitude !== undefined && p.longitude !== null && p.longitude !== undefined;
+            const coordsStr = hasCoords ? \`\${p.latitude}, \${p.longitude}\` : '';
+            const mapsLink = p.google_maps_url ? \`<a href="\${escapeHtml(p.google_maps_url)}" target="_blank" rel="noopener" style="color:var(--primary); font-weight:600; text-decoration:underline; font-size:0.75rem;">Ver en Maps ↗</a>\` : '';
+            const locationContent = hasCoords || mapsLink
+              ? \`<div style="font-size:0.8125rem;">\${coordsStr ? \`<span style="color:var(--text-main); font-family:var(--font-mono, monospace); font-size:0.75rem;">📍 \${escapeHtml(coordsStr)}</span>\` : ''}\${coordsStr && mapsLink ? '<br>' : ''}\${mapsLink}</div>\`
+              : '<span style="color:var(--text-dim);">—</span>';
+
+            const scheduleStr = p.opening_hours_text ? escapeHtml(p.opening_hours_text) : '—';
+            const priceStr = p.price_text ? escapeHtml(p.price_text) : '';
+            const schedPriceContent = \`<div style="font-size:0.8125rem;"><span style="color:var(--text-main); font-weight:600;">\${scheduleStr}</span>\${priceStr ? \`<br><span style="color:var(--text-muted); font-size:0.75rem;">\${priceStr}</span>\` : ''}</div>\`;
+
+            const isActive = p.is_active !== false;
+            const statusBadge = isActive
+              ? '<span class="badge badge-published">Activo</span>'
+              : '<span class="badge badge-outdated">Inactivo</span>';
+
+            return \`
+              <tr id="place-row-\${p.id}">
+                <td>
+                  <strong style="color:var(--text-main); font-size:0.9rem;">\${escapeHtml(p.name)}</strong>
+                  \${p.slug ? \`<br><span style="font-size:0.7rem; color:var(--text-dim); font-family:monospace;">\${escapeHtml(p.slug)}</span>\` : ''}
+                </td>
+                <td><span class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:800; text-transform:capitalize;">\${escapeHtml(p.category || 'cultura')}</span></td>
+                <td><div style="font-size:0.8125rem; color:var(--text-muted); max-width:240px; line-height:1.35;">\${escapeHtml(p.highlight_text || '—')}</div></td>
+                <td>\${schedPriceContent}</td>
+                <td>\${locationContent}</td>
+                <td>\${statusBadge}</td>
+                <td>
+                  <div class="action-group">
+                    <button type="button" class="btn-table-action" onclick="editPlace(\${p.id})">✏️ Editar</button>
+                  </div>
+                </td>
+              </tr>
+            \`;
+          }).join('');
+        }
+
+        // Render Mobile Cards
+        if (cardsContainer) {
+          cardsContainer.innerHTML = places.map(p => {
+            const hasCoords = p.latitude !== null && p.latitude !== undefined && p.longitude !== null && p.longitude !== undefined;
+            const coordsStr = hasCoords ? \`\${p.latitude}, \${p.longitude}\` : '';
+            const mapsLink = p.google_maps_url ? \`<a href="\${escapeHtml(p.google_maps_url)}" target="_blank" rel="noopener" style="color:var(--primary); font-weight:600; text-decoration:underline;">Ver en Google Maps ↗</a>\` : '';
+            const isActive = p.is_active !== false;
+            const statusBadge = isActive
+              ? '<span class="badge badge-published">Activo</span>'
+              : '<span class="badge badge-outdated">Inactivo</span>';
+
+            return \`
+              <div class="place-card" id="place-card-\${p.id}">
+                <div class="place-card-header">
+                  <span class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:800; text-transform:capitalize;">\${escapeHtml(p.category || 'cultura')}</span>
+                  \${statusBadge}
+                </div>
+                <h4 class="place-card-title">\${escapeHtml(p.name)}</h4>
+                <div class="place-card-body">
+                  \${p.highlight_text ? \`<div>✨ <strong>Destacado:</strong> \${escapeHtml(p.highlight_text)}</div>\` : ''}
+                  <div>⏰ <strong>Horario:</strong> \${escapeHtml(p.opening_hours_text || '—')}</div>
+                  <div>🏷️ <strong>Precio:</strong> \${escapeHtml(p.price_text || '—')}</div>
+                  \${hasCoords ? \`<div>📍 <strong>Coordenadas:</strong> <span style="font-family:monospace; font-size:0.8rem;">\${escapeHtml(coordsStr)}</span></div>\` : ''}
+                  \${mapsLink ? \`<div>🗺️ <strong>Maps:</strong> \${mapsLink}</div>\` : ''}
+                </div>
+                <div class="place-card-actions">
+                  <button type="button" class="btn-table-action" onclick="editPlace(\${p.id})">✏️ Editar Lugar</button>
+                </div>
+              </div>
+            \`;
+          }).join('');
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--red); padding:2rem;">Error al cargar lugares permanentes.</td></tr>';
+        if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; color:var(--red); padding:2rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar lugares permanentes.</div>';
+      }
     }
 
     window.openNewPlaceModal = function() {
+      modalPlaceSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
       document.getElementById('modal-place-title').innerText = 'Nuevo Lugar Permanente';
       document.getElementById('form-place').reset();
       document.getElementById('place-id').value = '';
+      const saveBtn = document.getElementById('btn-save-place');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Guardar Lugar';
+      }
       openModal('modal-place');
+      const nameInput = document.getElementById('place-name');
+      if (nameInput) nameInput.focus();
+    };
+
+    window.editPlace = function(id) {
+      const p = cachedPlaces.find(x => x.id === id);
+      if (!p) return;
+      modalPlaceSaveInProgress = false;
+      lastActiveElementBeforeModal = document.activeElement;
+      document.getElementById('modal-place-title').innerText = 'Editar Lugar #' + p.id;
+      document.getElementById('place-id').value = p.id;
+      document.getElementById('place-name').value = p.name || '';
+      const catSelect = document.getElementById('place-category');
+      if (catSelect) {
+        if (p.category && !Array.from(catSelect.options).some(o => o.value === p.category)) {
+          const opt = document.createElement('option');
+          opt.value = p.category;
+          opt.textContent = p.category.charAt(0).toUpperCase() + p.category.slice(1);
+          catSelect.appendChild(opt);
+        }
+        catSelect.value = p.category || 'cultura';
+      }
+      document.getElementById('place-highlight').value = p.highlight_text || '';
+      document.getElementById('place-hours').value = p.opening_hours_text || '';
+      document.getElementById('place-price').value = p.price_text || '';
+      document.getElementById('place-maps-url').value = p.google_maps_url || '';
+      const saveBtn = document.getElementById('btn-save-place');
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Guardar Cambios';
+      }
+      openModal('modal-place');
+      const nameInput = document.getElementById('place-name');
+      if (nameInput) nameInput.focus();
     };
 
     window.savePlace = async function(e) {
       e.preventDefault();
+      if (modalPlaceSaveInProgress) return;
+      const saveBtn = document.getElementById('btn-save-place');
       const id = document.getElementById('place-id').value;
+      const nameVal = document.getElementById('place-name').value.trim();
+      if (!nameVal) {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = id ? 'Guardar Cambios' : 'Guardar Lugar';
+        }
+        alert('El nombre del lugar es obligatorio.');
+        return;
+      }
+      const highlightVal = document.getElementById('place-highlight').value.trim();
+      if (!highlightVal) {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = id ? 'Guardar Cambios' : 'Guardar Lugar';
+        }
+        alert('El texto destacado es obligatorio.');
+        return;
+      }
+
       const payload = {
-        name: document.getElementById('place-name').value.trim(),
+        name: nameVal,
         category: document.getElementById('place-category').value,
-        highlight_text: document.getElementById('place-highlight').value.trim(),
+        highlight_text: highlightVal,
         opening_hours_text: document.getElementById('place-hours').value.trim() || null,
         price_text: document.getElementById('place-price').value.trim() || null,
         google_maps_url: document.getElementById('place-maps-url').value.trim() || null,
       };
 
-      if (id) {
-        await apiFetch(\`/api/v1/admin/places/\${id}\`, { method: 'PATCH', body: JSON.stringify(payload) });
-      } else {
-        await apiFetch('/api/v1/admin/places', { method: 'POST', body: JSON.stringify(payload) });
+      modalPlaceSaveInProgress = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerText = 'Guardando...';
       }
 
-      closeModal('modal-place');
-      loadAdminPlaces();
+      try {
+        let res;
+        if (id) {
+          res = await apiFetch(\`/api/v1/admin/places/\${id}\`, { method: 'PATCH', body: JSON.stringify(payload) });
+        } else {
+          res = await apiFetch('/api/v1/admin/places', { method: 'POST', body: JSON.stringify(payload) });
+        }
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          alert(errData.message || 'Error al guardar el lugar.');
+          return;
+        }
+
+        closeModal('modal-place');
+        loadAdminPlaces();
+      } catch (err) {
+        alert('Error de conexión al guardar el lugar.');
+      } finally {
+        modalPlaceSaveInProgress = false;
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerText = id ? 'Guardar Cambios' : 'Guardar Lugar';
+        }
+      }
     };
 
     // ==============================================================================
@@ -4953,6 +5191,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           if (activeModal.id === 'modal-venue' && modalVenueSaveInProgress) return;
           if (activeModal.id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
           if (activeModal.id === 'modal-exception' && modalExceptionSaveInProgress) return;
+          if (activeModal.id === 'modal-place' && modalPlaceSaveInProgress) return;
           closeModal(activeModal.id);
         } else {
           toggleMobileDrawer(false);
@@ -4979,6 +5218,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (id === 'modal-venue' && modalVenueSaveInProgress) return;
       if (id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
       if (id === 'modal-exception' && modalExceptionSaveInProgress) return;
+      if (id === 'modal-place' && modalPlaceSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
       const target = lastActiveElementBeforeModal;
