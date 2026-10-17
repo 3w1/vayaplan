@@ -224,15 +224,14 @@ describe('4. Creación y Edición de Local (CRUD)', () => {
 });
 
 describe('5. Inspección Previa de Dependencias (GET /venues/:id/dependencies)', () => {
-  test('Inspección de local provisional ID 9999 marca is_protected y can_delete=false', async () => {
+  test('Inspección de local provisional ID 9999 no está protegido por ID (is_protected=false)', async () => {
     const res = await app.request('/api/v1/admin/venues/9999/dependencies', {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.venue.id).toBe(9999);
-    expect(data.is_protected).toBe(true);
-    expect(data.can_delete).toBe(false);
+    expect(data.is_protected).toBe(false);
   });
 
   test('Inspección de local con dependencias activas detecta dependencias y bloquea', async () => {
@@ -262,15 +261,36 @@ describe('5. Inspección Previa de Dependencias (GET /venues/:id/dependencies)',
 });
 
 describe('6. Borrado Seguro y Protegido (DELETE /venues/:id)', () => {
-  test('Intento de borrado de local provisional ID 9999 es estrictamente bloqueado con 403 Forbidden', async () => {
-    const res = await app.request('/api/v1/admin/venues/9999', {
+  test('Venue 9999 no está bloqueado por ID; si tiene dependencias, se rechaza con 409; si no las tiene, se autoriza el borrado', async () => {
+    // 1. Asignar temporalmente una dependencia a 9999 para probar el bloqueo por dependencias
+    const insertRes = await pool.query<{ id: number }>(
+      `INSERT INTO events (city_id, venue_id, title, category, start_time, editorial_date, status, source_type)
+       VALUES (1, 9999, 'Test Dependencia 9999', 'cultura', now(), CURRENT_DATE, 'tentative', 'manual')
+       RETURNING id;`
+    );
+    const tempEventId = insertRes.rows[0].id;
+
+    // Con dependencia activa, DELETE /venues/9999 debe responder 409 Conflict (no 403)
+    const resBlocked = await app.request('/api/v1/admin/venues/9999', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${adminToken}` },
     });
-    expect(res.status).toBe(403);
-    const data = await res.json();
-    expect(data.error).toBe('forbidden');
-    expect(data.message).toContain('9999');
+    expect(resBlocked.status).toBe(409);
+    const blockedData = await resBlocked.json();
+    expect(blockedData.error).toBe('venue_has_dependencies');
+    expect(blockedData.dependencies.length).toBeGreaterThan(0);
+
+    // Retirar la dependencia temporal
+    await pool.query(`DELETE FROM events WHERE id = $1;`, [tempEventId]);
+
+    // Verificar dependencies de 9999 sin dependencias: can_delete = true
+    const depRes = await app.request('/api/v1/admin/venues/9999/dependencies', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(depRes.status).toBe(200);
+    const depData = await depRes.json();
+    expect(depData.is_protected).toBe(false);
+    expect(depData.can_delete).toBe(true);
   });
 
   test('Intento de borrado de local con dependencias activas es bloqueado con 409 Conflict', async () => {

@@ -99,7 +99,7 @@ export interface Venue {
 export interface Event {
   id: number;
   city_id: number;
-  venue_id: number;
+  venue_id: number | null;
   title: string;
   description: string | null;
   category: EventCategory;
@@ -405,8 +405,8 @@ export interface CollisionAlertInfo {
 }
 
 export interface AdminEventItem extends Event {
-  venue_name: string;
-  venue_slug: string;
+  venue_name: string | null;
+  venue_slug: string | null;
   venue_zone?: string | null;
   venue_category?: string | null;
   venue_address?: string | null;

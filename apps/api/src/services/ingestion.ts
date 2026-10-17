@@ -12,7 +12,7 @@ export interface IngestionCollision {
   existing_event_id: number;
   existing_title: string;
   existing_start_time: string;
-  venue_id: number;
+  venue_id: number | null;
   editorial_date: string;
   time_diff_minutes: number;
 }
@@ -32,7 +32,7 @@ export interface IngestedEventResult {
   title: string;
   editorial_date: string;
   start_time: string;
-  venue_id: number;
+  venue_id: number | null;
   status: string;
 }
 
@@ -167,14 +167,14 @@ export function inferCategoryFromRecord(
 }
 
 /**
- * Empareja el texto de lugar_celebracion con un venue existente en BD, o 9999 si no coincide
+ * Empareja el texto de lugar_celebracion con un venue existente en BD, o null si no coincide
  */
 export function matchVenue(
   lugarStr: string | null | undefined,
   venues: Array<{ id: number; name: string; slug: string }>
-): number {
+): number | null {
   if (!lugarStr || lugarStr.trim().length === 0) {
-    return 9999;
+    return null;
   }
   const normalize = (s: string) =>
     s
@@ -209,7 +209,7 @@ export function matchVenue(
     }
   }
 
-  return 9999;
+  return null;
 }
 
 /**
@@ -379,8 +379,8 @@ export async function ingestCulturalAgenda(options: {
         continue;
       }
 
-      // 5. Detección de colisión horaria (mismo venue_id !== 9999, misma editorial_date, ±2 horas)
-      if (venueId !== 9999) {
+      // 5. Detección de colisión horaria (mismo venue_id no nulo ni 9999, misma editorial_date, ±2 horas)
+      if (venueId !== null && venueId !== 9999) {
         const collisionCheck = await query(
           `SELECT id, title, start_time
            FROM events
@@ -426,7 +426,8 @@ export async function ingestCulturalAgenda(options: {
       const category = inferCategoryFromRecord(record.categoria, record.tematica, rawTitle);
       const priceParsed = parsePrice(record.precio);
       const imageUrl = sanitizeImageUrl(record.imagen_evento);
-      const dedupeKey = `palencia-v${venueId}-${editorialDate}-${rawTitle.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 35)}`;
+      const venueKey = venueId !== null ? `v${venueId}` : 'unassigned';
+      const dedupeKey = `palencia-${venueKey}-${editorialDate}-${rawTitle.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 35)}`;
 
       // 7. Inserción con status = 'tentative' y source_type = 'api'
       const insertSql = `
@@ -469,7 +470,7 @@ export async function ingestCulturalAgenda(options: {
           ? insertedRow.editorial_date
           : new Date(insertedRow.editorial_date).toISOString().split('T')[0],
         start_time: new Date(insertedRow.start_time).toISOString(),
-        venue_id: Number(insertedRow.venue_id),
+        venue_id: insertedRow.venue_id !== null && insertedRow.venue_id !== undefined ? Number(insertedRow.venue_id) : null,
         status: String(insertedRow.status),
       });
     } catch (itemErr: any) {
