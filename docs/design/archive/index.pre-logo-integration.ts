@@ -1,0 +1,2294 @@
+import { Hono } from 'hono';
+import { renderAdminHtml } from './admin';
+
+const app = new Hono();
+
+// ==============================================================================
+// Health Check
+// ==============================================================================
+app.get('/health', (c) => {
+  return c.json({ status: 'ok', service: 'vayaplan-web' });
+});
+
+// ==============================================================================
+// Redirección y Tracking de Códigos QR desde Web (puerto 3030)
+// ==============================================================================
+app.get('/qr/:qrCode', async (c) => {
+  const qrCode = c.req.param('qrCode');
+  const internalApi = process.env.INTERNAL_API_URL || 'http://api:4000';
+  try {
+    // Registra el escaneo en la API interna de forma asíncrona
+    await fetch(`${internalApi.replace(/\/$/, '')}/api/v1/qr/${encodeURIComponent(qrCode)}`, { method: 'POST' }).catch(() => {});
+  } catch (err) {}
+  return c.redirect('/?origin=qr_hotel', 302);
+});
+
+// ==============================================================================
+// Panel de Curación Administrativo (/admin)
+// ==============================================================================
+app.get('/admin', (c) => {
+  return c.html(renderAdminHtml());
+});
+
+// ==============================================================================
+// Proxy inverso explícito para previsualización aislada
+// Exige INTERNAL_API_URL cuando ENABLE_API_PROXY=true (sin fallback automático a producción)
+// ==============================================================================
+if (process.env.ENABLE_API_PROXY === 'true') {
+  const internalApiUrl = process.env.INTERNAL_API_URL;
+  if (!internalApiUrl || internalApiUrl.trim() === '') {
+    throw new Error('CONFIG_ERROR: ENABLE_API_PROXY=true requiere INTERNAL_API_URL explícito. No se permite fallback automático.');
+  }
+
+  app.all('/api/*', async (c) => {
+    const targetUrl = new URL(c.req.raw.url);
+    const upstreamUrl = `${internalApiUrl.replace(/\/$/, '')}${targetUrl.pathname}${targetUrl.search}`;
+    try {
+      const response = await fetch(upstreamUrl, {
+        method: c.req.method,
+        headers: c.req.raw.headers,
+        body: ['GET', 'HEAD'].includes(c.req.method) ? undefined : await c.req.raw.clone().arrayBuffer(),
+      });
+      return new Response(response.body, {
+        status: response.status,
+        headers: response.headers,
+      });
+    } catch (err) {
+      return c.json({ error: 'upstream_unavailable', message: 'Servicio API de pruebas no disponible' }, 502);
+    }
+  });
+}
+
+// ==============================================================================
+// Web App Manifest
+// ==============================================================================
+app.get('/manifest.json', (c) => {
+  const manifest = {
+    name: 'VayaPlan — Agenda Palencia',
+    short_name: 'VayaPlan',
+    description: 'Agenda hiperlocal de eventos y cultura en Palencia sin registro ni fricción.',
+    start_url: '/',
+    display: 'standalone',
+    orientation: 'portrait-primary',
+    background_color: '#ffffff',
+    theme_color: '#6C3BFF',
+    categories: ['lifestyle', 'entertainment', 'travel'],
+    icons: [
+      {
+        src: '/icons/icon.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+        purpose: 'any maskable',
+      },
+    ],
+  };
+
+  return c.json(manifest, 200, {
+    'Content-Type': 'application/manifest+json; charset=utf-8',
+    'Cache-Control': 'public, max-age=86400',
+  });
+});
+
+// ==============================================================================
+// Service Worker (Shell Offline & Cache)
+// ==============================================================================
+app.get('/sw.js', (c) => {
+  const swCode = `// VayaPlan Service Worker v1.3
+const CACHE_NAME = 'vayaplan-pwa-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/manifest.json',
+  '/icons/icon.svg'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      )
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // Peticiones de API: Network-first con fallback
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return new Response(JSON.stringify({ error: 'offline', message: 'Sin conexión a internet' }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      })
+    );
+    return;
+  }
+
+  // Assets estáticos de navegación: Network-first con fallback a caché
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const responseToCache = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+  );
+});
+`;
+
+  return new Response(swCode, {
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+      'Service-Worker-Allowed': '/',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
+});
+
+// ==============================================================================
+// Icono SVG Vectorial PWA
+// ==============================================================================
+app.get('/icons/icon.svg', (c) => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </linearGradient>
+    <linearGradient id="pinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#ea580c"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+  <!-- Base redondeada PWA -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#334155" stroke-width="6"/>
+  <!-- Pin de localización -->
+  <path d="M256 100 C185 100 128 157 128 228 C128 316 236 404 251 416 C254 418 258 418 261 416 C276 404 384 316 384 228 C384 157 327 100 256 100 Z" fill="url(#pinGrad)" filter="url(#glow)"/>
+  <!-- Centro del pin -->
+  <circle cx="256" cy="224" r="54" fill="#090d16"/>
+  <!-- Rayo / Chispa central de plan -->
+  <path d="M260 188 L236 226 L254 226 L248 264 L276 222 L258 222 Z" fill="url(#sparkGrad)"/>
+  <!-- Destello de energía superior derecho -->
+  <circle cx="360" cy="140" r="16" fill="#38bdf8" filter="url(#glow)"/>
+  <circle cx="395" cy="175" r="8" fill="#38bdf8"/>
+</svg>`;
+
+  return new Response(svg, {
+    headers: {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Cache-Control': 'public, max-age=86400',
+    },
+  });
+});
+
+// ==============================================================================
+// PWA Zero-Form UI — Aplicación Principal
+// ==============================================================================
+app.get('/', (c) => {
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>VayaPlan — ¿Qué hacer hoy en Palencia? Agenda Hiperlocal</title>
+  <meta name="description" content="Agenda hiperlocal sin filtros ni registro. Conciertos, teatro, cine y tardeo en Palencia en menos de 30 segundos.">
+  
+  <!-- Open Graph / WhatsApp Preview -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="VayaPlan — ¿Qué hacer hoy en Palencia?">
+  <meta property="og:description" content="Agenda hiperlocal sin filtros ni registro. Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.">
+  <meta property="og:image" content="https://vayaplan.com/icons/icon.svg">
+  <meta property="og:url" content="https://vayaplan.com/">
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="VayaPlan — Agenda Palencia">
+  <meta name="twitter:description" content="Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.">
+  <meta name="twitter:image" content="https://vayaplan.com/icons/icon.svg">
+
+  <!-- PWA & Mobile Meta -->
+  <meta name="theme-color" content="#6C3BFF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="VayaPlan">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/icons/icon.svg">
+
+  <style>
+    :root {
+      --color-night: #0B0F3B;
+      --color-primary: #6C3BFF;
+      --color-primary-light: #9D7BFF;
+      --color-primary-soft: #F0EBFF;
+      --color-amber: #FFC107;
+      --color-bg-page: #EEF2F6;
+      --color-bg-app: #FFFFFF;
+      --color-bg-subtle: #F8FAFC;
+      --color-border: #E2E8F0;
+      --color-border-subtle: #F1F5F9;
+      --color-text-main: #0B0F3B;
+      --color-text-muted: #64748B;
+      --color-text-subtle: #94A3B8;
+      --color-free-green: #059669;
+      --color-free-green-bg: #ECFDF5;
+      --color-red: #EF4444;
+      --color-red-bg: #FEE2E2;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-pill: 9999px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    *:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--color-bg-page);
+      color: var(--color-text-main);
+      line-height: 1.5;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    body.modal-open {
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 480px;
+      min-height: 100dvh;
+      background-color: var(--color-bg-app);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 0 32px rgba(11, 15, 59, 0.06);
+      padding-bottom: 4rem;
+    }
+
+    /* Header y Ciudad */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--color-border);
+      padding: 0.75rem 1rem;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand-logo-container {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+    }
+
+    .brand-temp-logo {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: var(--color-night);
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .brand-temp-logo .brand-highlight {
+      color: var(--color-primary);
+    }
+
+    .temp-badge {
+      font-size: 0.55rem;
+      font-weight: 700;
+      color: var(--color-text-subtle);
+      background: var(--color-border-subtle);
+      border: 1px solid var(--color-border);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .city-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background-color: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
+      padding: 0.4rem 0.8rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--color-night);
+    }
+
+    .city-pill svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--color-primary);
+      flex-shrink: 0;
+    }
+
+    /* Selector temporal (Hoy / Mañana / Este finde / Calendario) */
+    .time-selector-bar {
+      padding: 0.875rem 1rem 0 1rem;
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .time-selector-bar::-webkit-scrollbar { display: none; }
+
+    .time-tab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.5rem 0.95rem;
+      background: #FFFFFF;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-pill);
+      color: var(--color-text-muted);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .time-tab.active {
+      background-color: var(--color-primary);
+      border-color: var(--color-primary);
+      color: #FFFFFF;
+      box-shadow: 0 2px 8px rgba(108, 59, 255, 0.3);
+    }
+
+    .calendar-picker-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .calendar-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* Fila de Categorías Circulares */
+    .categories-row {
+      padding: 1rem 1rem 0.5rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.25rem;
+    }
+
+    .cat-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      min-width: 52px;
+      padding: 0.25rem;
+    }
+
+    .cat-circle {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
+      transition: all 0.15s ease;
+    }
+
+    .cat-circle svg {
+      width: 22px;
+      height: 22px;
+      fill: var(--color-text-muted);
+    }
+
+    .cat-btn.active .cat-circle {
+      background-color: var(--color-primary);
+      border-color: var(--color-primary);
+      box-shadow: 0 4px 12px rgba(108, 59, 255, 0.35);
+    }
+    .cat-btn.active .cat-circle svg {
+      fill: #FFFFFF;
+    }
+
+    .cat-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+    }
+    .cat-btn.active .cat-label {
+      color: var(--color-night);
+      font-weight: 800;
+    }
+
+    /* Barra de Filtros Activos */
+    .active-filters-bar {
+      display: none;
+      padding: 0.6rem 1rem;
+      background: #F8FAFC;
+      border-top: 1px solid var(--color-border);
+      border-bottom: 1px solid var(--color-border);
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .active-filters-bar.visible { display: flex; }
+
+    .active-chips-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      font-size: 0.7813rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+    }
+
+    .filter-chip-removable {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-pill);
+      font-weight: 700;
+      font-size: 0.75rem;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-clear-filters {
+      background: none;
+      border: none;
+      color: var(--color-primary);
+      font-size: 0.7813rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0.25rem;
+    }
+
+    /* Tarjeta Destacada (Hero Promocionado) */
+    .promoted-hero-card {
+      margin: 0.75rem 1rem 1rem 1rem;
+      border-radius: var(--radius-lg);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(11, 15, 59, 0.12);
+      background-color: var(--color-night);
+      aspect-ratio: 16 / 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      border: none;
+      text-align: left;
+      padding: 0;
+      width: calc(100% - 2rem);
+    }
+
+    .promoted-hero-card.no-image {
+      aspect-ratio: auto;
+      min-height: auto;
+      padding: 1.25rem;
+      background: linear-gradient(135deg, #0B0F3B 0%, #1A216B 60%, #2A1B5E 100%);
+      border: 1px solid rgba(157, 123, 255, 0.25);
+      box-shadow: 0 4px 14px rgba(11, 15, 59, 0.12);
+      justify-content: flex-start;
+      gap: 0.75rem;
+    }
+
+    .promoted-hero-card.no-image .hero-badge-tag {
+      position: static;
+      align-self: flex-start;
+      margin-bottom: 0.25rem;
+    }
+
+    .promoted-hero-card.no-image .hero-content {
+      padding: 0;
+    }
+
+    .promoted-hero-card.no-image .hero-title {
+      font-size: 1.15rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .promoted-hero-card.no-image .hero-overlay {
+      display: none;
+    }
+
+    .hero-img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(11, 15, 59, 0.05) 0%, rgba(11, 15, 59, 0.8) 70%, #0B0F3B 100%);
+      z-index: 1;
+    }
+
+    .hero-badge-tag {
+      position: absolute;
+      top: 0.875rem;
+      left: 0.875rem;
+      z-index: 2;
+      background-color: var(--color-amber);
+      color: var(--color-night);
+      font-size: 0.6875rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.6rem;
+      border-radius: var(--radius-pill);
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      padding: 1rem;
+      color: #ffffff;
+      width: 100%;
+    }
+
+    .hero-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 0.4rem;
+      color: #ffffff;
+    }
+
+    .hero-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      font-size: 0.8125rem;
+      color: rgba(255, 255, 255, 0.9);
+      flex-wrap: wrap;
+    }
+
+    .hero-price-pill {
+      background-color: var(--color-primary-soft);
+      color: var(--color-primary);
+      font-weight: 800;
+      font-size: 0.8125rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: var(--radius-pill);
+    }
+
+    /* Lista y Tarjetas Compactas */
+    .section-header-compact {
+      padding: 0.5rem 1rem 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .section-title-compact {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--color-night);
+    }
+
+    .events-list-compact {
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .card-compact {
+      display: flex;
+      gap: 0.875rem;
+      padding: 0.625rem;
+      background: #FFFFFF;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      text-align: left;
+      width: 100%;
+      border: 1px solid var(--color-border);
+    }
+    .card-compact:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(11, 15, 59, 0.05);
+    }
+
+    .card-compact.is-cancelled {
+      border-color: rgba(239, 68, 68, 0.4);
+      background-color: rgba(239, 68, 68, 0.03);
+      opacity: 0.85;
+    }
+
+    .card-thumb {
+      width: 76px;
+      height: 76px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      flex-shrink: 0;
+      background-color: var(--color-bg-subtle);
+    }
+
+    .card-thumb-fallback {
+      width: 76px;
+      height: 76px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--color-primary-soft), #FFFFFF);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--color-border);
+      flex-shrink: 0;
+    }
+    .card-thumb-fallback svg {
+      width: 30px;
+      height: 30px;
+      fill: var(--color-primary-light);
+    }
+
+    .card-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+    }
+
+    .card-title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--color-night);
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-title.title-cancelled {
+      text-decoration: line-through;
+      color: var(--color-text-muted);
+    }
+
+    .card-venue {
+      font-size: 0.7813rem;
+      color: var(--color-text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 0.15rem;
+    }
+
+    .card-bottom-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-top: 0.35rem;
+    }
+
+    .card-time {
+      font-size: 0.7813rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+    }
+
+    .card-price-pill {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-pill);
+    }
+    .card-price-pill.free {
+      background: var(--color-free-green-bg);
+      color: var(--color-free-green);
+    }
+    .card-price-pill.paid {
+      background: var(--color-primary-soft);
+      color: var(--color-primary);
+    }
+
+    /* Badges de Estado, Recurrencias y Lugares */
+    .promoted-tag-mini {
+      display: inline-block;
+      background: #FFF9E6;
+      color: #B45309;
+      font-size: 0.6875rem;
+      font-weight: 800;
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--radius-pill);
+      margin-bottom: 0.2rem;
+    }
+
+    .cancelled-tag {
+      display: inline-block;
+      background: var(--color-red-bg);
+      color: var(--color-red);
+      font-size: 0.6875rem;
+      font-weight: 800;
+      padding: 0.15rem 0.45rem;
+      border-radius: var(--radius-pill);
+      margin-bottom: 0.2rem;
+    }
+
+    .recurrence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background-color: var(--color-primary-soft);
+      color: var(--color-primary);
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.7188rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .place-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background-color: var(--color-free-green-bg);
+      color: var(--color-free-green);
+      padding: 0.2rem 0.55rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.7188rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    /* Agrupador de Fin de Semana */
+    .weekend-day-group {
+      margin-bottom: 1.5rem;
+      padding: 0 1rem;
+    }
+
+    .weekend-day-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 0.85rem;
+      background-color: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      margin-bottom: 0.75rem;
+    }
+
+    .weekend-day-title {
+      font-size: 0.875rem;
+      font-weight: 800;
+      color: var(--color-primary);
+    }
+
+    .weekend-day-date {
+      font-size: 0.7813rem;
+      color: var(--color-text-muted);
+    }
+
+    /* Modal Ficha Completa */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(11, 15, 59, 0.7);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .modal-overlay.active { display: flex; }
+    @media (min-width: 480px) {
+      .modal-overlay { align-items: center; }
+    }
+
+    .modal-sheet {
+      background: #FFFFFF;
+      width: 100%;
+      max-width: 480px;
+      max-height: 90dvh;
+      border-radius: 24px 24px 0 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+      box-shadow: 0 -10px 40px rgba(11, 15, 59, 0.2);
+      display: flex;
+      flex-direction: column;
+    }
+    @media (min-width: 480px) {
+      .modal-sheet {
+        border-radius: 24px;
+        max-height: 85dvh;
+      }
+    }
+
+    .modal-hero-cover {
+      position: relative;
+      width: 100%;
+      height: clamp(160px, 26vh, 230px);
+      background-color: var(--color-night);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .modal-hero-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .modal-sticky-header {
+      position: sticky;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: 48px;
+      background: #FFFFFF;
+      border-bottom: 1px solid rgba(11, 15, 59, 0.08);
+      border-radius: 24px 24px 0 0;
+      display: flex;
+      align-items: center;
+      padding: 0 0.875rem;
+      z-index: 50;
+      flex-shrink: 0;
+    }
+
+    .modal-close-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #F1F5F9;
+      border: 1px solid rgba(11, 15, 59, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--color-night);
+      transition: background-color 0.15s ease;
+      padding: 0;
+      margin: 0;
+    }
+    .modal-close-btn:hover,
+    .modal-close-btn:focus-visible {
+      background: #E2E8F0;
+      outline: 2px solid var(--color-primary);
+      outline-offset: 1px;
+    }
+
+    .modal-body {
+      padding: 1.25rem;
+    }
+    .modal-title-main {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--color-night);
+      line-height: 1.25;
+      margin-bottom: 1rem;
+    }
+
+    .modal-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.6rem;
+      font-size: 0.875rem;
+      color: var(--color-night);
+    }
+    .modal-meta-row svg {
+      width: 16px;
+      height: 16px;
+      fill: var(--color-primary);
+      flex-shrink: 0;
+    }
+
+    .modal-action-box {
+      margin: 1.25rem 0;
+      padding: 1rem;
+      background: var(--color-bg-subtle);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .modal-action-main-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .modal-price-display {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--color-night);
+    }
+
+    .btn-primary-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      background-color: var(--color-primary);
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 0.9375rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: background 0.15s ease;
+    }
+    .btn-primary-action:hover {
+      background-color: #582bd4;
+    }
+
+    .btn-secondary-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: var(--color-primary);
+      border: 1px solid var(--color-border);
+      font-weight: 700;
+      font-size: 0.875rem;
+      padding: 0.65rem 1.15rem;
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .btn-secondary-link:hover {
+      background: rgba(108, 59, 255, 0.06);
+      border-color: var(--color-primary);
+    }
+
+    .madrugada-tag {
+      display: inline-block;
+      background: rgba(108, 59, 255, 0.12);
+      color: var(--color-primary);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-pill);
+      margin-left: 0.35rem;
+      vertical-align: middle;
+    }
+
+    .card-madrugada-badge {
+      display: inline-block;
+      background: rgba(108, 59, 255, 0.08);
+      color: var(--color-primary);
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 0.1rem 0.35rem;
+      border-radius: var(--radius-pill);
+      margin-left: 0.25rem;
+    }
+
+    .action-disclaimer {
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+      text-align: right;
+    }
+
+    /* Estados vacíos y carga */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      background-color: var(--color-bg-subtle);
+      border: 1px dashed var(--color-border);
+      border-radius: var(--radius-md);
+      margin: 1rem;
+    }
+
+    .empty-state h3 {
+      font-size: 1.15rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      color: var(--color-night);
+    }
+
+    .empty-state p {
+      font-size: 0.875rem;
+      color: var(--color-text-muted);
+      max-width: 380px;
+      margin: 0 auto 1.25rem auto;
+    }
+
+    .loader-spinner {
+      border: 3px solid var(--color-primary-soft);
+      border-top: 3px solid var(--color-primary);
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 0.7s linear infinite;
+      margin: 2rem auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header Superior -->
+    <header>
+      <div class="brand-logo-container">
+        <div class="brand-temp-logo" aria-label="VayaPlan">
+          <span>¡Vaya</span><span class="brand-highlight">Plan!</span>
+          <span class="temp-badge" title="Marcador provisional pendiente de logo oficial SVG">PROV</span>
+        </div>
+      </div>
+
+      <div class="city-pill" title="Ciudad seleccionada">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <span>Palencia</span>
+      </div>
+    </header>
+
+    <!-- Selector Temporal: Hoy / Mañana / Este finde / Calendario -->
+    <nav class="time-selector-bar" aria-label="Filtro de fecha">
+      <button class="time-tab active" id="tab-today" data-action="switch-view" data-view="today">Hoy</button>
+      <button class="time-tab" id="tab-tomorrow" data-action="switch-view" data-view="tomorrow">Mañana</button>
+      <button class="time-tab" id="tab-weekend" data-action="switch-view" data-view="weekend">Este finde</button>
+      <div class="calendar-picker-wrapper">
+        <button class="time-tab" id="tab-calendar" type="button">
+          <span id="calendar-label">Calendario</span>
+        </button>
+        <input type="date" class="calendar-input" id="date-input" aria-label="Seleccionar fecha">
+      </div>
+    </nav>
+
+    <!-- Fila de Categorías Circulares -->
+    <section class="categories-row" aria-label="Filtro de categorías">
+      <button class="cat-btn active" data-action="set-cat" data-cat="all" aria-label="Todas las categorías">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>
+        </div>
+        <span class="cat-label">Todas</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="musica" aria-label="Categoría Música">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+        </div>
+        <span class="cat-label">Música</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="tardeo" aria-label="Categoría Tardeo">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M21 5V3H3v2l8 9v5H6v2h12v-2h-5v-5l8-9zM7.43 7L5.66 5h12.69l-1.78 2H7.43z"/></svg>
+        </div>
+        <span class="cat-label">Tardeo</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="cine" aria-label="Categoría Cine">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
+        </div>
+        <span class="cat-label">Cine</span>
+      </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="cultura" aria-label="Categoría Cultura">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M12 2L1 7v2h22V7L12 2zm-8 7v10h3V9H4zm6 0v10h3V9h-3zm6 0v10h3V9h-3zM2 20v2h20v-2H2z"/></svg>
+        </div>
+        <span class="cat-label">Cultura</span>
+      </button>
+    </section>
+
+    <!-- Barra de Filtros Activos (Visible solo con filtros aplicados) -->
+    <div class="active-filters-bar" id="active-filters-bar">
+      <div class="active-chips-wrap" id="active-chips-wrap">
+        <span>Filtros activos:</span>
+        <div id="chips-list" style="display:flex;gap:0.4rem;align-items:center;"></div>
+      </div>
+      <button class="btn-clear-filters" data-action="clear-filters">Limpiar</button>
+    </div>
+
+    <!-- Contenedor Destacado Promocionado (Condicional) -->
+    <div id="promoted-container"></div>
+
+    <!-- Encabezado de la Agenda Compacta -->
+    <div class="section-header-compact">
+      <h2 class="section-title-compact" id="view-title">Agenda de hoy</h2>
+      <span id="events-count" style="font-size:0.8125rem;color:var(--color-text-muted);font-weight:600;">Cargando...</span>
+    </div>
+
+    <!-- Listado Compacto de Eventos, Recurrencias y Lugares -->
+    <main id="content-container">
+      <div class="loader-spinner"></div>
+    </main>
+  </div>
+
+  <!-- Modal Ficha Unificada (Evento, Recurrencia o Lugar) -->
+  <div class="modal-overlay" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title-main">
+    <div class="modal-sheet" id="modal-content">
+      <!-- Se inyecta dinámicamente -->
+    </div>
+  </div>
+
+  <script type="module">
+    // ==============================================================================
+    // Estado y variables globales
+    // ==============================================================================
+    const CITY_TIMEZONE = 'Europe/Madrid';
+    const EDITORIAL_CUTOFF_HOUR = 6; // Eventos antes de las 06:00 pertenecen a la noche anterior
+
+    let currentView = 'today';
+    let currentFilter = 'all';
+    let selectedDate = getTodayDateString();
+    let currentData = null; // Almacena respuesta de API
+    let activeModalEventId = null; // Previene impresiones duplicadas accidentales
+    let lastFocusedElement = null; // Guarda el elemento que abrió el modal
+    let savedScrollY = 0; // Guarda la posición de scroll del fondo para restaurarla al cerrar modal
+    let currentRequestId = 0; // Previene condiciones de carrera en respuestas asíncronas
+
+    // ==============================================================================
+    // Métricas y Session Hash efímero (sessionStorage)
+    // ==============================================================================
+    function getSessionHash() {
+      try {
+        let hash = sessionStorage.getItem('vp_session_hash');
+        if (!hash) {
+          const bytes = new Uint8Array(16);
+          crypto.getRandomValues(bytes);
+          hash = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+          sessionStorage.setItem('vp_session_hash', hash);
+        }
+        return hash;
+      } catch (e) {
+        return 'ephemeral-session-' + Date.now();
+      }
+    }
+
+    function trackMetric(eventId, metricType, promotionId = null) {
+      if (!eventId) return;
+      try {
+        fetch('/api/v1/metrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_id: Number(eventId),
+            promotion_id: promotionId ? Number(promotionId) : null,
+            metric_type: metricType,
+            channel: 'web',
+            session_hash: getSessionHash(),
+          }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch (err) {}
+    }
+    window.trackMetric = trackMetric;
+
+    // ==============================================================================
+    // Fechas y Lógica Editorial (Zona horaria Europe/Madrid y corte de 06:00)
+    // ==============================================================================
+    function getEditorialDateInTimezone(now = new Date(), timeZone = CITY_TIMEZONE) {
+      // Hora en Palencia (Europe/Madrid)
+      const hourFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        hour: 'numeric',
+        hour12: false,
+      });
+      const hour = parseInt(hourFormatter.format(now), 10);
+
+      const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+
+      // Si es madrugada (antes de las 06:00), pertenece a la noche editorial anterior
+      if (hour < EDITORIAL_CUTOFF_HOUR) {
+        const prev = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        return dateFormatter.format(prev);
+      }
+      return dateFormatter.format(now);
+    }
+
+    function getTodayDateString() {
+      return getEditorialDateInTimezone(new Date(), CITY_TIMEZONE);
+    }
+
+    function getTomorrowDateString() {
+      const todayStr = getTodayDateString();
+      const [y, m, d] = todayStr.split('-').map(Number);
+      const next = new Date(Date.UTC(y, m - 1, d + 1, 12, 0, 0));
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: CITY_TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      });
+      return formatter.format(next);
+    }
+
+    function formatDateSpanish(dateStr) {
+      if (!dateStr) return '';
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+      return date.toLocaleDateString('es-ES', {
+        timeZone: CITY_TIMEZONE,
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+    }
+
+    function formatTime(isoString) {
+      if (!isoString) return '';
+      const date = new Date(isoString);
+      return date.toLocaleTimeString('es-ES', {
+        timeZone: CITY_TIMEZONE,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+    }
+
+    function formatEventRealDateTime(isoString) {
+      if (!isoString) return { dateText: '', isMadrugada: false };
+      const date = new Date(isoString);
+      const hourFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: CITY_TIMEZONE,
+        hour: 'numeric',
+        hourCycle: 'h23',
+      });
+      const hour = parseInt(hourFormatter.format(date), 10) % 24;
+      const isMadrugada = hour < EDITORIAL_CUTOFF_HOUR;
+      const dateText = date.toLocaleDateString('es-ES', {
+        timeZone: CITY_TIMEZONE,
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+      return { dateText, isMadrugada };
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function getCategoryLabel(category) {
+      const labels = {
+        musica_directo: 'Música en directo',
+        dj_tardeo: 'DJ & Tardeo',
+        monologo: 'Monólogo',
+        cine: 'Cine',
+        teatro: 'Teatro',
+        exposicion: 'Exposición',
+        cultura: 'Cultura',
+      };
+      return labels[category] || category || 'Plan';
+    }
+
+    // ==============================================================================
+    // Carga de datos mediante rutas relativas /api/v1/... (con control de concurrencia)
+    // ==============================================================================
+    async function loadData() {
+      const container = document.getElementById('content-container');
+      const promotedContainer = document.getElementById('promoted-container');
+
+      // Limpieza inmediata del destacado y spinner de carga
+      promotedContainer.innerHTML = '';
+      container.innerHTML = '<div class="loader-spinner"></div>';
+
+      const requestId = ++currentRequestId;
+
+      try {
+        let url = '';
+        if (currentView === 'today' || currentView === 'tomorrow' || currentView === 'calendar') {
+          url = \`/api/v1/cities/palencia/events?date=\${selectedDate}\`;
+        } else if (currentView === 'weekend') {
+          url = '/api/v1/cities/palencia/weekend';
+        }
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Error al cargar agenda');
+        const data = await res.json();
+
+        // Descartar si el usuario ya cambió a otra vista antes de que terminara la petición
+        if (requestId !== currentRequestId) return;
+
+        currentData = data;
+        if (currentView === 'weekend') {
+          renderWeekendAgenda();
+        } else {
+          renderDayAgenda();
+        }
+      } catch (err) {
+        if (requestId !== currentRequestId) return;
+        promotedContainer.innerHTML = '';
+        container.innerHTML = \`
+          <div class="empty-state">
+            <h3>No se pudo cargar la agenda</h3>
+            <p>Comprueba tu conexión o vuelve a intentarlo en unos instantes.</p>
+            <button class="btn-primary-action" data-action="reload-data">Reintentar</button>
+          </div>
+        \`;
+      }
+    }
+    window.loadData = loadData;
+
+    // ==============================================================================
+    // Filtrado estricto por contratos de categoría
+    // ==============================================================================
+    function filterEvents(events) {
+      if (!events || events.length === 0) return [];
+      if (currentFilter === 'all') return events;
+      if (currentFilter === 'musica') {
+        return events.filter((ev) => ev.category === 'musica_directo');
+      }
+      if (currentFilter === 'tardeo') {
+        return events.filter((ev) => ev.category === 'dj_tardeo');
+      }
+      if (currentFilter === 'cine') {
+        return events.filter((ev) => ev.category === 'cine');
+      }
+      if (currentFilter === 'cultura') {
+        return events.filter((ev) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(ev.category));
+      }
+      return events;
+    }
+
+    function filterRecurrences(recurrences) {
+      if (!recurrences || recurrences.length === 0) return [];
+      if (currentFilter === 'all') return recurrences;
+      if (currentFilter === 'musica') {
+        return recurrences.filter((r) => r.category === 'musica_directo');
+      }
+      if (currentFilter === 'tardeo') {
+        return recurrences.filter((r) => r.category === 'dj_tardeo');
+      }
+      if (currentFilter === 'cine') {
+        return recurrences.filter((r) => r.category === 'cine');
+      }
+      if (currentFilter === 'cultura') {
+        return recurrences.filter((r) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(r.category));
+      }
+      return recurrences;
+    }
+
+    // ==============================================================================
+    // Barra de Filtros Activos
+    // ==============================================================================
+    function updateActiveFiltersBar() {
+      const bar = document.getElementById('active-filters-bar');
+      const list = document.getElementById('chips-list');
+      let chipsHtml = '';
+
+      const catNames = {
+        musica: 'Música',
+        tardeo: 'Tardeo',
+        cine: 'Cine',
+        cultura: 'Cultura',
+      };
+
+      if (currentFilter !== 'all') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="remove-cat-filter" aria-label="Eliminar filtro \${catNames[currentFilter]}">
+            \${catNames[currentFilter] || currentFilter} ✕
+          </button>
+        \`;
+      }
+
+      if (currentView === 'tomorrow') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="switch-view" data-view="today" aria-label="Volver a Hoy">
+            Mañana ✕
+          </button>
+        \`;
+      } else if (currentView === 'weekend') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="switch-view" data-view="today" aria-label="Volver a Hoy">
+            Fin de semana ✕
+          </button>
+        \`;
+      } else if (currentView === 'calendar') {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="switch-view" data-view="today" aria-label="Volver a Hoy">
+            \${selectedDate} ✕
+          </button>
+        \`;
+      }
+
+      if (chipsHtml) {
+        list.innerHTML = chipsHtml;
+        bar.classList.add('visible');
+      } else {
+        bar.classList.remove('visible');
+      }
+    }
+
+    function clearAllFilters() {
+      currentFilter = 'all';
+      document.querySelectorAll('.cat-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.cat === 'all');
+      });
+      switchView('today');
+    }
+    window.clearAllFilters = clearAllFilters;
+
+    // ==============================================================================
+    // Helper de Portada / Fallback
+    // ==============================================================================
+    function renderEventThumbnail(imageUrl, title) {
+      if (imageUrl) {
+        return \`<img class="card-thumb" src="\${escapeHtml(imageUrl)}" alt="\${escapeHtml(title)}" loading="lazy" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(false));">\`;
+      }
+      return \`
+        <div class="card-thumb-fallback" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        </div>
+      \`;
+    }
+
+    function createSvgFallbackNode(isHero = false) {
+      const wrap = document.createElement('div');
+      wrap.className = isHero ? 'modal-hero-cover' : 'card-thumb-fallback';
+      wrap.style.cssText = isHero ? 'width:100%;height:100%;border-radius:0;display:flex;align-items:center;justify-content:center;background:#0B0F3B;' : '';
+      wrap.innerHTML = \`<svg style="\${isHero ? 'width:64px;height:64px;fill:#9D7BFF;' : 'width:30px;height:30px;fill:#9D7BFF;'}" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>\`;
+      return wrap;
+    }
+    window.createSvgFallbackNode = createSvgFallbackNode;
+
+    // ==============================================================================
+    // Renderizado: Agenda de Hoy / Día Seleccionado
+    // ==============================================================================
+    function renderDayAgenda() {
+      const container = document.getElementById('content-container');
+      const promotedContainer = document.getElementById('promoted-container');
+      const countEl = document.getElementById('events-count');
+      const viewTitleEl = document.getElementById('view-title');
+
+      if (!currentData) return;
+
+      updateActiveFiltersBar();
+
+      const filteredEvents = filterEvents(currentData.events || []);
+      const recurrences = filterRecurrences(currentData.recurrences || []);
+      const places = currentFilter === 'all' ? (currentData.places || []) : [];
+
+      const totalItems = filteredEvents.length + recurrences.length + places.length;
+      countEl.innerText = \`\${totalItems} \${totalItems === 1 ? 'plan' : 'planes'}\`;
+
+      if (currentView === 'today') {
+        viewTitleEl.innerText = currentFilter === 'all' ? 'Agenda de hoy' : \`\${getCategoryTitle(currentFilter)} en Palencia\`;
+      } else if (currentView === 'tomorrow') {
+        viewTitleEl.innerText = currentFilter === 'all' ? 'Planes para mañana' : \`\${getCategoryTitle(currentFilter)} mañana\`;
+      } else {
+        viewTitleEl.innerText = formatDateSpanish(selectedDate);
+      }
+
+      // 1. Destacado Promocionado único (solo si Boolean(ev.promotion), sin filtro y NO cancelado)
+      let listEvents = filteredEvents;
+      promotedContainer.innerHTML = '';
+
+      if (currentFilter === 'all') {
+        const promotedEvent = filteredEvents.find((ev) => Boolean(ev.promotion) && ev.status !== 'cancelled');
+        if (promotedEvent) {
+          const hasImage = Boolean(promotedEvent.image_url);
+          promotedContainer.innerHTML = \`
+            <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${promotedEvent.id}" aria-label="Destacado promocionado: \${escapeHtml(promotedEvent.title)}">
+              \${hasImage ? \`
+                <img class="hero-img" src="\${escapeHtml(promotedEvent.image_url)}" alt="\${escapeHtml(promotedEvent.title)}" loading="eager" onerror="this.onerror=null;const card=this.closest('.promoted-hero-card');if(card){card.classList.add('no-image');}this.remove();">
+                <div class="hero-overlay"></div>
+              \` : ''}
+              <span class="hero-badge-tag">★ Promocionado</span>
+              <div class="hero-content">
+                <h3 class="hero-title">\${escapeHtml(promotedEvent.title)}</h3>
+                <div class="hero-meta">
+                  <span>📍 \${escapeHtml(promotedEvent.venue.name)} · \${formatTime(promotedEvent.start_time)}\${formatEventRealDateTime(promotedEvent.start_time).isMadrugada ? ' (madrugada)' : ''}</span>
+                  <span class="hero-price-pill">\${escapeHtml(promotedEvent.price.label)}</span>
+                </div>
+              </div>
+            </button>
+          \`;
+          // Evitar duplicado inmediato en la lista superior
+          listEvents = filteredEvents.filter((ev) => ev.id !== promotedEvent.id);
+        }
+      }
+
+      if (totalItems === 0) {
+        let emptyTitle = '';
+        let emptyDesc = '';
+        let emptyActions = '';
+
+        if (currentFilter !== 'all') {
+          emptyTitle = \`Sin planes en \${getCategoryTitle(currentFilter)}\`;
+          emptyDesc = 'No encontramos eventos en esta categoría para la fecha seleccionada.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="remove-cat-filter">Quitar filtros</button>
+            <button type="button" class="btn-secondary-link" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        } else if (currentView === 'today') {
+          emptyTitle = 'No hay planes programados para hoy';
+          emptyDesc = 'Palencia descansa hoy. Descubre los planes preparados para este fin de semana.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        } else if (currentView === 'tomorrow') {
+          emptyTitle = 'No hay planes programados para mañana';
+          emptyDesc = 'Aún no hay actividades registradas para mañana. Consulta la agenda del fin de semana.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        } else {
+          emptyTitle = 'No hay planes para esta fecha';
+          emptyDesc = 'Prueba a seleccionar otro día en el calendario o consulta el fin de semana.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="switch-view" data-view="weekend">Ver este finde</button>
+          \`;
+        }
+
+        container.innerHTML = \`
+          <div class="empty-state">
+            <h3>\${escapeHtml(emptyTitle)}</h3>
+            <p>\${escapeHtml(emptyDesc)}</p>
+            <div class="empty-state-actions" style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+              \${emptyActions}
+            </div>
+          </div>
+        \`;
+        return;
+      }
+
+      let html = '<div class="events-list-compact">';
+
+      // 2. Tarjetas compactas de eventos (botones semánticos accesibles)
+      for (const ev of listEvents) {
+        const isCancelled = ev.status === 'cancelled';
+        html += \`
+          <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+            \${renderEventThumbnail(ev.image_url, ev.title)}
+            <div class="card-info">
+              <div>
+                \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+                <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
+                <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
+              </div>
+              <div class="card-bottom-row">
+                <span class="card-time">⏰ \${formatTime(ev.start_time)}\${formatEventRealDateTime(ev.start_time).isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>
+                <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
+              </div>
+            </div>
+          </button>
+        \`;
+      }
+
+      // 3. Actividades periódicas (Recurrencias)
+      for (const rec of recurrences) {
+        const dayLabel = getDayNameFromNumber(rec.day_of_week);
+        html += \`
+          <button type="button" class="card-compact" data-action="open-recurrence" data-id="\${rec.id}" aria-label="Actividad periódica: \${escapeHtml(rec.title)} en \${escapeHtml(rec.venue_name)}">
+            \${renderEventThumbnail(null, rec.title)}
+            <div class="card-info">
+              <div>
+                <span class="recurrence-badge">↻ Cada \${dayLabel}</span>
+                <h3 class="card-title">\${escapeHtml(rec.title)}</h3>
+                <div class="card-venue">📍 \${escapeHtml(rec.venue_name)}</div>
+              </div>
+              <div class="card-bottom-row">
+                <span class="card-time">⏰ \${escapeHtml(rec.start_time.slice(0, 5))}</span>
+                <span class="card-price-pill \${rec.is_free ? 'free' : 'paid'}">
+                  \${rec.is_free ? 'Entrada libre' : ((rec.price_cents / 100).toFixed(2).replace('.', ',') + ' €')}
+                </span>
+              </div>
+            </div>
+          </button>
+        \`;
+      }
+
+      // 4. Lugares permanentes (Places)
+      for (const place of places) {
+        html += \`
+          <button type="button" class="card-compact" data-action="open-place" data-id="\${place.id}" aria-label="Lugar permanente: \${escapeHtml(place.name)}">
+            \${renderEventThumbnail(place.image_url, place.name)}
+            <div class="card-info">
+              <div>
+                <span class="place-badge">★ Siempre disponible</span>
+                <h3 class="card-title">\${escapeHtml(place.name)}</h3>
+                <div class="card-venue">\${escapeHtml(place.highlight_text)}</div>
+              </div>
+              <div class="card-bottom-row">
+                <span class="card-time">⏰ \${escapeHtml(place.opening_hours_text || 'Consultar')}</span>
+                <span class="card-price-pill paid">\${escapeHtml(place.price_text || 'Consultar')}</span>
+              </div>
+            </div>
+          </button>
+        \`;
+      }
+
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    // ==============================================================================
+    // Renderizado: Agenda de Fin de Semana (Agrupada por editorial_date)
+    // ==============================================================================
+    function renderWeekendAgenda() {
+      const container = document.getElementById('content-container');
+      const promotedContainer = document.getElementById('promoted-container');
+      const countEl = document.getElementById('events-count');
+      const viewTitleEl = document.getElementById('view-title');
+
+      if (!currentData || !currentData.days) return;
+
+      updateActiveFiltersBar();
+      promotedContainer.innerHTML = '';
+      viewTitleEl.innerText = currentFilter === 'all' ? 'Fin de semana en Palencia' : \`\${getCategoryTitle(currentFilter)} en el finde\`;
+
+      let totalWeekendEvents = 0;
+      let html = '';
+
+      for (const day of currentData.days) {
+        const filteredEvents = filterEvents(day.events || []);
+        const recurrences = filterRecurrences(day.recurrences || []);
+        totalWeekendEvents += filteredEvents.length + recurrences.length;
+
+        html += \`
+          <div class="weekend-day-group">
+            <div class="weekend-day-header">
+              <span class="weekend-day-title">\${escapeHtml(day.editorial_label)}</span>
+              <span class="weekend-day-date">\${formatDateSpanish(day.editorial_date)}</span>
+            </div>
+            <div class="events-list-compact">
+        \`;
+
+        if (filteredEvents.length === 0 && recurrences.length === 0) {
+          html += \`
+            <div style="padding: 0.875rem; text-align: center; color: var(--color-text-muted); font-size: 0.8125rem;">
+              Sin planes registrados en esta categoría para este día.
+            </div>
+          \`;
+        }
+
+        // Eventos del día
+        for (const ev of filteredEvents) {
+          const isCancelled = ev.status === 'cancelled';
+          html += \`
+            <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+              \${renderEventThumbnail(ev.image_url, ev.title)}
+              <div class="card-info">
+                <div>
+                  \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+                  <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
+                  <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
+                </div>
+                <div class="card-bottom-row">
+                  <span class="card-time">⏰ \${formatTime(ev.start_time)}\${formatEventRealDateTime(ev.start_time).isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>
+                  <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
+                </div>
+              </div>
+            </button>
+          \`;
+        }
+
+        // Recurrencias del día
+        for (const rec of recurrences) {
+          html += \`
+            <button type="button" class="card-compact" data-action="open-recurrence" data-id="\${rec.id}" aria-label="Actividad periódica: \${escapeHtml(rec.title)} en \${escapeHtml(rec.venue_name)}">
+              \${renderEventThumbnail(null, rec.title)}
+              <div class="card-info">
+                <div>
+                  <span class="recurrence-badge">↻ Cada \${escapeHtml(day.editorial_label)}</span>
+                  <h3 class="card-title">\${escapeHtml(rec.title)}</h3>
+                  <div class="card-venue">📍 \${escapeHtml(rec.venue_name)}</div>
+                </div>
+                <div class="card-bottom-row">
+                  <span class="card-time">⏰ \${escapeHtml(rec.start_time.slice(0, 5))}</span>
+                  <span class="card-price-pill \${rec.is_free ? 'free' : 'paid'}">
+                    \${rec.is_free ? 'Entrada libre' : ((rec.price_cents / 100).toFixed(2).replace('.', ',') + ' €')}
+                  </span>
+                </div>
+              </div>
+            </button>
+          \`;
+        }
+
+        html += '</div></div>';
+      }
+
+      // Planes permanentes al final del fin de semana
+      if (currentFilter === 'all' && currentData.places && currentData.places.length > 0) {
+        html += \`
+          <div class="weekend-day-group">
+            <div class="weekend-day-header">
+              <span class="weekend-day-title">Planes permanentes</span>
+              <span class="weekend-day-date">Siempre disponibles</span>
+            </div>
+            <div class="events-list-compact">
+        \`;
+        for (const p of currentData.places) {
+          html += \`
+            <button type="button" class="card-compact" data-action="open-place" data-id="\${p.id}" aria-label="Lugar permanente: \${escapeHtml(p.name)}">
+              \${renderEventThumbnail(p.image_url, p.name)}
+              <div class="card-info">
+                <div>
+                  <span class="place-badge">★ Siempre disponible</span>
+                  <h3 class="card-title">\${escapeHtml(p.name)}</h3>
+                  <div class="card-venue">\${escapeHtml(p.highlight_text)}</div>
+                </div>
+                <div class="card-bottom-row">
+                  <span class="card-time">⏰ \${escapeHtml(p.opening_hours_text || 'Consultar')}</span>
+                  <span class="card-price-pill paid">\${escapeHtml(p.price_text || 'Consultar')}</span>
+                </div>
+              </div>
+            </button>
+          \`;
+        }
+        html += '</div></div>';
+      }
+
+      const displayedPlacesCount = (currentFilter === 'all' && currentData.places) ? currentData.places.length : 0;
+      const totalWeekendItems = totalWeekendEvents + displayedPlacesCount;
+      countEl.innerText = \`\${totalWeekendItems} \${totalWeekendItems === 1 ? 'plan' : 'planes'}\`;
+
+      if (totalWeekendItems === 0) {
+        let emptyTitle = currentFilter === 'all' ? 'Sin planes para este fin de semana' : \`Sin planes en \${getCategoryTitle(currentFilter)}\`;
+        let emptyDesc = currentFilter === 'all'
+          ? 'No hay actividades registradas para este fin de semana en Palencia.'
+          : 'No encontramos eventos en esta categoría para el fin de semana.';
+        let emptyActions = currentFilter !== 'all'
+          ? '<button type="button" class="btn-primary-action" data-action="remove-cat-filter">Quitar filtros</button> <button type="button" class="btn-secondary-link" data-action="switch-view" data-view="today">Volver a hoy</button>'
+          : '<button type="button" class="btn-primary-action" data-action="switch-view" data-view="today">Volver a hoy</button>';
+
+        container.innerHTML = \`
+          <div class="empty-state">
+            <h3>\${escapeHtml(emptyTitle)}</h3>
+            <p>\${escapeHtml(emptyDesc)}</p>
+            <div class="empty-state-actions" style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+              \${emptyActions}
+            </div>
+          </div>
+        \`;
+        return;
+      }
+
+      container.innerHTML = html;
+    }
+
+    function getCategoryTitle(cat) {
+      const t = {
+        musica: 'Música',
+        tardeo: 'Tardeo',
+        cine: 'Cine',
+        cultura: 'Cultura',
+      };
+      return t[cat] || 'Planes';
+    }
+
+    // ==============================================================================
+    // Ficha Modal de Evento Individual
+    // ==============================================================================
+    async function openEventModal(eventId) {
+      savedScrollY = window.scrollY;
+      const modal = document.getElementById('detail-modal');
+      const sheet = document.getElementById('modal-content');
+
+      document.body.classList.add('modal-open');
+      sheet.innerHTML = '<div class="loader-spinner" style="margin:4rem auto;"></div>';
+      modal.classList.add('active');
+
+      try {
+        const res = await fetch(\`/api/v1/events/\${eventId}\`);
+        if (!res.ok) throw new Error('Evento no encontrado');
+        const data = await res.json();
+        const ev = data.event;
+        const promoId = ev.promotion ? ev.promotion.id : null;
+        const isCancelled = ev.status === 'cancelled';
+        const realDateTime = formatEventRealDateTime(ev.start_time);
+
+        // Registrar métrica de impresión de ficha (evita duplicados si es el mismo evento activo)
+        if (activeModalEventId !== ev.id) {
+          trackMetric(ev.id, 'impression', promoId);
+          activeModalEventId = ev.id;
+        }
+
+        sheet.innerHTML = \`
+          <div class="modal-sticky-header">
+            <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+              <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            </button>
+          </div>
+
+          <div class="modal-hero-cover">
+            \${ev.image_url ? \`
+              <img class="modal-hero-img" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(true));">
+            \` : \`
+              <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
+                <svg style="width:64px;height:64px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              </div>
+            \`}
+          </div>
+
+          <div class="modal-body">
+            <div style="margin-bottom:0.75rem;">
+              \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="promoted-tag-mini">★ Promocionado</span>' : '')}
+            </div>
+
+            <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
+
+            <div class="modal-meta-row">
+              <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+              <span>\${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}</span>
+            </div>
+            <div class="modal-meta-row">
+              <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+              <span>\${formatTime(ev.start_time)} h</span>
+            </div>
+            <div class="modal-meta-row">
+              <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              <span><strong>\${escapeHtml(ev.venue.name)}</strong> \${ev.actions.maps_url ? \`<a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" style="color:var(--color-primary);margin-left:0.5rem;font-weight:700;" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">Ver mapa ↗</a>\` : ''}</span>
+            </div>
+
+            <!-- Bloque de Acción Principal y Precio -->
+            <div class="modal-action-box">
+              <div class="modal-action-main-row">
+                <span class="modal-price-display">\${escapeHtml(ev.price.label)}</span>
+                \${isCancelled ? \`
+                  <button type="button" class="btn-primary-action" disabled style="background:#94A3B8;cursor:not-allowed;">Evento cancelado</button>
+                \` : (ev.actions.tickets_url ? \`
+                  <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="ticket_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                    Comprar entradas ↗
+                  </a>
+                \` : (ev.actions.maps_url ? \`
+                  <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                    Cómo llegar ↗
+                  </a>
+                \` : ''))}
+              </div>
+              \${(!isCancelled && ev.actions.tickets_url) ? '<div class="action-disclaimer">Compra en una web externa</div>' : ''}
+            </div>
+
+            \${(!isCancelled && ev.actions.whatsapp_url) ? \`
+              <div style="margin-bottom:1.25rem;">
+                <a href="\${escapeHtml(ev.actions.whatsapp_url)}" target="_blank" rel="noopener" class="time-tab" style="width:100%;text-decoration:none;" data-metric="whatsapp_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                  💬 Contactar por WhatsApp con el local
+                </a>
+              </div>
+            \` : ''}
+
+            \${ev.description ? \`
+              <div style="margin-top:1.5rem;">
+                <h3 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h3>
+                <p style="font-size:0.9375rem;color:var(--color-text-muted);line-height:1.6;white-space:pre-line;">\${escapeHtml(ev.description)}</p>
+                \${ev.verification && ev.verification.source === 'web' && ev.actions.tickets_url ? \`
+                  <div style="margin-top:0.75rem;">
+                    <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" style="font-size:0.8125rem;color:var(--color-primary);font-weight:700;">Ver fuente original ↗</a>
+                  </div>
+                \` : ''}
+              </div>
+            \` : ''}
+
+            <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--color-border);">
+              <h3 style="font-size:0.875rem;font-weight:800;color:var(--color-text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.04em;">Organizador</h3>
+              <div style="font-size:0.9375rem;font-weight:700;color:var(--color-night);">\${escapeHtml(ev.venue.name)}</div>
+            </div>
+          </div>
+        \`;
+
+        // Poner foco inicial en el botón de cierre para accesibilidad
+        sheet.querySelector('.modal-close-btn')?.focus();
+      } catch (err) {
+        sheet.innerHTML = \`
+          <div class="modal-body" style="text-align:center;padding:3rem 1rem;">
+            <h3 style="font-size:1.15rem;margin-bottom:0.5rem;color:var(--color-night);">No se pudo cargar la información</h3>
+            <p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:1.25rem;">Comprueba tu conexión e inténtalo de nuevo.</p>
+            <button class="btn-primary-action" data-action="close-modal">Cerrar</button>
+          </div>
+        \`;
+        sheet.querySelector('.btn-primary-action')?.focus();
+      }
+    }
+    window.openEventModal = openEventModal;
+
+    // ==============================================================================
+    // Ficha Modal de Lugar Permanente
+    // ==============================================================================
+    function openPlaceModal(placeId) {
+      if (!currentData) return;
+      const placesList = currentData.places || (currentData.days ? currentData.places : []);
+      const place = (placesList || []).find((p) => p.id === placeId);
+      if (!place) return;
+
+      savedScrollY = window.scrollY;
+      document.body.classList.add('modal-open');
+
+      const modal = document.getElementById('detail-modal');
+      const sheet = document.getElementById('modal-content');
+
+      sheet.innerHTML = \`
+        <div class="modal-sticky-header">
+          <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+            <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          </button>
+        </div>
+
+        <div class="modal-hero-cover" style="aspect-ratio:16/9;">
+          \${place.image_url ? \`
+            <img class="modal-hero-img" src="\${escapeHtml(place.image_url)}" alt="\${escapeHtml(place.name)}" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(true));">
+          \` : \`
+            <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
+              <svg style="width:48px;height:48px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            </div>
+          \`}
+        </div>
+
+        <div class="modal-body">
+          <span class="place-badge" style="margin-bottom:0.75rem;">★ Siempre disponible</span>
+          <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(place.name)}</h1>
+          <p style="font-size:0.9375rem;color:var(--color-text-muted);margin-bottom:1rem;line-height:1.6;">\${escapeHtml(place.highlight_text)}</p>
+          \${place.description ? \`<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:1.25rem;line-height:1.5;white-space:pre-line;">\${escapeHtml(place.description)}</p>\` : ''}
+
+          \${place.opening_hours_text ? \`
+            <div class="modal-meta-row">
+              <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+              <span>Horario: \${escapeHtml(place.opening_hours_text)}</span>
+            </div>
+          \` : ''}
+
+          \${place.google_maps_url ? \`
+            <div style="margin-top:1.5rem;">
+              <a href="\${escapeHtml(place.google_maps_url)}" target="_blank" rel="noopener" class="btn-primary-action" style="width:100%;text-decoration:none;">
+                Cómo llegar en Google Maps ↗
+              </a>
+            </div>
+          \` : ''}
+        </div>
+      \`;
+
+      modal.classList.add('active');
+      sheet.querySelector('.modal-close-btn')?.focus();
+    }
+    window.openPlaceModal = openPlaceModal;
+
+    // ==============================================================================
+    // Ficha Modal de Recurrencia
+    // ==============================================================================
+    function openRecurrenceModal(recId) {
+      if (!currentData) return;
+      let rec = null;
+      if (currentData.recurrences) {
+        rec = currentData.recurrences.find((r) => r.id === recId);
+      } else if (currentData.days) {
+        for (const day of currentData.days) {
+          rec = (day.recurrences || []).find((r) => r.id === recId);
+          if (rec) break;
+        }
+      }
+      if (!rec) return;
+
+      savedScrollY = window.scrollY;
+      document.body.classList.add('modal-open');
+
+      const modal = document.getElementById('detail-modal');
+      const sheet = document.getElementById('modal-content');
+
+      sheet.innerHTML = \`
+        <div class="modal-sticky-header">
+          <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+            <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          </button>
+        </div>
+
+        <div class="modal-body" style="padding-top:1.25rem;">
+          <span class="recurrence-badge" style="margin-bottom:0.75rem;">↻ Actividad periódica</span>
+          <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(rec.title)}</h1>
+          <p style="font-size:0.9375rem;color:var(--color-text-muted);line-height:1.6;margin-bottom:1.5rem;">
+            Plan recurrente habitual en <strong>\${escapeHtml(rec.venue_name)}</strong>. Consulta directamente con el local los posibles cambios puntuales de programación o festivos.
+          </p>
+          <button class="btn-primary-action" style="width:100%;" data-action="close-modal">Entendido</button>
+        </div>
+      \`;
+      modal.classList.add('active');
+      sheet.querySelector('.modal-close-btn')?.focus();
+    }
+    window.openRecurrenceModal = openRecurrenceModal;
+
+    // ==============================================================================
+    // Cierre de Modal y Gestión de Foco
+    // ==============================================================================
+    function closeModal() {
+      const modal = document.getElementById('detail-modal');
+      modal.classList.remove('active');
+      document.body.classList.remove('modal-open');
+      window.scrollTo(0, savedScrollY);
+      activeModalEventId = null;
+      if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+      }
+    }
+    window.closeModal = closeModal;
+
+    // ==============================================================================
+    // Controladores de interfaz y navegación
+    // ==============================================================================
+    function switchView(view) {
+      currentView = view;
+      document.querySelectorAll('.time-tab').forEach((el) => el.classList.remove('active'));
+
+      if (view === 'today') {
+        document.getElementById('tab-today').classList.add('active');
+        selectedDate = getTodayDateString();
+        document.getElementById('calendar-label').innerText = 'Calendario';
+      } else if (view === 'tomorrow') {
+        document.getElementById('tab-tomorrow').classList.add('active');
+        selectedDate = getTomorrowDateString();
+        document.getElementById('calendar-label').innerText = 'Calendario';
+      } else if (view === 'weekend') {
+        document.getElementById('tab-weekend').classList.add('active');
+        document.getElementById('calendar-label').innerText = 'Calendario';
+      } else if (view === 'calendar') {
+        document.getElementById('tab-calendar').classList.add('active');
+      }
+
+      loadData();
+    }
+    window.switchView = switchView;
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.cat-btn').forEach((el) => {
+        el.classList.toggle('active', el.dataset.cat === filter);
+      });
+
+      if (currentView === 'weekend') {
+        renderWeekendAgenda();
+      } else {
+        renderDayAgenda();
+      }
+    }
+    window.setFilter = setFilter;
+
+    function getDayNameFromNumber(dow) {
+      const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+      return days[dow] || 'día';
+    }
+
+    // ==============================================================================
+    // Delegación Segura de Clics (Sin interpolar JavaScript inline)
+    // ==============================================================================
+    document.addEventListener('click', (e) => {
+      // 1. Métricas en enlaces dentro del modal
+      const metricEl = e.target.closest('[data-metric]');
+      if (metricEl) {
+        const type = metricEl.dataset.metric;
+        const evId = metricEl.dataset.eventId;
+        const promoId = metricEl.dataset.promoId ? Number(metricEl.dataset.promoId) : null;
+        if (evId && type) {
+          trackMetric(Number(evId), type, promoId);
+        }
+      }
+
+      // 2. Acciones del modal o lista
+      const trigger = e.target.closest('[data-action]');
+      if (!trigger) return;
+
+      const action = trigger.dataset.action;
+
+      if (action === 'open-event') {
+        lastFocusedElement = trigger;
+        openEventModal(Number(trigger.dataset.id));
+      } else if (action === 'open-place') {
+        lastFocusedElement = trigger;
+        openPlaceModal(Number(trigger.dataset.id));
+      } else if (action === 'open-recurrence') {
+        lastFocusedElement = trigger;
+        openRecurrenceModal(Number(trigger.dataset.id));
+      } else if (action === 'close-modal') {
+        closeModal();
+      } else if (action === 'switch-view') {
+        switchView(trigger.dataset.view);
+      } else if (action === 'set-cat') {
+        setFilter(trigger.dataset.cat);
+      } else if (action === 'clear-filters') {
+        clearAllFilters();
+      } else if (action === 'remove-cat-filter') {
+        setFilter('all');
+      } else if (action === 'reload-data') {
+        loadData();
+      }
+    });
+
+    // Cierre al pulsar sobre el fondo oscurecido del modal
+    document.getElementById('detail-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'detail-modal') {
+        closeModal();
+      }
+    });
+
+    // Selector de fecha nativo en calendario
+    document.getElementById('date-input').addEventListener('change', (e) => {
+      const pickedDate = e.target.value;
+      if (!pickedDate) return;
+      selectedDate = pickedDate;
+      currentView = 'calendar';
+      document.querySelectorAll('.time-tab').forEach((el) => el.classList.remove('active'));
+      document.getElementById('tab-calendar').classList.add('active');
+
+      const [y, m, d] = pickedDate.split('-');
+      document.getElementById('calendar-label').innerText = \`\${d}/\${m}\`;
+      loadData();
+    });
+
+    // ==============================================================================
+    // Accesibilidad: Tecla Escape y Atrapado de Foco (Focus Trap)
+    // ==============================================================================
+    document.addEventListener('keydown', (e) => {
+      const modal = document.getElementById('detail-modal');
+      if (!modal.classList.contains('active')) return;
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeModal();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
+
+    // ==============================================================================
+    // Registro de Service Worker PWA
+    // ==============================================================================
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+
+    // Inicialización al cargar la página
+    document.addEventListener('DOMContentLoaded', () => {
+      getSessionHash();
+      loadData();
+    });
+  </script>
+</body>
+</html>`;
+
+  return c.html(html);
+});
+
+// ==============================================================================
+// Puerto y arranque del servidor web
+// ==============================================================================
+const port = Number(process.env.PORT || 3000);
+const hostname = process.env.HOST || '127.0.0.1';
+
+console.log(
+  JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: 'info',
+    message: `Servidor web PWA VayaPlan iniciando en puerto ${port} (${hostname})`,
+    port,
+    hostname,
+  })
+);
+
+export default {
+  port,
+  hostname,
+  fetch: app.fetch,
+};

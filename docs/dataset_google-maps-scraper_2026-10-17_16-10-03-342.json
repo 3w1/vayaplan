@@ -1,0 +1,2690 @@
+[{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 1,
+  "position": 1,
+  "title": "Restaurante y Cervecería la Vieja Bruselas",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante"
+  ],
+  "types": [
+    "Restaurante"
+  ],
+  "address": "Pl. de los Dominicos, 3, 34005 Palencia",
+  "neighborhood": null,
+  "street": "Pl. de los Dominicos, 3",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34005",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.2,
+  "rating": 4.2,
+  "reviewsCount": 517,
+  "ratingCount": 517,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 70 28 17",
+  "phoneNumber": "+34 979 70 28 17",
+  "website": "http://www.restaurantelaviejabruselas.es/",
+  "domain": "www.restaurantelaviejabruselas.es",
+  "placeId": "ChIJaVu-i0OwRw0RDWNvzZO0cR0",
+  "dataId": "/g/1thx9ykz",
+  "cid": "2121675446368035597",
+  "cidHex": "0xd47b0438bbe5b69:0x1d71b493cd6f630d",
+  "fid": "0xd47b0438bbe5b69:0x1d71b493cd6f630d",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJaVu-i0OwRw0RDWNvzZO0cR0",
+  "url": "https://www.google.com/maps/search/?api=1&query=Restaurante%20y%20Cervecer%C3%ADa%20la%20Vieja%20Bruselas&query_place_id=ChIJaVu-i0OwRw0RDWNvzZO0cR0",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdTUZ2u3EZpcVoF4nFAouxh7TTmOlZDd_wYVa-ZozbsUYGSvkpOjPY18O8snEV40D3SR8SBCcl5Ep3tmmEdtk20lUnnjFKlTxlVkeVz77r02_QdBMfDtPHmuMLQ_g1xegjrvEr5",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdTUZ2u3EZpcVoF4nFAouxh7TTmOlZDd_wYVa-ZozbsUYGSvkpOjPY18O8snEV40D3SR8SBCcl5Ep3tmmEdtk20lUnnjFKlTxlVkeVz77r02_QdBMfDtPHmuMLQ_g1xegjrvEr5"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdTUZ2u3EZpcVoF4nFAouxh7TTmOlZDd_wYVa-ZozbsUYGSvkpOjPY18O8snEV40D3SR8SBCcl5Ep3tmmEdtk20lUnnjFKlTxlVkeVz77r02_QdBMfDtPHmuMLQ_g1xegjrvEr5",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdTUZ2u3EZpcVoF4nFAouxh7TTmOlZDd_wYVa-ZozbsUYGSvkpOjPY18O8snEV40D3SR8SBCcl5Ep3tmmEdtk20lUnnjFKlTxlVkeVz77r02_QdBMfDtPHmuMLQ_g1xegjrvEr5=w114-h86-k-no",
+      "imageId": "CIHM0ogKEICAgICEzKelNg",
+      "title": null,
+      "type": "Foto",
+      "width": 3994,
+      "height": 2995,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdTUZ2u3EZpcVoF4nFAouxh7TTmOlZDd_wYVa-ZozbsUYGSvkpOjPY18O8snEV40D3SR8SBCcl5Ep3tmmEdtk20lUnnjFKlTxlVkeVz77r02_QdBMfDtPHmuMLQ_g1xegjrvEr5",
+  "logoUrl": "https://lh6.googleusercontent.com/-yzV0nlFFjfs/AAAAAAAAAAI/AAAAAAAAAAA/W7NbRI3i_Ms/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Restaurante y Cervecería la Vieja Bruselas (propietario)",
+    "googleId": "103547448423175404756"
+  },
+  "location": {
+    "lat": 42.0147879,
+    "lng": -4.536809
+  },
+  "latitude": 42.0147879,
+  "longitude": -4.536809,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "Cerrado",
+    "domingo": "Cerrado",
+    "lunes": "10:00–17:00",
+    "martes": "Cerrado",
+    "miércoles": "Cerrado",
+    "jueves": "Cerrado",
+    "viernes": "Cerrado"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "10:00–17:00"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "Cerrado"
+      ]
+    }
+  ],
+  "openingHoursState": "Cerrado · Apertura: 10:00 (lun)",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979702817",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 2,
+  "position": 2,
+  "title": "Taberna Plaza Vieja",
+  "categoryName": "Taberna",
+  "type": "Taberna",
+  "categories": [
+    "Taberna",
+    "Restaurante"
+  ],
+  "types": [
+    "Taberna",
+    "Restaurante"
+  ],
+  "address": "C. España, 21, 29640 Fuengirola, Málaga",
+  "neighborhood": null,
+  "street": "C. España, 21",
+  "streetNumber": null,
+  "city": "Fuengirola",
+  "postalCode": "29640",
+  "state": "Málaga",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.2,
+  "rating": 4.2,
+  "reviewsCount": 1243,
+  "ratingCount": 1243,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 951 31 19 04",
+  "phoneNumber": "+34 951 31 19 04",
+  "website": "http://www.tabernaplazavieja.es/",
+  "domain": "www.tabernaplazavieja.es",
+  "placeId": "ChIJExpODWvicg0RcrTYrRA54x4",
+  "dataId": "/g/11bc7n9ng_",
+  "cid": "2225685384650077298",
+  "cidHex": "0xd72e26b0d4e1a13:0x1ee33910add8b472",
+  "fid": "0xd72e26b0d4e1a13:0x1ee33910add8b472",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJExpODWvicg0RcrTYrRA54x4",
+  "url": "https://www.google.com/maps/search/?api=1&query=Taberna%20Plaza%20Vieja&query_place_id=ChIJExpODWvicg0RcrTYrRA54x4",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdCQjrXE945dZuVLgzO3aPuQ8f-RvE_Bpo2wx-4I48Nw97yu5H_lWWyuI3FtE5l4H09N0x0QB3zF5-w9NHpJFwZwZpQlO_fkwg_fVwFpyRQLQ_RtLWGpcZ5Pq5hV3wOiDP42obHDA",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdCQjrXE945dZuVLgzO3aPuQ8f-RvE_Bpo2wx-4I48Nw97yu5H_lWWyuI3FtE5l4H09N0x0QB3zF5-w9NHpJFwZwZpQlO_fkwg_fVwFpyRQLQ_RtLWGpcZ5Pq5hV3wOiDP42obHDA"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdCQjrXE945dZuVLgzO3aPuQ8f-RvE_Bpo2wx-4I48Nw97yu5H_lWWyuI3FtE5l4H09N0x0QB3zF5-w9NHpJFwZwZpQlO_fkwg_fVwFpyRQLQ_RtLWGpcZ5Pq5hV3wOiDP42obHDA",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdCQjrXE945dZuVLgzO3aPuQ8f-RvE_Bpo2wx-4I48Nw97yu5H_lWWyuI3FtE5l4H09N0x0QB3zF5-w9NHpJFwZwZpQlO_fkwg_fVwFpyRQLQ_RtLWGpcZ5Pq5hV3wOiDP42obHDA=w114-h86-k-no",
+      "imageId": "CIHM0ogKEICAgICM2szSlwE",
+      "title": null,
+      "type": "Foto",
+      "width": 4032,
+      "height": 3024,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdCQjrXE945dZuVLgzO3aPuQ8f-RvE_Bpo2wx-4I48Nw97yu5H_lWWyuI3FtE5l4H09N0x0QB3zF5-w9NHpJFwZwZpQlO_fkwg_fVwFpyRQLQ_RtLWGpcZ5Pq5hV3wOiDP42obHDA",
+  "logoUrl": "https://lh6.googleusercontent.com/-g5ejRV7sYus/AAAAAAAAAAI/AAAAAAAAAAA/uLsdaI9t49I/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Taberna Plaza Vieja (propietario)",
+    "googleId": "113038146635275532985"
+  },
+  "location": {
+    "lat": 36.5377444,
+    "lng": -4.62239
+  },
+  "latitude": 36.5377444,
+  "longitude": -4.62239,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "13:00–24:00",
+    "domingo": "13:00–24:00",
+    "lunes": "Cerrado",
+    "martes": "19:00–24:00",
+    "miércoles": "13:00–24:00",
+    "jueves": "13:00–24:00",
+    "viernes": "13:00–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "13:00–24:00"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "13:00–24:00"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "19:00–24:00"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "13:00–24:00"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "13:00–24:00"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "13:00–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:00",
+  "serviceHours": null,
+  "bookingLinks": [
+    "https://www.google.com/maps/reserve/v/dine/c/AtSsWCHAj0I?source=pa&opi=79508299"
+  ],
+  "reservations": [
+    {
+      "action": "reserve",
+      "provider": "google.com",
+      "url": "https://www.google.com/maps/reserve/v/dine/c/AtSsWCHAj0I?source=pa&opi=79508299"
+    }
+  ],
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34951311904",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 3,
+  "position": 3,
+  "title": "TABERNA LA HERRADA",
+  "categoryName": "Bar de tapas",
+  "type": "Bar de tapas",
+  "categories": [
+    "Bar de tapas"
+  ],
+  "types": [
+    "Bar de tapas"
+  ],
+  "address": "Av. de los Vacceos, 9, 34003 Palencia",
+  "neighborhood": null,
+  "street": "Av. de los Vacceos, 9",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34003",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.7,
+  "rating": 4.7,
+  "reviewsCount": 558,
+  "ratingCount": 558,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": null,
+  "phoneNumber": null,
+  "website": "https://instagram.com/tabernalaherradapalencia?igshid=YmMyMTA2M2Y=",
+  "domain": "instagram.com",
+  "placeId": "ChIJxcK6CcqxRw0RCVmwyyKPJqU",
+  "dataId": "/g/11fpkxn3lp",
+  "cid": "11900356444982106377",
+  "cidHex": "0xd47b1ca09bac2c5:0xa5268f22cbb05909",
+  "fid": "0xd47b1ca09bac2c5:0xa5268f22cbb05909",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJxcK6CcqxRw0RCVmwyyKPJqU",
+  "url": "https://www.google.com/maps/search/?api=1&query=TABERNA%20LA%20HERRADA&query_place_id=ChIJxcK6CcqxRw0RCVmwyyKPJqU",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLfAZXVPP19kJhOJTgew-ZxNhDkUlRAWtqO42LWTytAxvOaW69JtDysElJOoJPmYKxNhndbb1x5VwvC5o7JPSR1uAAyeQpxEZYCEo1IfI6dudTVSIVZ1BbA0CTWObYxQzQCj12erDg",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLfAZXVPP19kJhOJTgew-ZxNhDkUlRAWtqO42LWTytAxvOaW69JtDysElJOoJPmYKxNhndbb1x5VwvC5o7JPSR1uAAyeQpxEZYCEo1IfI6dudTVSIVZ1BbA0CTWObYxQzQCj12erDg"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLfAZXVPP19kJhOJTgew-ZxNhDkUlRAWtqO42LWTytAxvOaW69JtDysElJOoJPmYKxNhndbb1x5VwvC5o7JPSR1uAAyeQpxEZYCEo1IfI6dudTVSIVZ1BbA0CTWObYxQzQCj12erDg",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLfAZXVPP19kJhOJTgew-ZxNhDkUlRAWtqO42LWTytAxvOaW69JtDysElJOoJPmYKxNhndbb1x5VwvC5o7JPSR1uAAyeQpxEZYCEo1IfI6dudTVSIVZ1BbA0CTWObYxQzQCj12erDg=w152-h86-k-no",
+      "imageId": "CIHM0ogKEICAgICByNb7jQE",
+      "title": null,
+      "type": "Foto",
+      "width": 4032,
+      "height": 2268,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLfAZXVPP19kJhOJTgew-ZxNhDkUlRAWtqO42LWTytAxvOaW69JtDysElJOoJPmYKxNhndbb1x5VwvC5o7JPSR1uAAyeQpxEZYCEo1IfI6dudTVSIVZ1BbA0CTWObYxQzQCj12erDg",
+  "logoUrl": "https://lh3.googleusercontent.com/-NzL7RdEkFwY/AAAAAAAAAAI/AAAAAAAAAAA/2i9bMDB_5ys/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "TABERNA LA HERRADA (propietario)",
+    "googleId": "116387535559912597988"
+  },
+  "location": {
+    "lat": 42.0135037,
+    "lng": -4.5295424
+  },
+  "latitude": 42.0135037,
+  "longitude": -4.5295424,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "10:30–24:00",
+    "domingo": "10:30–16:00",
+    "lunes": "Cerrado",
+    "martes": "9:00–23:30",
+    "miércoles": "9:00–23:30",
+    "jueves": "9:00–23:30",
+    "viernes": "9:00–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "10:30–24:00"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "10:30–16:00"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "9:00–23:30"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "9:00–23:30"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "9:00–23:30"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "9:00–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": null,
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 4,
+  "position": 4,
+  "title": "La Clásica",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante"
+  ],
+  "types": [
+    "Restaurante"
+  ],
+  "address": "C. Mayor Principal, 1, 34001 Palencia",
+  "neighborhood": null,
+  "street": "C. Mayor Principal, 1",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.4,
+  "rating": 4.4,
+  "reviewsCount": 109,
+  "ratingCount": 109,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 61 24 11",
+  "phoneNumber": "+34 979 61 24 11",
+  "website": "https://www.laclasicapalencia.com/",
+  "domain": "www.laclasicapalencia.com",
+  "placeId": "ChIJPRDzdACxRw0RoGvKB2ecj5U",
+  "dataId": "/g/11yqxwcf80",
+  "cid": "10777004399647157152",
+  "cidHex": "0xd47b10074f3103d:0x958f9c6707ca6ba0",
+  "fid": "0xd47b10074f3103d:0x958f9c6707ca6ba0",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJPRDzdACxRw0RoGvKB2ecj5U",
+  "url": "https://www.google.com/maps/search/?api=1&query=La%20Cl%C3%A1sica&query_place_id=ChIJPRDzdACxRw0RoGvKB2ecj5U",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW=w86-h86-k-no",
+      "imageId": "CIABIhATJuMzYCLQSq3Ia1GUvr9j",
+      "title": null,
+      "type": "Foto",
+      "width": 3072,
+      "height": 3072,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW",
+  "logoUrl": "https://lh4.googleusercontent.com/-Xz6f0GmfpNc/AAAAAAAAAAI/AAAAAAAAAAA/QqAkIfCCnBA/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "La Clásica (propietario)",
+    "googleId": "108355904986148077792"
+  },
+  "location": {
+    "lat": 42.0136081,
+    "lng": -4.5342207
+  },
+  "latitude": 42.0136081,
+  "longitude": -4.5342207,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "9:30–23:30",
+    "domingo": "9:30–23:30",
+    "lunes": "Cerrado",
+    "martes": "Cerrado",
+    "miércoles": "9:00–23:30",
+    "jueves": "9:00–23:30",
+    "viernes": "9:00–23:30"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "9:30–23:30"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "9:30–23:30"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "9:00–23:30"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "9:00–23:30"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "9:00–23:30"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 23:30",
+  "serviceHours": null,
+  "bookingLinks": [
+    "https://www.google.com/maps/reserve/v/dine/c/fPdvfDcEJyU?source=pa&opi=79508299"
+  ],
+  "reservations": [
+    {
+      "action": "reserve",
+      "provider": "google.com",
+      "url": "https://www.google.com/maps/reserve/v/dine/c/fPdvfDcEJyU?source=pa&opi=79508299"
+    }
+  ],
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": null,
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979612411",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 5,
+  "position": 5,
+  "title": "La Parrilla de Don Jamón",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante"
+  ],
+  "types": [
+    "Restaurante"
+  ],
+  "address": "Pl. Mayor, 14, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Pl. Mayor, 14",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 3.8,
+  "rating": 3.8,
+  "reviewsCount": 601,
+  "ratingCount": 601,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 74 12 12",
+  "phoneNumber": "+34 979 74 12 12",
+  "website": "http://www.laparrilladedonjamon.es/",
+  "domain": "www.laparrilladedonjamon.es",
+  "placeId": "ChIJZVXar0WxRw0RdlhAqZydG2c",
+  "dataId": "/g/11pf8d9gfg",
+  "cid": "7429705306457790582",
+  "cidHex": "0xd47b145afda5565:0x671b9d9ca9405876",
+  "fid": "0xd47b145afda5565:0x671b9d9ca9405876",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJZVXar0WxRw0RdlhAqZydG2c",
+  "url": "https://www.google.com/maps/search/?api=1&query=La%20Parrilla%20de%20Don%20Jam%C3%B3n&query_place_id=ChIJZVXar0WxRw0RdlhAqZydG2c",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh=w114-h86-k-no",
+      "imageId": "CIHM0ogKEICAgIDBxNKGEQ",
+      "title": null,
+      "type": "Foto",
+      "width": 4080,
+      "height": 3060,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh",
+  "logoUrl": "https://lh3.googleusercontent.com/-sx7ifb8sNEc/AAAAAAAAAAI/AAAAAAAAAAA/9vUhy-CX8DI/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "La Parrilla de Don Jamón (propietario)",
+    "googleId": "105925666945184397771"
+  },
+  "location": {
+    "lat": 42.0103723,
+    "lng": -4.5323486
+  },
+  "latitude": 42.0103723,
+  "longitude": -4.5323486,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "9:00–23:00",
+    "domingo": "9:00–23:00",
+    "lunes": "9:00–23:00",
+    "martes": "9:00–23:00",
+    "miércoles": "9:00–23:00",
+    "jueves": "9:00–23:00",
+    "viernes": "9:00–23:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "9:00–23:00"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "9:00–23:00"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "9:00–23:00"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "9:00–23:00"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "9:00–23:00"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "9:00–23:00"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "9:00–23:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 23:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979741212",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 6,
+  "position": 6,
+  "title": "Hotel Castilla Vieja",
+  "categoryName": "Hotel",
+  "type": "Hotel",
+  "categories": [
+    "Hotel",
+    "Hotel de larga estancia",
+    "Restaurante",
+    "Alojamiento con servicio"
+  ],
+  "types": [
+    "Hotel",
+    "Hotel de larga estancia",
+    "Restaurante",
+    "Alojamiento con servicio"
+  ],
+  "address": "Av. de Casado del Alisal, 26, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Av. de Casado del Alisal, 26",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.1,
+  "rating": 4.1,
+  "reviewsCount": 2186,
+  "ratingCount": 2186,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 74 90 44",
+  "phoneNumber": "+34 979 74 90 44",
+  "website": "http://www.hotelcastillavieja.com/?referer_code=GOOGLEBP",
+  "domain": "www.hotelcastillavieja.com",
+  "placeId": "ChIJ0a5wX0iwRw0R3Ddf9JSy2Jo",
+  "dataId": "/g/1tf25d4r",
+  "cid": "11157864429635188700",
+  "cidHex": "0xd47b0485f70aed1:0x9ad8b294f45f37dc",
+  "fid": "0xd47b0485f70aed1:0x9ad8b294f45f37dc",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJ0a5wX0iwRw0R3Ddf9JSy2Jo",
+  "url": "https://www.google.com/maps/search/?api=1&query=Hotel%20Castilla%20Vieja&query_place_id=ChIJ0a5wX0iwRw0R3Ddf9JSy2Jo",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdS_zTWJEnZ4_q_rjPpvib9kh9ewkYHzBLz77rVTGS9jaBrJbDX-z-YjgRr0N8luUd0MYEimWAhKekYGxi2JuyU0bu8lw03T3kpw3081htW-fl00Jr_8rCefe1cPbjHYle8bL6iWgVS0zI",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdS_zTWJEnZ4_q_rjPpvib9kh9ewkYHzBLz77rVTGS9jaBrJbDX-z-YjgRr0N8luUd0MYEimWAhKekYGxi2JuyU0bu8lw03T3kpw3081htW-fl00Jr_8rCefe1cPbjHYle8bL6iWgVS0zI"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdS_zTWJEnZ4_q_rjPpvib9kh9ewkYHzBLz77rVTGS9jaBrJbDX-z-YjgRr0N8luUd0MYEimWAhKekYGxi2JuyU0bu8lw03T3kpw3081htW-fl00Jr_8rCefe1cPbjHYle8bL6iWgVS0zI",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdS_zTWJEnZ4_q_rjPpvib9kh9ewkYHzBLz77rVTGS9jaBrJbDX-z-YjgRr0N8luUd0MYEimWAhKekYGxi2JuyU0bu8lw03T3kpw3081htW-fl00Jr_8rCefe1cPbjHYle8bL6iWgVS0zI=w129-h86-k-no",
+      "imageId": "CIABIhDdy6B76wLeGijj5bO5qS4g",
+      "title": null,
+      "type": "Foto",
+      "width": 5408,
+      "height": 3600,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdS_zTWJEnZ4_q_rjPpvib9kh9ewkYHzBLz77rVTGS9jaBrJbDX-z-YjgRr0N8luUd0MYEimWAhKekYGxi2JuyU0bu8lw03T3kpw3081htW-fl00Jr_8rCefe1cPbjHYle8bL6iWgVS0zI",
+  "logoUrl": "https://lh5.googleusercontent.com/-asT3cJeOepY/AAAAAAAAAAI/AAAAAAAAAAA/NwevUi0ujE0/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Hotel Castilla Vieja (propietario)",
+    "googleId": "113298118408482205389"
+  },
+  "location": {
+    "lat": 42.0103912,
+    "lng": -4.5296125
+  },
+  "latitude": 42.0103912,
+  "longitude": -4.5296125,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": null,
+  "openingHoursDetailed": null,
+  "openingHoursState": null,
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": "Hotel funcional con habitaciones decoradas con sencillez, 2 restaurantes, bar y salón.",
+  "description": "Hotel funcional con habitaciones decoradas con sencillez, 2 restaurantes, bar y salón.",
+  "amenities": null,
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979749044",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 7,
+  "position": 7,
+  "title": "Restaurante Don Jamón",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "types": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "address": "Pl. Mayor, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Pl. Mayor",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 3.8,
+  "rating": 3.8,
+  "reviewsCount": 2187,
+  "ratingCount": 2187,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 70 22 70",
+  "phoneNumber": "+34 979 70 22 70",
+  "website": "http://www.restaurantedonjamon.com/",
+  "domain": "www.restaurantedonjamon.com",
+  "placeId": "ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+  "dataId": "/g/1v27wthw",
+  "cid": "12035002396287318192",
+  "cidHex": "0xd47b047bbe213d1:0xa704eaea4dae38b0",
+  "fid": "0xd47b047bbe213d1:0xa704eaea4dae38b0",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+  "url": "https://www.google.com/maps/search/?api=1&query=Restaurante%20Don%20Jam%C3%B3n&query_place_id=ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw=w114-h86-k-no",
+      "imageId": "CIHM0ogKEICAgID6p93PmwE",
+      "title": null,
+      "type": "Foto",
+      "width": 4000,
+      "height": 3000,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw",
+  "logoUrl": "https://lh4.googleusercontent.com/-S44NzVGL2cM/AAAAAAAAAAI/AAAAAAAAAAA/AwHU7BrEM1I/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Restaurante Don Jamón (propietario)",
+    "googleId": "100698960882423395092"
+  },
+  "location": {
+    "lat": 42.0106662,
+    "lng": -4.5321117
+  },
+  "latitude": 42.0106662,
+  "longitude": -4.5321117,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "8:00–24:00",
+    "domingo": "8:00–24:00",
+    "lunes": "8:00–24:00",
+    "martes": "8:00–24:00",
+    "miércoles": "8:00–24:00",
+    "jueves": "8:00–24:00",
+    "viernes": "8:00–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "8:00–24:00"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "8:00–24:00"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "8:00–24:00"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "8:00–24:00"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "8:00–24:00"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "8:00–24:00"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "8:00–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979702270",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 8,
+  "position": 8,
+  "title": "Bar javi",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "types": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "address": "C. Mayor Antigua, 32, 34005 Palencia",
+  "neighborhood": null,
+  "street": "C. Mayor Antigua, 32",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34005",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.3,
+  "rating": 4.3,
+  "reviewsCount": 960,
+  "ratingCount": 960,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 607 43 03 56",
+  "phoneNumber": "+34 607 43 03 56",
+  "website": null,
+  "domain": null,
+  "placeId": "ChIJl0cuDEGwRw0RzAoRdx1g1Jc",
+  "dataId": "/g/1tfs2cr8",
+  "cid": "10940475074457701068",
+  "cidHex": "0xd47b0410c2e4797:0x97d4601d77110acc",
+  "fid": "0xd47b0410c2e4797:0x97d4601d77110acc",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJl0cuDEGwRw0RzAoRdx1g1Jc",
+  "url": "https://www.google.com/maps/search/?api=1&query=Bar%20javi&query_place_id=ChIJl0cuDEGwRw0RzAoRdx1g1Jc",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc2iH4RND-B0Oz87uBsWyTKYtqMVKshnjoDWDIhNJyc81_3QjhPAfTV_7G1NLPTnaMJ-Xt3Q488ep2dkmnldB8-Nj_dv8s7wTjtkeogi_OZHyMSrOxo8wBYEGITAqj8A4An4hnI",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLc2iH4RND-B0Oz87uBsWyTKYtqMVKshnjoDWDIhNJyc81_3QjhPAfTV_7G1NLPTnaMJ-Xt3Q488ep2dkmnldB8-Nj_dv8s7wTjtkeogi_OZHyMSrOxo8wBYEGITAqj8A4An4hnI"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc2iH4RND-B0Oz87uBsWyTKYtqMVKshnjoDWDIhNJyc81_3QjhPAfTV_7G1NLPTnaMJ-Xt3Q488ep2dkmnldB8-Nj_dv8s7wTjtkeogi_OZHyMSrOxo8wBYEGITAqj8A4An4hnI",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc2iH4RND-B0Oz87uBsWyTKYtqMVKshnjoDWDIhNJyc81_3QjhPAfTV_7G1NLPTnaMJ-Xt3Q488ep2dkmnldB8-Nj_dv8s7wTjtkeogi_OZHyMSrOxo8wBYEGITAqj8A4An4hnI=w86-h114-k-no",
+      "imageId": "CIHM0ogKEICAgID076-mZw",
+      "title": null,
+      "type": "Foto",
+      "width": 3024,
+      "height": 4032,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc2iH4RND-B0Oz87uBsWyTKYtqMVKshnjoDWDIhNJyc81_3QjhPAfTV_7G1NLPTnaMJ-Xt3Q488ep2dkmnldB8-Nj_dv8s7wTjtkeogi_OZHyMSrOxo8wBYEGITAqj8A4An4hnI",
+  "logoUrl": "https://lh5.googleusercontent.com/-30AkAIPnTEU/AAAAAAAAAAI/AAAAAAAAAAA/suqclk-WYhs/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Bar javi (propietario)",
+    "googleId": "102288073929355653185"
+  },
+  "location": {
+    "lat": 42.0117602,
+    "lng": -4.5387308
+  },
+  "latitude": 42.0117602,
+  "longitude": -4.5387308,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "Abierto 24 horas",
+    "domingo": "9:00–17:00, 20:00–24:00",
+    "lunes": "9:00–17:00",
+    "martes": "9:00–17:00",
+    "miércoles": "Abierto 24 horas",
+    "jueves": "9:00–17:00",
+    "viernes": "10:00–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "Abierto 24 horas"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "9:00–17:00",
+        "20:00–24:00"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "9:00–17:00"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "9:00–17:00"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "Abierto 24 horas"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "9:00–17:00"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "10:00–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Asientos adaptados sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34607430356",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 9,
+  "position": 9,
+  "title": "La Barra de Villoldo",
+  "categoryName": "Bar restaurante",
+  "type": "Bar restaurante",
+  "categories": [
+    "Bar restaurante"
+  ],
+  "types": [
+    "Bar restaurante"
+  ],
+  "address": "Pl. la Rinconada de San Miguel, 2, 34005 Palencia",
+  "neighborhood": null,
+  "street": "Pl. la Rinconada de San Miguel, 2",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34005",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.2,
+  "rating": 4.2,
+  "reviewsCount": 1428,
+  "ratingCount": 1428,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 61 02 02",
+  "phoneNumber": "+34 979 61 02 02",
+  "website": "http://labarradevilloldo.com/",
+  "domain": "labarradevilloldo.com",
+  "placeId": "ChIJw_EdhDiwRw0R8N3S6Fv2Yn0",
+  "dataId": "/g/11b76ds05m",
+  "cid": "9035054677067226608",
+  "cidHex": "0xd47b038841df1c3:0x7d62f65be8d2ddf0",
+  "fid": "0xd47b038841df1c3:0x7d62f65be8d2ddf0",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJw_EdhDiwRw0R8N3S6Fv2Yn0",
+  "url": "https://www.google.com/maps/search/?api=1&query=La%20Barra%20de%20Villoldo&query_place_id=ChIJw_EdhDiwRw0R8N3S6Fv2Yn0",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdiJqF3fY3kfCjlX-jWKhr2N4gSz_MX18i2mf2wZE6s26ZVVPjSjO9Eo7J5NXVBK5Kmufl5HEcAHJ6stIl-z8ewhzvuVsBBZmVcKYwfsiOFJdHs3DLJS_yw54Dmu6Jxhb1yj1k",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdiJqF3fY3kfCjlX-jWKhr2N4gSz_MX18i2mf2wZE6s26ZVVPjSjO9Eo7J5NXVBK5Kmufl5HEcAHJ6stIl-z8ewhzvuVsBBZmVcKYwfsiOFJdHs3DLJS_yw54Dmu6Jxhb1yj1k"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdiJqF3fY3kfCjlX-jWKhr2N4gSz_MX18i2mf2wZE6s26ZVVPjSjO9Eo7J5NXVBK5Kmufl5HEcAHJ6stIl-z8ewhzvuVsBBZmVcKYwfsiOFJdHs3DLJS_yw54Dmu6Jxhb1yj1k",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdiJqF3fY3kfCjlX-jWKhr2N4gSz_MX18i2mf2wZE6s26ZVVPjSjO9Eo7J5NXVBK5Kmufl5HEcAHJ6stIl-z8ewhzvuVsBBZmVcKYwfsiOFJdHs3DLJS_yw54Dmu6Jxhb1yj1k=w114-h86-k-no",
+      "imageId": "CIHM0ogKEICAgIDeguLpQw",
+      "title": null,
+      "type": "Foto",
+      "width": 3949,
+      "height": 2973,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdiJqF3fY3kfCjlX-jWKhr2N4gSz_MX18i2mf2wZE6s26ZVVPjSjO9Eo7J5NXVBK5Kmufl5HEcAHJ6stIl-z8ewhzvuVsBBZmVcKYwfsiOFJdHs3DLJS_yw54Dmu6Jxhb1yj1k",
+  "logoUrl": "https://lh3.googleusercontent.com/-zFN35yMZvFQ/AAAAAAAAAAI/AAAAAAAAAAA/VSIwenKb5nQ/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "La Barra de Villoldo (propietario)",
+    "googleId": "115957478598808823028"
+  },
+  "location": {
+    "lat": 42.0083438,
+    "lng": -4.5340714
+  },
+  "latitude": 42.0083438,
+  "longitude": -4.5340714,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "12:30–23:30",
+    "domingo": "12:30–16:30",
+    "lunes": "Cerrado",
+    "martes": "12:30–16:30, 19:30–23:30",
+    "miércoles": "12:30–16:30, 19:30–23:30",
+    "jueves": "12:30–16:30, 19:30–23:30",
+    "viernes": "12:30–23:30"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "12:30–23:30"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "12:30–16:30"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "12:30–16:30",
+        "19:30–23:30"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "12:30–16:30",
+        "19:30–23:30"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "12:30–16:30",
+        "19:30–23:30"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "12:30–23:30"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 23:30",
+  "serviceHours": null,
+  "bookingLinks": [
+    "https://www.google.com/maps/reserve/v/dine/c/gRg4M6zs-6Y?source=pa&opi=79508299"
+  ],
+  "reservations": [
+    {
+      "action": "reserve",
+      "provider": "google.com",
+      "url": "https://www.google.com/maps/reserve/v/dine/c/gRg4M6zs-6Y?source=pa&opi=79508299"
+    }
+  ],
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979610202",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Taberna Plaza Vieja Palencia",
+  "searchString": "Taberna Plaza Vieja Palencia",
+  "rank": 10,
+  "position": 10,
+  "title": "Restaurante La Traserilla",
+  "categoryName": "Restaurante de cocina española",
+  "type": "Restaurante de cocina española",
+  "categories": [
+    "Restaurante de cocina española"
+  ],
+  "types": [
+    "Restaurante de cocina española"
+  ],
+  "address": "C. Don Sancho, 1, 34001 Palencia",
+  "neighborhood": null,
+  "street": "C. Don Sancho, 1",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.4,
+  "rating": 4.4,
+  "reviewsCount": 2376,
+  "ratingCount": 2376,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 74 54 21",
+  "phoneNumber": "+34 979 74 54 21",
+  "website": "http://www.latraserilla.es/",
+  "domain": "www.latraserilla.es",
+  "placeId": "ChIJPXkrE0ewRw0RRJNYaKx4bCQ",
+  "dataId": "/g/1tdh0m2r",
+  "cid": "2624605364730499908",
+  "cidHex": "0xd47b047132b793d:0x246c78ac68589344",
+  "fid": "0xd47b047132b793d:0x246c78ac68589344",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJPXkrE0ewRw0RRJNYaKx4bCQ",
+  "url": "https://www.google.com/maps/search/?api=1&query=Restaurante%20La%20Traserilla&query_place_id=ChIJPXkrE0ewRw0RRJNYaKx4bCQ",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdvz-I-zRHenVLU6DtWfI8Y-RCPjYaWAgF8XVGe2SZGZ-22Pqqix4JqrVBd3hXljdk6M0-OSh5aZKGm5B4dsHL-8wnIXdmDd1-oMV8hFgTlFm5sOX1_7CjgpCxG4i8mYvc_U8as",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdvz-I-zRHenVLU6DtWfI8Y-RCPjYaWAgF8XVGe2SZGZ-22Pqqix4JqrVBd3hXljdk6M0-OSh5aZKGm5B4dsHL-8wnIXdmDd1-oMV8hFgTlFm5sOX1_7CjgpCxG4i8mYvc_U8as"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdvz-I-zRHenVLU6DtWfI8Y-RCPjYaWAgF8XVGe2SZGZ-22Pqqix4JqrVBd3hXljdk6M0-OSh5aZKGm5B4dsHL-8wnIXdmDd1-oMV8hFgTlFm5sOX1_7CjgpCxG4i8mYvc_U8as",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdvz-I-zRHenVLU6DtWfI8Y-RCPjYaWAgF8XVGe2SZGZ-22Pqqix4JqrVBd3hXljdk6M0-OSh5aZKGm5B4dsHL-8wnIXdmDd1-oMV8hFgTlFm5sOX1_7CjgpCxG4i8mYvc_U8as=w152-h86-k-no",
+      "imageId": "CIHM0ogKEICAgIDcj9C4fw",
+      "title": null,
+      "type": "Foto",
+      "width": 4128,
+      "height": 2322,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdvz-I-zRHenVLU6DtWfI8Y-RCPjYaWAgF8XVGe2SZGZ-22Pqqix4JqrVBd3hXljdk6M0-OSh5aZKGm5B4dsHL-8wnIXdmDd1-oMV8hFgTlFm5sOX1_7CjgpCxG4i8mYvc_U8as",
+  "logoUrl": "https://lh5.googleusercontent.com/-hAS3Ef_Elb4/AAAAAAAAAAI/AAAAAAAAAAA/ZJDI755lbBg/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Restaurante La Traserilla (propietario)",
+    "googleId": "117012570998517952079"
+  },
+  "location": {
+    "lat": 42.0097175,
+    "lng": -4.5327614
+  },
+  "latitude": 42.0097175,
+  "longitude": -4.5327614,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "11:15–0:30",
+    "domingo": "11:15–0:30",
+    "lunes": "11:15–0:30",
+    "martes": "11:15–18:30",
+    "miércoles": "Cerrado",
+    "jueves": "11:15–0:30",
+    "viernes": "11:15–0:30"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "11:15–0:30"
+      ]
+    },
+    {
+      "day": "domingo",
+      "hours": [
+        "11:15–0:30"
+      ]
+    },
+    {
+      "day": "lunes",
+      "hours": [
+        "11:15–0:30"
+      ]
+    },
+    {
+      "day": "martes",
+      "hours": [
+        "11:15–18:30"
+      ]
+    },
+    {
+      "day": "miércoles",
+      "hours": [
+        "Cerrado"
+      ]
+    },
+    {
+      "day": "jueves",
+      "hours": [
+        "11:15–0:30"
+      ]
+    },
+    {
+      "day": "viernes",
+      "hours": [
+        "11:15–0:30"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:30",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": "Cocina española con toques actuales en una casa de comienzos del s. XIX con tres pisos y decoración moderna.",
+  "description": "Cocina española con toques actuales en una casa de comienzos del s. XIX con tres pisos y decoración moderna.",
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true,
+      "Bucle magnético asistencial": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979745421",
+  "free_usage": {
+    "count": 13,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 1,
+  "position": 1,
+  "title": "Debla - Palencia.",
+  "categoryName": "Bar",
+  "type": "Bar",
+  "categories": [
+    "Bar"
+  ],
+  "types": [
+    "Bar"
+  ],
+  "address": "Pl. Mayor, 15, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Pl. Mayor, 15",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.3,
+  "rating": 4.3,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 74 29 27",
+  "phoneNumber": "+34 979 74 29 27",
+  "website": null,
+  "domain": null,
+  "placeId": "ChIJoxA_z0ewRw0Rl9JuNSb1qxM",
+  "dataId": "/g/11xfbl9n3",
+  "cid": "1417496052192170647",
+  "cidHex": "0xd47b047cf3f10a3:0x13abf526356ed297",
+  "fid": "0xd47b047cf3f10a3:0x13abf526356ed297",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJoxA_z0ewRw0Rl9JuNSb1qxM",
+  "url": "https://www.google.com/maps/search/?api=1&query=Debla%20-%20Palencia.&query_place_id=ChIJoxA_z0ewRw0Rl9JuNSb1qxM",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeM5br6xmIq4-0if95e7siNXfmqBDkPUG2g1zzjzCl61ABTpE1fSDgmVh2a1MZ580LomRpPQ5TSM1PaTwVMEmsB2U_5ugpi7sZ66rflA63j8SzJz0IiG48-HRZOBWIqy3X48c9CYg",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLeM5br6xmIq4-0if95e7siNXfmqBDkPUG2g1zzjzCl61ABTpE1fSDgmVh2a1MZ580LomRpPQ5TSM1PaTwVMEmsB2U_5ugpi7sZ66rflA63j8SzJz0IiG48-HRZOBWIqy3X48c9CYg"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeM5br6xmIq4-0if95e7siNXfmqBDkPUG2g1zzjzCl61ABTpE1fSDgmVh2a1MZ580LomRpPQ5TSM1PaTwVMEmsB2U_5ugpi7sZ66rflA63j8SzJz0IiG48-HRZOBWIqy3X48c9CYg",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeM5br6xmIq4-0if95e7siNXfmqBDkPUG2g1zzjzCl61ABTpE1fSDgmVh2a1MZ580LomRpPQ5TSM1PaTwVMEmsB2U_5ugpi7sZ66rflA63j8SzJz0IiG48-HRZOBWIqy3X48c9CYg=w182-h86-k-no",
+      "imageId": "CIHM0ogKEICAgIDUjpjD0wE",
+      "title": null,
+      "type": "Foto",
+      "width": 4608,
+      "height": 2176,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeM5br6xmIq4-0if95e7siNXfmqBDkPUG2g1zzjzCl61ABTpE1fSDgmVh2a1MZ580LomRpPQ5TSM1PaTwVMEmsB2U_5ugpi7sZ66rflA63j8SzJz0IiG48-HRZOBWIqy3X48c9CYg",
+  "logoUrl": null,
+  "owner": {
+    "name": "Debla - Palencia. (propietario)",
+    "googleId": "115228859296428443476"
+  },
+  "location": {
+    "lat": 42.0108776,
+    "lng": -4.532495
+  },
+  "latitude": 42.0108776,
+  "longitude": -4.532495,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "9:00–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "9:00–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979742927",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 2,
+  "position": 2,
+  "title": "Restaurante D'Candela",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante"
+  ],
+  "types": [
+    "Restaurante"
+  ],
+  "address": "Pl. Mayor, 10, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Pl. Mayor, 10",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.3,
+  "rating": 4.3,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 87 28 78",
+  "phoneNumber": "+34 979 87 28 78",
+  "website": "https://decandelarestaurante.com/",
+  "domain": "decandelarestaurante.com",
+  "placeId": "ChIJg39ojCSxRw0RPuTihIE3drU",
+  "dataId": "/g/11str_ssmd",
+  "cid": "13075699597536584766",
+  "cidHex": "0xd47b1248c687f83:0xb576378184e2e43e",
+  "fid": "0xd47b1248c687f83:0xb576378184e2e43e",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJg39ojCSxRw0RPuTihIE3drU",
+  "url": "https://www.google.com/maps/search/?api=1&query=Restaurante%20D%27Candela&query_place_id=ChIJg39ojCSxRw0RPuTihIE3drU",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLftmWrCiez4lLWAX7XsrpR4rGwOpBxcjE_6qzjOPhZRGEdn709dmpBQCyT2WeXXW_HCm3F89Pmam0JK8Q5LKYbGBSGjnH-V1cCHaMKOvu3XhdpVeTu57X4taukAZlrEPZ_0znKaZLPvqO3c",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLftmWrCiez4lLWAX7XsrpR4rGwOpBxcjE_6qzjOPhZRGEdn709dmpBQCyT2WeXXW_HCm3F89Pmam0JK8Q5LKYbGBSGjnH-V1cCHaMKOvu3XhdpVeTu57X4taukAZlrEPZ_0znKaZLPvqO3c"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLftmWrCiez4lLWAX7XsrpR4rGwOpBxcjE_6qzjOPhZRGEdn709dmpBQCyT2WeXXW_HCm3F89Pmam0JK8Q5LKYbGBSGjnH-V1cCHaMKOvu3XhdpVeTu57X4taukAZlrEPZ_0znKaZLPvqO3c",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLftmWrCiez4lLWAX7XsrpR4rGwOpBxcjE_6qzjOPhZRGEdn709dmpBQCyT2WeXXW_HCm3F89Pmam0JK8Q5LKYbGBSGjnH-V1cCHaMKOvu3XhdpVeTu57X4taukAZlrEPZ_0znKaZLPvqO3c=w152-h86-k-no",
+      "imageId": "CIABIhCC0VW6qDA1lwiJkdUrAJ0C",
+      "title": null,
+      "type": "Foto",
+      "width": 4080,
+      "height": 2304,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLftmWrCiez4lLWAX7XsrpR4rGwOpBxcjE_6qzjOPhZRGEdn709dmpBQCyT2WeXXW_HCm3F89Pmam0JK8Q5LKYbGBSGjnH-V1cCHaMKOvu3XhdpVeTu57X4taukAZlrEPZ_0znKaZLPvqO3c",
+  "logoUrl": "https://lh6.googleusercontent.com/-erQZnMy0360/AAAAAAAAAAI/AAAAAAAAAAA/e45yzgWI0W8/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Restaurante D'Candela (propietario)",
+    "googleId": "115572694532554992688"
+  },
+  "location": {
+    "lat": 42.0103543,
+    "lng": -4.5328077
+  },
+  "latitude": 42.0103543,
+  "longitude": -4.5328077,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "10:00–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "10:00–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:00",
+  "serviceHours": null,
+  "bookingLinks": [
+    "https://www.google.com/maps/reserve/v/dine/c/34bhCWbgyqM?source=pa&opi=79508299"
+  ],
+  "reservations": [
+    {
+      "action": "reserve",
+      "provider": "google.com",
+      "url": "https://www.google.com/maps/reserve/v/dine/c/34bhCWbgyqM?source=pa&opi=79508299"
+    }
+  ],
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979872878",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 3,
+  "position": 3,
+  "title": "La Parrilla de Don Jamón",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante"
+  ],
+  "types": [
+    "Restaurante"
+  ],
+  "address": "Pl. Mayor, 14, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Pl. Mayor, 14",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 3.8,
+  "rating": 3.8,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 74 12 12",
+  "phoneNumber": "+34 979 74 12 12",
+  "website": "http://www.laparrilladedonjamon.es/",
+  "domain": "www.laparrilladedonjamon.es",
+  "placeId": "ChIJZVXar0WxRw0RdlhAqZydG2c",
+  "dataId": "/g/11pf8d9gfg",
+  "cid": "7429705306457790582",
+  "cidHex": "0xd47b145afda5565:0x671b9d9ca9405876",
+  "fid": "0xd47b145afda5565:0x671b9d9ca9405876",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJZVXar0WxRw0RdlhAqZydG2c",
+  "url": "https://www.google.com/maps/search/?api=1&query=La%20Parrilla%20de%20Don%20Jam%C3%B3n&query_place_id=ChIJZVXar0WxRw0RdlhAqZydG2c",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh=w114-h86-k-no",
+      "imageId": "CIHM0ogKEICAgIDBxNKGEQ",
+      "title": null,
+      "type": "Foto",
+      "width": 4080,
+      "height": 3060,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcnSFz26cwUy3tRM_jUwMsXTCXDDJjrB_WQGCy-mErGrwh9e5u3XfO5Z6OQw-ke0UAI778lkSO8Br-0KCyLxJffwSl4ztlf3FbXIPgRjKGy_uYzVPkBNByGrIp5pVxc-NPmU-lh",
+  "logoUrl": "https://lh3.googleusercontent.com/-sx7ifb8sNEc/AAAAAAAAAAI/AAAAAAAAAAA/9vUhy-CX8DI/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "La Parrilla de Don Jamón (propietario)",
+    "googleId": "105925666945184397771"
+  },
+  "location": {
+    "lat": 42.0103723,
+    "lng": -4.5323486
+  },
+  "latitude": 42.0103723,
+  "longitude": -4.5323486,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "9:00–23:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "9:00–23:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 23:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979741212",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 4,
+  "position": 4,
+  "title": "Restaurante Don Jamón",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "types": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "address": "Pl. Mayor, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Pl. Mayor",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 3.8,
+  "rating": 3.8,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 70 22 70",
+  "phoneNumber": "+34 979 70 22 70",
+  "website": "http://www.restaurantedonjamon.com/",
+  "domain": "www.restaurantedonjamon.com",
+  "placeId": "ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+  "dataId": "/g/1v27wthw",
+  "cid": "12035002396287318192",
+  "cidHex": "0xd47b047bbe213d1:0xa704eaea4dae38b0",
+  "fid": "0xd47b047bbe213d1:0xa704eaea4dae38b0",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+  "url": "https://www.google.com/maps/search/?api=1&query=Restaurante%20Don%20Jam%C3%B3n&query_place_id=ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw=w114-h86-k-no",
+      "imageId": "CIHM0ogKEICAgID6p93PmwE",
+      "title": null,
+      "type": "Foto",
+      "width": 4000,
+      "height": 3000,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdizvNHZjqqBdff3dRoXoJHHuyIt48Yt0LA8H7sqpExLlnK2Yg4DTnG5th4JoOPgilSyodNQ7JdZzLJD63AdREfg2cp0GbhQXOsnw8WiFhokDzSSZC853QuEbKTiFcVKCJaWUGObw",
+  "logoUrl": "https://lh4.googleusercontent.com/-S44NzVGL2cM/AAAAAAAAAAI/AAAAAAAAAAA/AwHU7BrEM1I/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Restaurante Don Jamón (propietario)",
+    "googleId": "100698960882423395092"
+  },
+  "location": {
+    "lat": 42.0106662,
+    "lng": -4.5321117
+  },
+  "latitude": 42.0106662,
+  "longitude": -4.5321117,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "8:00–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "8:00–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979702270",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 5,
+  "position": 5,
+  "title": "Habana, Cafetería Restaurante en Palencia",
+  "categoryName": "Bar",
+  "type": "Bar",
+  "categories": [
+    "Bar",
+    "Cafetería",
+    "Restaurante de desayunos",
+    "Restaurante de postres",
+    "Tienda de postres",
+    "Restaurante de comida para llevar",
+    "Restaurante"
+  ],
+  "types": [
+    "Bar",
+    "Cafetería",
+    "Restaurante de desayunos",
+    "Restaurante de postres",
+    "Tienda de postres",
+    "Restaurante de comida para llevar",
+    "Restaurante"
+  ],
+  "address": "C. Mayor Principal, 101, 34001 Palencia",
+  "neighborhood": null,
+  "street": "C. Mayor Principal, 101",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.2,
+  "rating": 4.2,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 04 16 24",
+  "phoneNumber": "+34 979 04 16 24",
+  "website": "https://habanacafeteria.com/",
+  "domain": "habanacafeteria.com",
+  "placeId": "ChIJc1oAmQmxRw0RvUgJkeKZTqE",
+  "dataId": "/g/11bx564yml",
+  "cid": "11623396886664792253",
+  "cidHex": "0xd47b10999005a73:0xa14e99e2910948bd",
+  "fid": "0xd47b10999005a73:0xa14e99e2910948bd",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJc1oAmQmxRw0RvUgJkeKZTqE",
+  "url": "https://www.google.com/maps/search/?api=1&query=Habana%2C%20Cafeter%C3%ADa%20Restaurante%20en%20Palencia&query_place_id=ChIJc1oAmQmxRw0RvUgJkeKZTqE",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLe9E6HnYyWGQucR0GQj7JyDry9UbCnDzHyzwAp7RJguqBHVh3Xw7XNIVGUv3RyL-0I0IWnAODHDg1p-pMHPpo08S4yksfDuSW4n57Otvv2SGbGDRLa261K9z1mj0A_Q4gEuV-ZxoA",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLe9E6HnYyWGQucR0GQj7JyDry9UbCnDzHyzwAp7RJguqBHVh3Xw7XNIVGUv3RyL-0I0IWnAODHDg1p-pMHPpo08S4yksfDuSW4n57Otvv2SGbGDRLa261K9z1mj0A_Q4gEuV-ZxoA"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLe9E6HnYyWGQucR0GQj7JyDry9UbCnDzHyzwAp7RJguqBHVh3Xw7XNIVGUv3RyL-0I0IWnAODHDg1p-pMHPpo08S4yksfDuSW4n57Otvv2SGbGDRLa261K9z1mj0A_Q4gEuV-ZxoA",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLe9E6HnYyWGQucR0GQj7JyDry9UbCnDzHyzwAp7RJguqBHVh3Xw7XNIVGUv3RyL-0I0IWnAODHDg1p-pMHPpo08S4yksfDuSW4n57Otvv2SGbGDRLa261K9z1mj0A_Q4gEuV-ZxoA=w129-h86-k-no",
+      "imageId": "CIHM0ogKEICAgID8zrSkqAE",
+      "title": null,
+      "type": "Foto",
+      "width": 5184,
+      "height": 3456,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLe9E6HnYyWGQucR0GQj7JyDry9UbCnDzHyzwAp7RJguqBHVh3Xw7XNIVGUv3RyL-0I0IWnAODHDg1p-pMHPpo08S4yksfDuSW4n57Otvv2SGbGDRLa261K9z1mj0A_Q4gEuV-ZxoA",
+  "logoUrl": "https://lh5.googleusercontent.com/-a_-zy49k0iI/AAAAAAAAAAI/AAAAAAAAAAA/CZ-ZL26Sl2s/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Habana, Cafetería Restaurante en Palencia (propietario)",
+    "googleId": "117110500920527165962"
+  },
+  "location": {
+    "lat": 42.0065824,
+    "lng": -4.5311761
+  },
+  "latitude": 42.0065824,
+  "longitude": -4.5311761,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "9:30–23:30"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "9:30–23:30"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 23:30",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979041624",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 6,
+  "position": 6,
+  "title": "La Clásica",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante"
+  ],
+  "types": [
+    "Restaurante"
+  ],
+  "address": "C. Mayor Principal, 1, 34001 Palencia",
+  "neighborhood": null,
+  "street": "C. Mayor Principal, 1",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.4,
+  "rating": 4.4,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 61 24 11",
+  "phoneNumber": "+34 979 61 24 11",
+  "website": "https://www.laclasicapalencia.com/",
+  "domain": "www.laclasicapalencia.com",
+  "placeId": "ChIJPRDzdACxRw0RoGvKB2ecj5U",
+  "dataId": "/g/11yqxwcf80",
+  "cid": "10777004399647157152",
+  "cidHex": "0xd47b10074f3103d:0x958f9c6707ca6ba0",
+  "fid": "0xd47b10074f3103d:0x958f9c6707ca6ba0",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJPRDzdACxRw0RoGvKB2ecj5U",
+  "url": "https://www.google.com/maps/search/?api=1&query=La%20Cl%C3%A1sica&query_place_id=ChIJPRDzdACxRw0RoGvKB2ecj5U",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW=w86-h86-k-no",
+      "imageId": "CIABIhATJuMzYCLQSq3Ia1GUvr9j",
+      "title": null,
+      "type": "Foto",
+      "width": 3072,
+      "height": 3072,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLd1cpmWi2UNMJv1LlrTrecWVRizSoVKYKhN8RXSR4CiAloIX_6Nu8qP6KclipMhvtDspBG-g7Z2R1LlivXoxVYDy1xWvYMbLvwTRV2-hHWVg-H07D-Z6K9Xt3Jn0E1OcUiEkWdTgIW2-TxW",
+  "logoUrl": "https://lh4.googleusercontent.com/-Xz6f0GmfpNc/AAAAAAAAAAI/AAAAAAAAAAA/QqAkIfCCnBA/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "La Clásica (propietario)",
+    "googleId": "108355904986148077792"
+  },
+  "location": {
+    "lat": 42.0136081,
+    "lng": -4.5342207
+  },
+  "latitude": 42.0136081,
+  "longitude": -4.5342207,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "9:30–23:30"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "9:30–23:30"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 23:30",
+  "serviceHours": null,
+  "bookingLinks": [
+    "https://www.google.com/maps/reserve/v/dine/c/fPdvfDcEJyU?source=pa&opi=79508299"
+  ],
+  "reservations": [
+    {
+      "action": "reserve",
+      "provider": "google.com",
+      "url": "https://www.google.com/maps/reserve/v/dine/c/fPdvfDcEJyU?source=pa&opi=79508299"
+    }
+  ],
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": null,
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979612411",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 7,
+  "position": 7,
+  "title": "Bar Alaska",
+  "categoryName": "Bar",
+  "type": "Bar",
+  "categories": [
+    "Bar"
+  ],
+  "types": [
+    "Bar"
+  ],
+  "address": "C. Mayor Principal, 26, 34001 Palencia",
+  "neighborhood": null,
+  "street": "C. Mayor Principal, 26",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.3,
+  "rating": 4.3,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 74 28 35",
+  "phoneNumber": "+34 979 74 28 35",
+  "website": "https://www.facebook.com/AlaskaPalencia/",
+  "domain": "www.facebook.com",
+  "placeId": "ChIJl8APWUawRw0RwP9_EtNKUaQ",
+  "dataId": "/g/1z44bhlhr",
+  "cid": "11840327165742677952",
+  "cidHex": "0xd47b046590fc097:0xa4514ad3127fffc0",
+  "fid": "0xd47b046590fc097:0xa4514ad3127fffc0",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJl8APWUawRw0RwP9_EtNKUaQ",
+  "url": "https://www.google.com/maps/search/?api=1&query=Bar%20Alaska&query_place_id=ChIJl8APWUawRw0RwP9_EtNKUaQ",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeQ8B22rILxj-LjEykztZC-M3cO_4infDwvyo64ghBffFDW4xts5XFLibZp9EjuxyJYRqJyi0n2TwZMlRYeKOwY9Ina32n_LZ2-V2As4e5PTSaqgAOaOYDsWOncVEGr69pwPxzjNQ",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLeQ8B22rILxj-LjEykztZC-M3cO_4infDwvyo64ghBffFDW4xts5XFLibZp9EjuxyJYRqJyi0n2TwZMlRYeKOwY9Ina32n_LZ2-V2As4e5PTSaqgAOaOYDsWOncVEGr69pwPxzjNQ"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeQ8B22rILxj-LjEykztZC-M3cO_4infDwvyo64ghBffFDW4xts5XFLibZp9EjuxyJYRqJyi0n2TwZMlRYeKOwY9Ina32n_LZ2-V2As4e5PTSaqgAOaOYDsWOncVEGr69pwPxzjNQ",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeQ8B22rILxj-LjEykztZC-M3cO_4infDwvyo64ghBffFDW4xts5XFLibZp9EjuxyJYRqJyi0n2TwZMlRYeKOwY9Ina32n_LZ2-V2As4e5PTSaqgAOaOYDsWOncVEGr69pwPxzjNQ=w152-h86-k-no",
+      "imageId": "CIHM0ogKEICAgICaq4OZtQE",
+      "title": null,
+      "type": "Foto",
+      "width": 1363,
+      "height": 768,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLeQ8B22rILxj-LjEykztZC-M3cO_4infDwvyo64ghBffFDW4xts5XFLibZp9EjuxyJYRqJyi0n2TwZMlRYeKOwY9Ina32n_LZ2-V2As4e5PTSaqgAOaOYDsWOncVEGr69pwPxzjNQ",
+  "logoUrl": "https://lh5.googleusercontent.com/-ttBaikl6KZA/AAAAAAAAAAI/AAAAAAAAAAA/4697U7iUg-k/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "Bar Alaska (propietario)",
+    "googleId": "114282660144949302381"
+  },
+  "location": {
+    "lat": 42.0117435,
+    "lng": -4.5337235
+  },
+  "latitude": 42.0117435,
+  "longitude": -4.5337235,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "9:00–2:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "9:00–2:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 2:00",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979742835",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 8,
+  "position": 8,
+  "title": "La Mejillonera",
+  "categoryName": "Bar",
+  "type": "Bar",
+  "categories": [
+    "Bar",
+    "Restaurante de cocina española"
+  ],
+  "types": [
+    "Bar",
+    "Restaurante de cocina española"
+  ],
+  "address": "C. los Soldados, 7, 34001 Palencia",
+  "neighborhood": null,
+  "street": "C. los Soldados, 7",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.5,
+  "rating": 4.5,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 74 47 68",
+  "phoneNumber": "+34 979 74 47 68",
+  "website": null,
+  "domain": null,
+  "placeId": "ChIJyb7ka0awRw0RVHYqQbeonRY",
+  "dataId": "/g/1tfhhqlw",
+  "cid": "1629644145203770964",
+  "cidHex": "0xd47b0466be4bec9:0x169da8b7412a7654",
+  "fid": "0xd47b0466be4bec9:0x169da8b7412a7654",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJyb7ka0awRw0RVHYqQbeonRY",
+  "url": "https://www.google.com/maps/search/?api=1&query=La%20Mejillonera&query_place_id=ChIJyb7ka0awRw0RVHYqQbeonRY",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdA1eWLUC0xdveubeL6fJng9EF7YJLpZ0MWGAAYaBy_IkH9QtA1Wd-LKgUv85pfLIoJsTszeCTkGFHAvmvQsSSxuQse9pUvC-GSRVoP-VbSzqU0bOleWuoUhRzlA9Htem7gPng",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLdA1eWLUC0xdveubeL6fJng9EF7YJLpZ0MWGAAYaBy_IkH9QtA1Wd-LKgUv85pfLIoJsTszeCTkGFHAvmvQsSSxuQse9pUvC-GSRVoP-VbSzqU0bOleWuoUhRzlA9Htem7gPng"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdA1eWLUC0xdveubeL6fJng9EF7YJLpZ0MWGAAYaBy_IkH9QtA1Wd-LKgUv85pfLIoJsTszeCTkGFHAvmvQsSSxuQse9pUvC-GSRVoP-VbSzqU0bOleWuoUhRzlA9Htem7gPng",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdA1eWLUC0xdveubeL6fJng9EF7YJLpZ0MWGAAYaBy_IkH9QtA1Wd-LKgUv85pfLIoJsTszeCTkGFHAvmvQsSSxuQse9pUvC-GSRVoP-VbSzqU0bOleWuoUhRzlA9Htem7gPng=w172-h86-k-no",
+      "imageId": "CIHM0ogKEICAgICEo5WdNw",
+      "title": null,
+      "type": "Foto",
+      "width": 3264,
+      "height": 1632,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLdA1eWLUC0xdveubeL6fJng9EF7YJLpZ0MWGAAYaBy_IkH9QtA1Wd-LKgUv85pfLIoJsTszeCTkGFHAvmvQsSSxuQse9pUvC-GSRVoP-VbSzqU0bOleWuoUhRzlA9Htem7gPng",
+  "logoUrl": null,
+  "owner": {
+    "name": "La Mejillonera (propietario)",
+    "googleId": "101575054606196743413"
+  },
+  "location": {
+    "lat": 42.0127427,
+    "lng": -4.5330224
+  },
+  "latitude": 42.0127427,
+  "longitude": -4.5330224,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "11:30–16:00, 19:30–24:00"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "11:30–16:00",
+        "19:30–24:00"
+      ]
+    }
+  ],
+  "openingHoursState": "Cerrado · Apertura: 19:30",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979744768",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 9,
+  "position": 9,
+  "title": "DIECINUEVE",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "types": [
+    "Restaurante",
+    "Bar restaurante"
+  ],
+  "address": "C. Mayor Principal, 80, 34001 Palencia",
+  "neighborhood": null,
+  "street": "C. Mayor Principal, 80",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4.6,
+  "rating": 4.6,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 979 70 10 22",
+  "phoneNumber": "+34 979 70 10 22",
+  "website": "https://www.muchodiecinueve.com/",
+  "domain": "www.muchodiecinueve.com",
+  "placeId": "ChIJg79yMESxRw0RypSCPtTvNPQ",
+  "dataId": "/g/11w9kzvv6s",
+  "cid": "17596953338904220874",
+  "cidHex": "0xd47b1443072bf83:0xf434efd43e8294ca",
+  "fid": "0xd47b1443072bf83:0xf434efd43e8294ca",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJg79yMESxRw0RypSCPtTvNPQ",
+  "url": "https://www.google.com/maps/search/?api=1&query=DIECINUEVE&query_place_id=ChIJg79yMESxRw0RypSCPtTvNPQ",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcQh8TgkOTXJ2zpk28KRQfGgPMUBHGdIQ3hC6-XGNRgi7dsIBRb_-_76b783qyRjfajZRCDP6nTZGklmuXW97Xuvr4xdi-rruLm3Oujzay_1hnux8f5bvqmXhErtsQXDRRfHKotvqkOynrB",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLcQh8TgkOTXJ2zpk28KRQfGgPMUBHGdIQ3hC6-XGNRgi7dsIBRb_-_76b783qyRjfajZRCDP6nTZGklmuXW97Xuvr4xdi-rruLm3Oujzay_1hnux8f5bvqmXhErtsQXDRRfHKotvqkOynrB"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcQh8TgkOTXJ2zpk28KRQfGgPMUBHGdIQ3hC6-XGNRgi7dsIBRb_-_76b783qyRjfajZRCDP6nTZGklmuXW97Xuvr4xdi-rruLm3Oujzay_1hnux8f5bvqmXhErtsQXDRRfHKotvqkOynrB",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcQh8TgkOTXJ2zpk28KRQfGgPMUBHGdIQ3hC6-XGNRgi7dsIBRb_-_76b783qyRjfajZRCDP6nTZGklmuXW97Xuvr4xdi-rruLm3Oujzay_1hnux8f5bvqmXhErtsQXDRRfHKotvqkOynrB=w86-h114-k-no",
+      "imageId": "CIABIhCX_A45dJFBXkMR7D82N_K0",
+      "title": null,
+      "type": "Foto",
+      "width": 2912,
+      "height": 3883,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLcQh8TgkOTXJ2zpk28KRQfGgPMUBHGdIQ3hC6-XGNRgi7dsIBRb_-_76b783qyRjfajZRCDP6nTZGklmuXW97Xuvr4xdi-rruLm3Oujzay_1hnux8f5bvqmXhErtsQXDRRfHKotvqkOynrB",
+  "logoUrl": "https://lh3.googleusercontent.com/-Te-Zmalsbs0/AAAAAAAAAAI/AAAAAAAAAAA/YOKMu_Y-psA/s80-p-k-no-ns-nd/photo.jpg",
+  "owner": {
+    "name": "DIECINUEVE (propietario)",
+    "googleId": "112425030583097451596"
+  },
+  "location": {
+    "lat": 42.0091573,
+    "lng": -4.5328523
+  },
+  "latitude": 42.0091573,
+  "longitude": -4.5328523,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "13:00–0:30"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "13:00–0:30"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 0:30",
+  "serviceHours": null,
+  "bookingLinks": [
+    "https://www.google.com/maps/reserve/v/dine/c/be7gOpugQEs?source=pa&opi=79508299"
+  ],
+  "reservations": [
+    {
+      "action": "reserve",
+      "provider": "google.com",
+      "url": "https://www.google.com/maps/reserve/v/dine/c/be7gOpugQEs?source=pa&opi=79508299"
+    }
+  ],
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Acceso para sillas de ruedas": true,
+      "Aseo adaptado para sillas de ruedas": true,
+      "Asientos adaptados sillas de ruedas": true,
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34979701022",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+},
+{
+  "query": "Bar Plaza Mayor Palencia",
+  "searchString": "Bar Plaza Mayor Palencia",
+  "rank": 10,
+  "position": 10,
+  "title": "La Cuchillería",
+  "categoryName": "Restaurante",
+  "type": "Restaurante",
+  "categories": [
+    "Restaurante"
+  ],
+  "types": [
+    "Restaurante"
+  ],
+  "address": "Pl. Mayor, 15, 34001 Palencia",
+  "neighborhood": null,
+  "street": "Pl. Mayor, 15",
+  "streetNumber": null,
+  "city": "Palencia",
+  "postalCode": "34001",
+  "state": "Palencia",
+  "countryCode": "ES",
+  "locatedIn": null,
+  "timezone": "Europe/Madrid",
+  "totalScore": 4,
+  "rating": 4,
+  "reviewsCount": null,
+  "ratingCount": null,
+  "reviewsDistribution": null,
+  "priceLevel": null,
+  "phone": "+34 673 03 22 75",
+  "phoneNumber": "+34 673 03 22 75",
+  "website": "https://lacuchilleriapalencia.com/",
+  "domain": "lacuchilleriapalencia.com",
+  "placeId": "ChIJCVZbNACxRw0RxW5Jjg55UH8",
+  "dataId": "/g/11w8p44my8",
+  "cid": "9173965544377380549",
+  "cidHex": "0xd47b100345b5609:0x7f50790e8e496ec5",
+  "fid": "0xd47b100345b5609:0x7f50790e8e496ec5",
+  "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJCVZbNACxRw0RxW5Jjg55UH8",
+  "url": "https://www.google.com/maps/search/?api=1&query=La%20Cuchiller%C3%ADa&query_place_id=ChIJCVZbNACxRw0RxW5Jjg55UH8",
+  "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc5_3t2TSrGgmBw_mtCm58lC36Pc3n-FsxLsa_roJFBR4OYvrYThCw5bfFJzq6iuNQM6-9OstNgnHgdLpMMGB_xZmIW56k2d4CxYzv_QZUVzVfTD4a3-vwzz9gK2kW3i6k0TkFuW8BXAZ_l",
+  "imageUrls": [
+    "https://lh3.googleusercontent.com/grass-cs/AABkmLc5_3t2TSrGgmBw_mtCm58lC36Pc3n-FsxLsa_roJFBR4OYvrYThCw5bfFJzq6iuNQM6-9OstNgnHgdLpMMGB_xZmIW56k2d4CxYzv_QZUVzVfTD4a3-vwzz9gK2kW3i6k0TkFuW8BXAZ_l"
+  ],
+  "images": [
+    {
+      "imageUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc5_3t2TSrGgmBw_mtCm58lC36Pc3n-FsxLsa_roJFBR4OYvrYThCw5bfFJzq6iuNQM6-9OstNgnHgdLpMMGB_xZmIW56k2d4CxYzv_QZUVzVfTD4a3-vwzz9gK2kW3i6k0TkFuW8BXAZ_l",
+      "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc5_3t2TSrGgmBw_mtCm58lC36Pc3n-FsxLsa_roJFBR4OYvrYThCw5bfFJzq6iuNQM6-9OstNgnHgdLpMMGB_xZmIW56k2d4CxYzv_QZUVzVfTD4a3-vwzz9gK2kW3i6k0TkFuW8BXAZ_l=w114-h86-k-no",
+      "imageId": "CIABIhDL0YNNu0pP7hRbCL1UGlHv",
+      "title": null,
+      "type": "Foto",
+      "width": 4032,
+      "height": 3024,
+      "capturedAt": null
+    }
+  ],
+  "thumbnailUrl": "https://lh3.googleusercontent.com/grass-cs/AABkmLc5_3t2TSrGgmBw_mtCm58lC36Pc3n-FsxLsa_roJFBR4OYvrYThCw5bfFJzq6iuNQM6-9OstNgnHgdLpMMGB_xZmIW56k2d4CxYzv_QZUVzVfTD4a3-vwzz9gK2kW3i6k0TkFuW8BXAZ_l",
+  "logoUrl": null,
+  "owner": {
+    "name": "La Cuchillería (propietario)",
+    "googleId": "109196974770702227522"
+  },
+  "location": {
+    "lat": 42.0107472,
+    "lng": -4.5324184
+  },
+  "latitude": 42.0107472,
+  "longitude": -4.5324184,
+  "plusCode": null,
+  "temporarilyClosed": null,
+  "permanentlyClosed": null,
+  "openingHours": {
+    "sábado": "11:00–23:30"
+  },
+  "openingHoursDetailed": [
+    {
+      "day": "sábado",
+      "hours": [
+        "11:00–23:30"
+      ]
+    }
+  ],
+  "openingHoursState": "Abierto · Cierre: 23:30",
+  "serviceHours": null,
+  "bookingLinks": null,
+  "reservations": null,
+  "orderLinks": null,
+  "orderOptions": null,
+  "menuLinks": null,
+  "menu": null,
+  "popularTimes": null,
+  "popularTimesHistogram": null,
+  "popularTimesLiveText": null,
+  "popularTimesLivePercent": null,
+  "about": null,
+  "description": null,
+  "amenities": {
+    "Accesibilidad": {
+      "Aparcamiento adaptado para sillas de ruedas": true
+    }
+  },
+  "relatedPlaces": null,
+  "searchGridIndex": null,
+  "searchCenter": null,
+  "phoneUnformatted": "+34673032275",
+  "free_usage": {
+    "count": 21,
+    "limit": 100
+  }
+}]
