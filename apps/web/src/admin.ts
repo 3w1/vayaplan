@@ -1737,6 +1737,7 @@ export function renderAdminHtml(): string {
       border-radius: 8px;
       padding: 0.65rem 0.85rem;
       line-height: 1.4;
+      margin-top: 0.5rem;
     }
 
     /* Resumen de jornada editorial */
@@ -2576,12 +2577,13 @@ export function renderAdminHtml(): string {
             </div>
 
             <div class="venue-search-wrap">
-              <label for="ev-venue-search" style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Buscar local del censo *</label>
+              <label for="ev-venue-search" style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Local</label>
               <div style="position:relative;">
                 <input type="text" id="ev-venue-search" class="event-input" placeholder="Escribe el nombre o calle del establecimiento..." autocomplete="off" oninput="onEventVenueSearchInput(this.value)" onfocus="onEventVenueSearchFocus()">
                 <input type="hidden" id="ev-venue-id">
                 <div id="ev-venue-dropdown" class="venue-search-results" style="display:none;" role="listbox"></div>
               </div>
+              <div id="ev-venue-field-error" style="display:none; color:#dc2626; font-size:0.75rem; font-weight:600; margin-top:0.35rem;"></div>
             </div>
 
             <!-- Ficha de local seleccionado -->
@@ -2593,12 +2595,15 @@ export function renderAdminHtml(): string {
                   <div id="ev-venue-selected-meta" style="font-size:0.75rem; color:var(--text-muted);"></div>
                 </div>
               </div>
-              <button type="button" class="btn-sm btn-secondary" onclick="clearSelectedVenue()">Cambiar local</button>
+              <div style="display:flex; gap:0.4rem; align-items:center;">
+                <button type="button" class="btn-sm btn-secondary" onclick="clearSelectedVenue()">Cambiar</button>
+                <button type="button" class="btn-sm btn-link" style="color:var(--text-muted); background:none; border:none; cursor:pointer; font-size:0.8125rem; padding:0.25rem 0.5rem;" onclick="clearSelectedVenue()">Quitar</button>
+              </div>
             </div>
 
-            <!-- Aviso cuando no hay local asignado -->
+            <!-- Ayuda breve de asignación de local -->
             <div id="ev-venue-unassigned-notice" class="venue-unassigned-notice" style="display:block;">
-              ℹ️ <strong>Sin local asignado.</strong> <em>Se permite guardar como borrador; para publicar es obligatorio seleccionar un local del censo.</em>
+              Obligatorio para publicar; opcional en borradores.
             </div>
           </section>
 
@@ -4411,6 +4416,13 @@ export function renderAdminHtml(): string {
         errBox.innerHTML = '';
         errBox.style.display = 'none';
       }
+      const venueErr = document.getElementById('ev-venue-field-error');
+      if (venueErr) {
+        venueErr.innerText = '';
+        venueErr.style.display = 'none';
+      }
+      const venueInput = document.getElementById('ev-venue-search');
+      if (venueInput) venueInput.style.borderColor = '';
     }
 
     // Cálculo y resumen de jornada editorial (Europe/Madrid)
@@ -4550,6 +4562,14 @@ export function renderAdminHtml(): string {
 
     // Selector y búsqueda de local para el evento
     window.onEventVenueSearchInput = function(val) {
+      const venueErr = document.getElementById('ev-venue-field-error');
+      if (venueErr) {
+        venueErr.innerText = '';
+        venueErr.style.display = 'none';
+      }
+      const venueInput = document.getElementById('ev-venue-search');
+      if (venueInput) venueInput.style.borderColor = '';
+
       const query = normalizeSearchText(val || '');
       const dropdown = document.getElementById('ev-venue-dropdown');
       if (!dropdown) return;
@@ -5142,7 +5162,15 @@ export function renderAdminHtml(): string {
 
       // Verificación de local: obligatorio para publicar
       if (targetStatus === 'published' && (!venueId || venueId === 9999)) {
-        showFormError('Para publicar el evento es obligatorio seleccionar un local del censo. Si aún no tienes local, guárdalo como borrador.', 'ev-venue-search');
+        const venueErrMsg = 'Para publicar el evento es obligatorio seleccionar un local del censo. Si aún no tienes local, guárdalo como borrador.';
+        showFormError(venueErrMsg, 'ev-venue-search');
+        const venueErr = document.getElementById('ev-venue-field-error');
+        if (venueErr) {
+          venueErr.innerText = venueErrMsg;
+          venueErr.style.display = 'block';
+        }
+        const venueInput = document.getElementById('ev-venue-search');
+        if (venueInput) venueInput.style.borderColor = '#dc2626';
         return;
       }
 
@@ -5260,7 +5288,15 @@ export function renderAdminHtml(): string {
       // Si se pasa a published, verificar que tenga local asignado
       const venueId = document.getElementById('ev-venue-id').value;
       if (newStatus === 'published' && (!venueId || Number(venueId) === 9999)) {
-        showFormError('Para publicar el evento es obligatorio asignar un local del censo.', 'ev-venue-search');
+        const venueErrMsg = 'Para publicar el evento es obligatorio asignar un local del censo.';
+        showFormError(venueErrMsg, 'ev-venue-search');
+        const venueErr = document.getElementById('ev-venue-field-error');
+        if (venueErr) {
+          venueErr.innerText = venueErrMsg;
+          venueErr.style.display = 'block';
+        }
+        const venueInput = document.getElementById('ev-venue-search');
+        if (venueInput) venueInput.style.borderColor = '#dc2626';
         return;
       }
 
