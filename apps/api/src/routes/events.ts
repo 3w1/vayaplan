@@ -14,6 +14,7 @@ import type {
   PublicEventItem,
   RecurrenceItem,
 } from '@vayaplan/types';
+import { hasImageVariantsColumns } from '../services/image-storage';
 
 export const eventsRoutes = new Hono();
 
@@ -72,6 +73,11 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
   }
 
   // 3. Consultar eventos publicados para la ciudad y fecha
+  const hasVariants = await hasImageVariantsColumns();
+  const variantsEventCols = hasVariants
+    ? 'e.image_thumb_url,'
+    : 'NULL::text AS image_thumb_url,';
+
   const eventQueryParams: any[] = [city.id, targetDate];
   let eventsSql = `
     SELECT 
@@ -84,6 +90,7 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       e.price_cents,
       e.is_free,
       e.image_url,
+      ${variantsEventCols}
       e.source_type,
       e.source_url,
       e.status,
@@ -155,6 +162,7 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
         google_maps_url: mapsUrl,
       },
       image_url: row.image_url,
+      image_thumb_url: row.image_thumb_url || row.image_url,
       actions: {
         maps_url: mapsUrl,
         booking_url: null,

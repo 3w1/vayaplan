@@ -1,3 +1,5 @@
+import * as path from 'path';
+import * as fs from 'fs';
 import { Hono } from 'hono';
 import { requireAdminAuth } from '../../middleware/auth';
 import {
@@ -5,6 +7,9 @@ import {
   validateImageMagicBytes,
   saveImageUpload,
   cleanupOrphanUploads,
+  getPrivateUploadsDir,
+  TransformQueueFullError,
+  TransformQueueTimeoutError,
 } from '../../services/image-storage';
 import type { AdminUser } from '@vayaplan/types';
 
@@ -65,15 +70,38 @@ adminUploadsRoutes.post('/uploads', async (c) => {
       key: saved.key,
       filename: saved.filename,
       url: saved.url,
+      thumb_url: saved.thumb_url,
+      original_url: saved.original_url,
       size_bytes: saved.size,
-      mime_type: detected.mime,
+      mime_type: saved.mimeType,
       provider: saved.provider,
+      variants: saved.variants,
     }, 201);
   } catch (err: any) {
+    if (err instanceof TransformQueueFullError || err.code === 'queue_full') {
+      return c.json({
+        error: 'queue_full',
+        message: err.message,
+      }, 503);
+    }
+    if (err instanceof TransformQueueTimeoutError || err.code === 'queue_timeout') {
+      return c.json({
+        error: 'queue_timeout',
+        message: err.message,
+      }, 504);
+    }
+
     const isConfigError = err.message?.includes('no configurado') || err.message?.includes('R2_');
-    const statusCode = isConfigError ? 503 : 500;
+    const isValidationError =
+      err.message?.includes('dañado') ||
+      err.message?.includes('animadas') ||
+      err.message?.includes('dimensiones máximas') ||
+      err.message?.includes('no es una imagen válida') ||
+      err.message?.includes('determinar las dimensiones');
+    const statusCode = isValidationError ? 400 : (isConfigError ? 503 : 500);
+    const errorCode = isValidationError ? 'invalid_image' : (isConfigError ? 'storage_unconfigured' : 'storage_error');
     return c.json({
-      error: 'storage_error',
+      error: errorCode,
       message: err.message || 'Error al procesar o almacenar la imagen en Cloudflare R2.',
     }, statusCode as any);
   }
@@ -94,4 +122,38 @@ adminUploadsRoutes.post('/uploads/cleanup', async (c) => {
     status: 'ok',
     ...result,
   }, 200);
+});
+
+/**
+ * GET /api/v1/admin/uploads/originals/:filename
+ * Recupera el archivo original con metadatos de forma estrictamente autenticada
+ */
+adminUploadsRoutes.get('/uploads/originals/:filename', async (c) => {
+  const filename = c.req.param('filename');
+  if (!filename || !/^[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/i.test(filename)) {
+    return c.json({ error: 'invalid_filename', message: 'Nombre de archivo no válido.' }, 400);
+  }
+
+  const privateDir = getPrivateUploadsDir();
+  const filePath = path.resolve(privateDir, filename);
+
+  if (!filePath.startsWith(privateDir) || !fs.existsSync(filePath)) {
+    return c.json({ error: 'not_found', message: 'Archivo original no encontrado.' }, 404);
+  }
+
+  const ext = path.extname(filename).toLowerCase();
+  let contentType = 'application/octet-stream';
+  if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+  else if (ext === '.png') contentType = 'image/png';
+  else if (ext === '.webp') contentType = 'image/webp';
+
+  const fileBuffer = await fs.promises.readFile(filePath);
+
+  return new Response(fileBuffer, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 });

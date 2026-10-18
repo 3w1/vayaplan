@@ -10,6 +10,7 @@ import {
   getCurrentDateInTimezone,
 } from '@vayaplan/shared';
 import type { AdminEventItem, AdminUser, EventCategory, EventSourceType, EventStatus } from '@vayaplan/types';
+import { hasImageVariantsColumns } from '../../services/image-storage';
 
 export const adminEventsRoutes = new Hono<{
   Variables: {
@@ -128,6 +129,8 @@ adminEventsRoutes.get('/events', async (c) => {
     price_cents: Number(row.price_cents),
     is_free: Boolean(row.is_free),
     image_url: row.image_url,
+    image_thumb_url: row.image_thumb_url || row.image_url,
+    image_original_url: row.image_original_url || row.image_url,
     source_type: row.source_type,
     source_url: row.source_url,
     source_hash: row.source_hash,
@@ -216,6 +219,8 @@ adminEventsRoutes.get('/events/:id', async (c) => {
     price_cents: Number(row.price_cents),
     is_free: Boolean(row.is_free),
     image_url: row.image_url,
+    image_thumb_url: row.image_thumb_url || row.image_url,
+    image_original_url: row.image_original_url || row.image_url,
     source_type: row.source_type,
     source_url: row.source_url,
     source_hash: row.source_hash,
@@ -261,6 +266,8 @@ adminEventsRoutes.post('/events', async (c) => {
   const isFree = body.is_free !== undefined ? Boolean(body.is_free) : priceCents === 0;
   const description = body.description?.trim() || null;
   const imageUrl = body.image_url?.trim() || null;
+  const imageThumbUrl = body.image_thumb_url?.trim() || null;
+  const imageOriginalUrl = body.image_original_url?.trim() || null;
   const sourceType = (body.source_type as EventSourceType) || 'manual';
   const sourceUrl = body.source_url?.trim() || null;
   const status = (body.status as EventStatus) || 'published';
@@ -285,23 +292,22 @@ adminEventsRoutes.post('/events', async (c) => {
   // Generar dedupe_key básico
   const dedupeKey = `palencia-${venueId}-${editorialDate}-${title.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30)}`;
 
-  const insertSql = `
-    INSERT INTO events (
-      city_id, venue_id, title, description, category,
-      start_time, end_time, editorial_date, price_cents, is_free,
-      image_url, source_type, source_url, dedupe_key,
-      status, verified_at, verified_by, created_at, updated_at
-    )
-    VALUES (
-      $1, $2, $3, $4, $5,
-      $6, $7, $8, $9, $10,
-      $11, $12, $13, $14,
-      $15, now(), $16, now(), now()
-    )
-    RETURNING id;
-  `;
+  const hasVariants = await hasImageVariantsColumns();
+  const insertCols = hasVariants
+    ? `city_id, venue_id, title, description, category,
+       start_time, end_time, editorial_date, price_cents, is_free,
+       image_url, image_thumb_url, image_original_url, source_type, source_url, dedupe_key,
+       status, verified_at, verified_by, created_at, updated_at`
+    : `city_id, venue_id, title, description, category,
+       start_time, end_time, editorial_date, price_cents, is_free,
+       image_url, source_type, source_url, dedupe_key,
+       status, verified_at, verified_by, created_at, updated_at`;
 
-  const result = await query(insertSql, [
+  const insertVals = hasVariants
+    ? `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now(), $18, now(), now()`
+    : `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), $16, now(), now()`;
+
+  const insertParams: any[] = [
     cityId,
     venueId,
     title,
@@ -313,12 +319,21 @@ adminEventsRoutes.post('/events', async (c) => {
     priceCents,
     isFree,
     imageUrl,
-    sourceType,
-    sourceUrl,
-    dedupeKey,
-    status,
-    admin?.email || 'Curador',
-  ]);
+  ];
+
+  if (hasVariants) {
+    insertParams.push(imageThumbUrl, imageOriginalUrl);
+  }
+
+  insertParams.push(sourceType, sourceUrl, dedupeKey, status, admin?.email || 'Curador');
+
+  const insertSql = `
+    INSERT INTO events (${insertCols})
+    VALUES (${insertVals})
+    RETURNING id;
+  `;
+
+  const result = await query(insertSql, insertParams);
 
   return c.json({ status: 'ok', event_id: Number(result.rows[0].id) }, 201);
 });
@@ -347,24 +362,25 @@ adminEventsRoutes.post('/events/draft', async (c) => {
   const sourceUrl = body.source_url?.trim() || null;
   const description = body.description?.trim() || null;
   const imageUrl = body.image_url?.trim() || null;
+  const imageThumbUrl = body.image_thumb_url?.trim() || null;
+  const imageOriginalUrl = body.image_original_url?.trim() || null;
 
-  const insertSql = `
-    INSERT INTO events (
-      city_id, venue_id, title, description, category,
-      start_time, editorial_date, price_cents, is_free,
-      image_url, source_type, source_url,
-      status, created_at, updated_at
-    )
-    VALUES (
-      $1, $2, $3, $4, $5,
-      $6, $7, $8, $9,
-      $10, $11, $12,
-      'tentative', now(), now()
-    )
-    RETURNING id;
-  `;
+  const hasVariants = await hasImageVariantsColumns();
+  const insertCols = hasVariants
+    ? `city_id, venue_id, title, description, category,
+       start_time, editorial_date, price_cents, is_free,
+       image_url, image_thumb_url, image_original_url, source_type, source_url,
+       status, created_at, updated_at`
+    : `city_id, venue_id, title, description, category,
+       start_time, editorial_date, price_cents, is_free,
+       image_url, source_type, source_url,
+       status, created_at, updated_at`;
 
-  const result = await query(insertSql, [
+  const insertVals = hasVariants
+    ? `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'tentative', now(), now()`
+    : `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'tentative', now(), now()`;
+
+  const insertParams: any[] = [
     cityId,
     venueId,
     title,
@@ -375,9 +391,21 @@ adminEventsRoutes.post('/events/draft', async (c) => {
     priceCents,
     isFree,
     imageUrl,
-    sourceType,
-    sourceUrl,
-  ]);
+  ];
+
+  if (hasVariants) {
+    insertParams.push(imageThumbUrl, imageOriginalUrl);
+  }
+
+  insertParams.push(sourceType, sourceUrl);
+
+  const insertSql = `
+    INSERT INTO events (${insertCols})
+    VALUES (${insertVals})
+    RETURNING id;
+  `;
+
+  const result = await query(insertSql, insertParams);
 
   return c.json({ status: 'ok', event_id: Number(result.rows[0].id), event_status: 'tentative' }, 201);
 });
@@ -416,11 +444,15 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
     }, 400);
   }
 
+  const hasVariants = await hasImageVariantsColumns();
   const allowedFields = [
     'title', 'description', 'category', 'venue_id', 'start_time',
     'end_time', 'editorial_date', 'price_cents', 'is_free', 'image_url',
     'source_type', 'source_url', 'status'
   ];
+  if (hasVariants) {
+    allowedFields.push('image_thumb_url', 'image_original_url');
+  }
 
   const updates: string[] = [];
   const values: any[] = [];

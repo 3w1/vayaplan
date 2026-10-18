@@ -880,9 +880,9 @@ app.get('/', (c) => {
       width: 76px;
       height: 76px;
       border-radius: var(--radius-sm);
-      object-fit: cover;
+      object-fit: contain;
       flex-shrink: 0;
-      background-color: var(--color-bg-subtle);
+      background-color: var(--color-night);
     }
 
     .card-thumb-fallback {
@@ -1083,15 +1083,219 @@ app.get('/', (c) => {
     .modal-hero-cover {
       position: relative;
       width: 100%;
-      height: clamp(160px, 26vh, 230px);
+      height: clamp(170px, 28vh, 250px);
       background-color: var(--color-night);
       overflow: hidden;
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .modal-hero-cover:focus-visible {
+      outline: 2px solid var(--color-primary-light);
+      outline-offset: -2px;
+    }
+    .modal-hero-backdrop {
+      position: absolute;
+      top: -20px;
+      left: -20px;
+      right: -20px;
+      bottom: -20px;
+      width: calc(100% + 40px);
+      height: calc(100% + 40px);
+      object-fit: cover;
+      filter: blur(12px) brightness(0.4);
+      opacity: 0.75;
+      pointer-events: none;
     }
     .modal-hero-img {
+      position: relative;
+      z-index: 2;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: 100%;
+      object-fit: contain;
+    }
+    .modal-hero-zoom-badge {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 3;
+      background: rgba(11, 15, 59, 0.82);
+      color: #FFFFFF;
+      padding: 0.35rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      pointer-events: none;
+      transition: background 0.15s ease;
+    }
+    .modal-hero-cover:hover .modal-hero-zoom-badge,
+    .modal-hero-cover:focus-visible .modal-hero-zoom-badge {
+      background: rgba(108, 59, 255, 0.95);
+    }
+
+    .btn-poster-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.65rem 1rem;
+      margin-top: 0.4rem;
+      margin-bottom: 0.85rem;
+      background: #F5F3FF;
+      border: 1px solid rgba(108, 59, 255, 0.25);
+      color: var(--color-primary);
+      border-radius: var(--radius-sm);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-poster-action:hover {
+      background: #EDE9FE;
+      border-color: var(--color-primary);
+    }
+    .btn-poster-action:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    /* Lightbox / Visor de Cartel Completo Accesible */
+    .poster-lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(11, 15, 59, 0.95);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .poster-lightbox-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+    .poster-lightbox-container {
+      position: relative;
+      z-index: 2;
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      max-width: 100vw;
+      max-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+    .poster-lightbox-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      background: rgba(11, 15, 59, 0.9);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      color: #FFFFFF;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+    .poster-lightbox-title {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 60vw;
+    }
+    .poster-lightbox-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      flex-shrink: 0;
+    }
+    .lightbox-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.1);
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+    }
+    .lightbox-btn:hover {
+      background: rgba(255, 255, 255, 0.22);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+    .lightbox-btn:focus-visible {
+      outline: 2px solid #9D7BFF;
+      outline-offset: 2px;
+    }
+    .lightbox-close-btn {
+      background: rgba(239, 68, 68, 0.28);
+      border-color: rgba(239, 68, 68, 0.45);
+      margin-left: 0.35rem;
+    }
+    .lightbox-close-btn:hover {
+      background: rgba(239, 68, 68, 0.55);
+    }
+    .poster-lightbox-viewport {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem;
+      cursor: zoom-in;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: pan-x pan-y pinch-zoom;
+    }
+    .poster-lightbox-viewport.is-zoomed {
+      cursor: grab;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+    .poster-lightbox-viewport.is-dragging {
+      cursor: grabbing;
+    }
+    .poster-lightbox-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+      transform-origin: center center;
+      border-radius: 4px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    .poster-lightbox-footer {
+      padding: 0.5rem 1rem;
+      text-align: center;
+      background: rgba(11, 15, 59, 0.9);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 0.75rem;
+      z-index: 10;
+      flex-shrink: 0;
     }
 
     .modal-sticky-header {
@@ -1406,6 +1610,36 @@ app.get('/', (c) => {
     </div>
   </div>
 
+  <!-- Visor de Cartel Completo / Lightbox Accesible -->
+  <div id="poster-lightbox" class="poster-lightbox" role="dialog" aria-modal="true" aria-label="Visor de cartel completo" style="display:none;">
+    <div class="poster-lightbox-backdrop" data-action="close-lightbox" tabindex="-1"></div>
+    <div class="poster-lightbox-container">
+      <div class="poster-lightbox-header">
+        <span id="poster-lightbox-title" class="poster-lightbox-title">Cartel completo</span>
+        <div class="poster-lightbox-controls">
+          <button type="button" class="lightbox-btn" data-action="lightbox-zoom-out" aria-label="Alejar cartel">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 13H5v-2h14v2z"/></svg>
+          </button>
+          <button type="button" class="lightbox-btn" data-action="lightbox-zoom-reset" aria-label="Restablecer tamaño">
+            <span id="poster-lightbox-zoom-label" style="font-size:0.75rem;font-weight:700;">100%</span>
+          </button>
+          <button type="button" class="lightbox-btn" data-action="lightbox-zoom-in" aria-label="Acercar cartel">
+            <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          </button>
+          <button type="button" class="lightbox-btn lightbox-close-btn" data-action="close-lightbox" aria-label="Cerrar visor de cartel">
+            <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="poster-lightbox-viewport" id="poster-lightbox-viewport" tabindex="0" role="region" aria-label="Lienzo de imagen ampliable">
+        <img id="poster-lightbox-img" class="poster-lightbox-img" src="" alt="Cartel completo del evento">
+      </div>
+      <div class="poster-lightbox-footer">
+        <small>💡 Pulsa sobre la imagen para alternar zoom (100% / 200%). Puedes arrastrar para desplazarte. Pulsa Esc para cerrar.</small>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     // ==============================================================================
     // Estado y variables globales
@@ -1708,7 +1942,7 @@ app.get('/', (c) => {
                 <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="Evento destacado: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}, \${escapeHtml(dt)}">
                   <div class="hero-media-box">
                     \${hasImage ? \`
-                      <img class="hero-img-backdrop" src="\${escapeHtml(ev.image_url)}" alt="" loading="eager" aria-hidden="true">
+                      <img class="hero-img-backdrop" src="\${escapeHtml(ev.image_thumb_url || ev.image_url)}" alt="" loading="eager" aria-hidden="true">
                       <img class="hero-img-contain" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" loading="eager" onerror="this.onerror=null;const card=this.closest('.promoted-hero-card');if(card){card.classList.add('no-image');}this.remove();">
                     \` : ''}
                     <div class="hero-top-badges">
@@ -2088,7 +2322,7 @@ app.get('/', (c) => {
         const isPromoted = Boolean(ev.promotion) && !isCancelled;
         html += \`
           <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
-            \${renderEventThumbnail(ev.image_url, ev.title)}
+            \${renderEventThumbnail(ev.image_thumb_url || ev.image_url, ev.title)}
             <div class="card-info">
               <div>
                 \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
@@ -2131,7 +2365,7 @@ app.get('/', (c) => {
       for (const place of places) {
         html += \`
           <button type="button" class="card-compact" data-action="open-place" data-id="\${place.id}" aria-label="Lugar permanente: \${escapeHtml(place.name)}">
-            \${renderEventThumbnail(place.image_url, place.name)}
+            \${renderEventThumbnail(place.image_thumb_url || place.image_url, place.name)}
             <div class="card-info">
               <div>
                 <span class="place-badge">★ Siempre disponible</span>
@@ -2216,7 +2450,7 @@ app.get('/', (c) => {
           const isPromoted = Boolean(ev.promotion) && !isCancelled;
           html += \`
             <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
-              \${renderEventThumbnail(ev.image_url, ev.title)}
+              \${renderEventThumbnail(ev.image_thumb_url || ev.image_url, ev.title)}
               <div class="card-info">
                 <div>
                   \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
@@ -2270,7 +2504,7 @@ app.get('/', (c) => {
         for (const p of currentData.places) {
           html += \`
             <button type="button" class="card-compact" data-action="open-place" data-id="\${p.id}" aria-label="Lugar permanente: \${escapeHtml(p.name)}">
-              \${renderEventThumbnail(p.image_url, p.name)}
+              \${renderEventThumbnail(p.image_thumb_url || p.image_url, p.name)}
               <div class="card-info">
                 <div>
                   <span class="place-badge">★ Siempre disponible</span>
@@ -2360,9 +2594,14 @@ app.get('/', (c) => {
             </button>
           </div>
 
-          <div class="modal-hero-cover">
+          <div class="modal-hero-cover" \${ev.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}" style="cursor:zoom-in;"\` : ''}>
             \${ev.image_url ? \`
-              <img class="modal-hero-img" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(true));">
+              <img class="modal-hero-backdrop" src="\${escapeHtml(ev.image_thumb_url || ev.image_url)}" alt="" aria-hidden="true">
+              <img class="modal-hero-img" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" onerror="this.onerror=null;this.closest('.modal-hero-cover').replaceWith(createSvgFallbackNode(true));">
+              <span class="modal-hero-zoom-badge" aria-hidden="true">
+                <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+                Ver cartel completo
+              </span>
             \` : \`
               <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
                 <svg style="width:64px;height:64px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
@@ -2389,6 +2628,13 @@ app.get('/', (c) => {
               <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
               <span><strong>\${escapeHtml(ev.venue.name)}</strong> \${ev.actions.maps_url ? \`<a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" style="color:var(--color-primary);margin-left:0.5rem;font-weight:700;" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">Ver mapa ↗</a>\` : ''}</span>
             </div>
+
+            \${ev.image_url ? \`
+              <button type="button" class="btn-poster-action" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}">
+                <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+                <span>Ver cartel completo</span>
+              </button>
+            \` : ''}
 
             <!-- Bloque de Acción Principal y Precio -->
             <div class="modal-action-box">
@@ -2465,9 +2711,14 @@ app.get('/', (c) => {
           </button>
         </div>
 
-        <div class="modal-hero-cover" style="aspect-ratio:16/9;">
+        <div class="modal-hero-cover" style="aspect-ratio:16/9;" \${place.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(place.image_url)}" data-poster-title="\${escapeHtml(place.name)}" aria-label="Ver imagen completa de \${escapeHtml(place.name)}" style="aspect-ratio:16/9;cursor:zoom-in;"\` : ''}>
           \${place.image_url ? \`
-            <img class="modal-hero-img" src="\${escapeHtml(place.image_url)}" alt="\${escapeHtml(place.name)}" onerror="this.onerror=null;this.replaceWith(createSvgFallbackNode(true));">
+            <img class="modal-hero-backdrop" src="\${escapeHtml(place.image_url)}" alt="" aria-hidden="true">
+            <img class="modal-hero-img" src="\${escapeHtml(place.image_url)}" alt="\${escapeHtml(place.name)}" onerror="this.onerror=null;this.closest('.modal-hero-cover').replaceWith(createSvgFallbackNode(true));">
+            <span class="modal-hero-zoom-badge" aria-hidden="true">
+              <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+              Ver imagen completa
+            </span>
           \` : \`
             <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
               <svg style="width:48px;height:48px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
@@ -2478,6 +2729,12 @@ app.get('/', (c) => {
         <div class="modal-body">
           <span class="place-badge" style="margin-bottom:0.75rem;">★ Siempre disponible</span>
           <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(place.name)}</h1>
+          \${place.image_url ? \`
+            <button type="button" class="btn-poster-action" data-action="open-full-poster" data-poster-url="\${escapeHtml(place.image_url)}" data-poster-title="\${escapeHtml(place.name)}" aria-label="Ver imagen completa de \${escapeHtml(place.name)}">
+              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+              <span>Ver imagen completa</span>
+            </button>
+          \` : ''}
           <p style="font-size:0.9375rem;color:var(--color-text-muted);margin-bottom:1rem;line-height:1.6;">\${escapeHtml(place.highlight_text)}</p>
           \${place.description ? \`<p style="font-size:0.875rem;color:var(--color-text-muted);margin-bottom:1.25rem;line-height:1.5;white-space:pre-line;">\${escapeHtml(place.description)}</p>\` : ''}
 
@@ -2563,6 +2820,95 @@ app.get('/', (c) => {
     window.closeModal = closeModal;
 
     // ==============================================================================
+    // Visor de Cartel Completo Accesible (Lightbox)
+    // ==============================================================================
+    let lightboxTriggerEl = null;
+    let lightboxCurrentZoom = 1;
+    const ZOOM_LEVELS = [1, 1.5, 2, 3];
+    let isDraggingLightbox = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let scrollStartX = 0;
+    let scrollStartY = 0;
+
+    function openPosterLightbox(url, title, triggerEl) {
+      if (!url) return;
+      lightboxTriggerEl = triggerEl || document.activeElement;
+      const lb = document.getElementById('poster-lightbox');
+      const img = document.getElementById('poster-lightbox-img');
+      const titleEl = document.getElementById('poster-lightbox-title');
+
+      if (titleEl) {
+        titleEl.textContent = title ? ('Cartel: ' + title) : 'Cartel completo';
+      }
+      if (img) {
+        img.src = url;
+        img.alt = title ? ('Cartel completo de ' + title) : 'Cartel completo';
+      }
+      setLightboxZoom(1);
+
+      if (lb) {
+        lb.style.display = 'flex';
+        const closeBtn = lb.querySelector('.lightbox-close-btn');
+        if (closeBtn && typeof closeBtn.focus === 'function') {
+          closeBtn.focus();
+        }
+      }
+    }
+    window.openPosterLightbox = openPosterLightbox;
+
+    function closePosterLightbox() {
+      const lb = document.getElementById('poster-lightbox');
+      if (!lb || lb.style.display === 'none') return;
+      lb.style.display = 'none';
+      const img = document.getElementById('poster-lightbox-img');
+      if (img) img.src = '';
+      setLightboxZoom(1);
+      if (lightboxTriggerEl && typeof lightboxTriggerEl.focus === 'function') {
+        lightboxTriggerEl.focus();
+        lightboxTriggerEl = null;
+      }
+    }
+    window.closePosterLightbox = closePosterLightbox;
+
+    function setLightboxZoom(scale) {
+      lightboxCurrentZoom = Math.max(1, Math.min(3, scale));
+      const img = document.getElementById('poster-lightbox-img');
+      const viewport = document.getElementById('poster-lightbox-viewport');
+      const label = document.getElementById('poster-lightbox-zoom-label');
+
+      if (label) {
+        label.textContent = Math.round(lightboxCurrentZoom * 100) + '%';
+      }
+
+      if (img) {
+        if (lightboxCurrentZoom > 1) {
+          img.style.transform = 'scale(' + lightboxCurrentZoom + ')';
+          viewport?.classList.add('is-zoomed');
+        } else {
+          img.style.transform = 'scale(1)';
+          viewport?.classList.remove('is-zoomed');
+          if (viewport) {
+            viewport.scrollLeft = 0;
+            viewport.scrollTop = 0;
+          }
+        }
+      }
+    }
+    window.setLightboxZoom = setLightboxZoom;
+
+    function stepLightboxZoom(delta) {
+      const curIdx = ZOOM_LEVELS.reduce((bestIdx, lvl, idx) => {
+        return Math.abs(lvl - lightboxCurrentZoom) < Math.abs(ZOOM_LEVELS[bestIdx] - lightboxCurrentZoom) ? idx : bestIdx;
+      }, 0);
+      let nextIdx = curIdx + delta;
+      if (nextIdx < 0) nextIdx = 0;
+      if (nextIdx >= ZOOM_LEVELS.length) nextIdx = ZOOM_LEVELS.length - 1;
+      setLightboxZoom(ZOOM_LEVELS[nextIdx]);
+    }
+    window.stepLightboxZoom = stepLightboxZoom;
+
+    // ==============================================================================
     // Controladores de interfaz y navegación
     // ==============================================================================
     function switchView(view) {
@@ -2639,6 +2985,16 @@ app.get('/', (c) => {
         openRecurrenceModal(Number(trigger.dataset.id));
       } else if (action === 'close-modal') {
         closeModal();
+      } else if (action === 'open-full-poster') {
+        openPosterLightbox(trigger.dataset.posterUrl, trigger.dataset.posterTitle, trigger);
+      } else if (action === 'close-lightbox') {
+        closePosterLightbox();
+      } else if (action === 'lightbox-zoom-in') {
+        stepLightboxZoom(1);
+      } else if (action === 'lightbox-zoom-out') {
+        stepLightboxZoom(-1);
+      } else if (action === 'lightbox-zoom-reset') {
+        setLightboxZoom(1);
       } else if (action === 'switch-view') {
         switchView(trigger.dataset.view);
       } else if (action === 'set-cat') {
@@ -2655,6 +3011,46 @@ app.get('/', (c) => {
         loadData();
       }
     });
+
+    // Configuración de interacción directa sobre el visor de cartel (zoom y arrastre)
+    const lightboxImg = document.getElementById('poster-lightbox-img');
+    if (lightboxImg) {
+      lightboxImg.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (lightboxCurrentZoom > 1) {
+          setLightboxZoom(1);
+        } else {
+          setLightboxZoom(2);
+        }
+      });
+    }
+
+    const lightboxViewport = document.getElementById('poster-lightbox-viewport');
+    if (lightboxViewport) {
+      lightboxViewport.addEventListener('mousedown', (e) => {
+        if (lightboxCurrentZoom <= 1) return;
+        isDraggingLightbox = true;
+        lightboxViewport.classList.add('is-dragging');
+        dragStartX = e.pageX;
+        dragStartY = e.pageY;
+        scrollStartX = lightboxViewport.scrollLeft;
+        scrollStartY = lightboxViewport.scrollTop;
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!isDraggingLightbox || !lightboxViewport) return;
+        e.preventDefault();
+        const dx = e.pageX - dragStartX;
+        const dy = e.pageY - dragStartY;
+        lightboxViewport.scrollLeft = scrollStartX - dx;
+        lightboxViewport.scrollTop = scrollStartY - dy;
+      });
+      window.addEventListener('mouseup', () => {
+        if (isDraggingLightbox && lightboxViewport) {
+          isDraggingLightbox = false;
+          lightboxViewport.classList.remove('is-dragging');
+        }
+      });
+    }
 
     // Cierre al pulsar sobre el fondo oscurecido del modal
     document.getElementById('detail-modal').addEventListener('click', (e) => {
@@ -2673,7 +3069,7 @@ app.get('/', (c) => {
       document.getElementById('tab-calendar').classList.add('active');
 
       const [y, m, d] = pickedDate.split('-');
-      document.getElementById('calendar-label').innerText = \`\${d}/\${m}\`;
+      document.getElementById('calendar-label').innerText = d + '/' + m;
       loadData();
     });
 
@@ -2681,6 +3077,57 @@ app.get('/', (c) => {
     // Accesibilidad: Tecla Escape y Atrapado de Foco (Focus Trap)
     // ==============================================================================
     document.addEventListener('keydown', (e) => {
+      // Prioridad 1: Visor de cartel completo (Lightbox) si está visible
+      const lightbox = document.getElementById('poster-lightbox');
+      if (lightbox && lightbox.style.display !== 'none') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closePosterLightbox();
+          return;
+        }
+
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          stepLightboxZoom(1);
+          return;
+        }
+
+        if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          stepLightboxZoom(-1);
+          return;
+        }
+
+        if (e.key === 'Tab') {
+          const focusable = lightbox.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+          return;
+        }
+        return;
+      }
+
+      // Soporte teclado (Enter o Espacio) en cabeceras de imagen clicables
+      if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.closest) {
+        const trigger = e.target.closest('[data-action="open-full-poster"]');
+        if (trigger && trigger.tagName !== 'BUTTON') {
+          e.preventDefault();
+          openPosterLightbox(trigger.dataset.posterUrl, trigger.dataset.posterTitle, trigger);
+          return;
+        }
+      }
+
+      // Prioridad 2: Ficha modal de evento/lugar
       const modal = document.getElementById('detail-modal');
       if (!modal.classList.contains('active')) return;
 

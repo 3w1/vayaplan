@@ -6,6 +6,7 @@ import {
   resolveGoogleMapsUrl,
 } from '@vayaplan/shared';
 import type { PublicEventItem, SingleEventResponseContract } from '@vayaplan/types';
+import { hasImageVariantsColumns } from '../services/image-storage';
 
 export const singleEventRoutes = new Hono();
 
@@ -27,6 +28,11 @@ singleEventRoutes.get('/events/:id', async (c) => {
     );
   }
 
+  const hasVariants = await hasImageVariantsColumns();
+  const variantsEventCols = hasVariants
+    ? 'e.image_thumb_url,'
+    : 'NULL::text AS image_thumb_url,';
+
   const eventSql = `
     SELECT 
       e.id,
@@ -39,6 +45,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
       e.price_cents,
       e.is_free,
       e.image_url,
+      ${variantsEventCols}
       e.source_type,
       e.source_url,
       e.status,
@@ -114,6 +121,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
       google_maps_url: mapsUrl,
     },
     image_url: row.image_url,
+    image_thumb_url: row.image_thumb_url || row.image_url,
     actions: {
       maps_url: mapsUrl,
       booking_url: null,

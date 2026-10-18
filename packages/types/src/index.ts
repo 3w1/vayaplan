@@ -38,6 +38,21 @@ export type MetricType =
   | 'qr_scan'
   | 'channel_view';
 
+export interface ImageVariantInfo {
+  key: string;
+  url: string;
+  width: number;
+  height: number;
+  size_bytes: number;
+  mime_type: string;
+}
+
+export interface ImageVariantsMap {
+  original: ImageVariantInfo;
+  detail: ImageVariantInfo;
+  thumb: ImageVariantInfo;
+}
+
 export type MetricChannel =
   | 'web'
   | 'whatsapp_channel'
@@ -110,6 +125,8 @@ export interface Event {
   price_cents: number;
   is_free: boolean;
   image_url: string | null;
+  image_thumb_url?: string | null;
+  image_original_url?: string | null;
   source_type: EventSourceType;
   source_url: string | null;
   source_hash: string | null;
@@ -255,6 +272,7 @@ export interface PublicEventItem {
   status: EventStatus;
   venue: VenueSummary;
   image_url: string | null;
+  image_thumb_url?: string | null;
   actions: EventActionInfo;
   verification: EventVerificationInfo;
   promotion: PromotionInfo | null;

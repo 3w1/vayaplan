@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'bun:test';
+import * as path from 'path';
+import * as fs from 'fs';
+import sharp from 'sharp';
 import {
   validateImageMagicBytes,
   saveImageUpload,
@@ -15,11 +18,41 @@ import {
   getR2Config,
 } from '../r2-client';
 
+async function makeJpegBuffer(w = 100, h = 100) {
+  return await sharp({
+    create: { width: w, height: h, channels: 3, background: { r: 200, g: 50, b: 50 } },
+  }).jpeg().toBuffer();
+}
+
+async function makePngBuffer(w = 100, h = 100) {
+  return await sharp({
+    create: { width: w, height: h, channels: 4, background: { r: 50, g: 100, b: 200, alpha: 0.8 } },
+  }).png().toBuffer();
+}
+
 describe('Image Storage & Cloudflare R2 Adapter', () => {
   const originalEnv = { ...process.env };
+  const testUploadsDir = path.join(process.cwd(), 'test-uploads-storage-' + Date.now());
+
+  beforeAll(() => {
+    process.env.UPLOADS_DIR = testUploadsDir;
+    if (fs.existsSync(testUploadsDir)) fs.rmSync(testUploadsDir, { recursive: true, force: true });
+    fs.mkdirSync(testUploadsDir, { recursive: true });
+  });
+
+  afterAll(() => {
+    process.env = { ...originalEnv };
+    if (fs.existsSync(testUploadsDir)) {
+      fs.rmSync(testUploadsDir, { recursive: true, force: true });
+    }
+  });
 
   beforeEach(() => {
     resetCustomR2S3Client();
+    process.env.UPLOADS_DIR = testUploadsDir;
+    if (fs.existsSync(testUploadsDir)) fs.rmSync(testUploadsDir, { recursive: true, force: true });
+    fs.mkdirSync(testUploadsDir, { recursive: true });
+
     process.env.R2_ACCOUNT_ID = 'test-account-id';
     process.env.R2_ACCESS_KEY_ID = 'test-access-key';
     process.env.R2_SECRET_ACCESS_KEY = 'test-secret-key';
@@ -29,7 +62,6 @@ describe('Image Storage & Cloudflare R2 Adapter', () => {
 
   afterEach(() => {
     resetCustomR2S3Client();
-    process.env = { ...originalEnv };
   });
 
   describe('1. Validación de Formatos y Magic Bytes', () => {
@@ -99,38 +131,44 @@ describe('Image Storage & Cloudflare R2 Adapter', () => {
       delete process.env.R2_ACCESS_KEY_ID;
       delete process.env.R2_SECRET_ACCESS_KEY;
 
-      const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+      const validJpeg = await makeJpegBuffer(80, 80);
       await expect(saveImageUpload(validJpeg, 'jpg')).rejects.toThrow(
         /Almacenamiento Cloudflare R2 no configurado/i
       );
     });
 
     it('Sube archivo a Cloudflare R2 mediante PutObjectCommand con clave UUID y cabeceras inmutables', async () => {
-      let sentCommand: any = null;
+      const sentCommands: any[] = [];
       const mockS3 = {
         send: async (cmd: any) => {
-          sentCommand = cmd;
+          sentCommands.push(cmd);
           return {};
         },
       };
       setCustomR2S3Client(mockS3);
 
-      const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xab]);
+      const validJpeg = await makeJpegBuffer(120, 160);
       const res = await saveImageUpload(validJpeg, 'jpg', { prefix: 'events' });
 
       expect(res.provider).toBe('cloudflare_r2');
-      expect(res.key).toMatch(/^events\/[a-f0-9-]{36}\.jpg$/);
+      expect(res.key).toMatch(/^events\/[a-f0-9-]{36}-detail\.webp$/);
       expect(res.url).toBe(`https://media.vayaplan.com/${res.key}`);
-      expect(res.filename).toMatch(/^[a-f0-9-]{36}\.jpg$/);
-      expect(res.size).toBe(validJpeg.length);
-      expect(res.mimeType).toBe('image/jpeg');
+      expect(res.thumb_url).toBe(`https://media.vayaplan.com/${res.variants.thumb.key}`);
+      expect(res.original_url).toMatch(/^\/api\/v1\/admin\/uploads\/originals\/[a-f0-9-]{36}-original\.jpg$/);
+      expect(res.mimeType).toBe('image/webp');
+      expect(res.variants).toBeDefined();
 
-      // Verificar parámetros pasados al cliente S3
-      expect(sentCommand).not.toBeNull();
-      expect(sentCommand.input.Bucket).toBe('vayaplan-media-test');
-      expect(sentCommand.input.Key).toBe(res.key);
-      expect(sentCommand.input.ContentType).toBe('image/jpeg');
-      expect(sentCommand.input.CacheControl).toBe('public, max-age=31536000, immutable');
+      // Verificar que se subieron las 2 variantes públicas a R2 (detail y thumb) y no el original
+      expect(sentCommands.length).toBe(2);
+      expect(sentCommands.find((c) => c.input.Key === res.variants.original.key)).toBeUndefined();
+      const detailCmd = sentCommands.find((c) => c.input.Key === res.variants.detail.key);
+      const thumbCmd = sentCommands.find((c) => c.input.Key === res.variants.thumb.key);
+      expect(detailCmd).toBeDefined();
+      expect(thumbCmd).toBeDefined();
+
+      expect(detailCmd.input.Bucket).toBe('vayaplan-media-test');
+      expect(detailCmd.input.ContentType).toBe('image/webp');
+      expect(detailCmd.input.CacheControl).toBe('public, max-age=31536000, immutable');
     });
 
     it('Si Cloudflare R2 falla, lanza error descriptivo y NO guarda en disco local silenciosamente', async () => {
@@ -141,17 +179,17 @@ describe('Image Storage & Cloudflare R2 Adapter', () => {
       };
       setCustomR2S3Client(mockS3);
 
-      const validJpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+      const validJpeg = await makeJpegBuffer(60, 60);
       await expect(saveImageUpload(validJpeg, 'jpg')).rejects.toThrow(
         /Error al transferir la imagen a Cloudflare R2: NetworkingError/i
       );
     });
 
     it('Reutilización por importador (saveImageFromUrl): descarga, valida y almacena en R2', async () => {
-      let sentCommand: any = null;
+      const sentCommands: any[] = [];
       const mockS3 = {
         send: async (cmd: any) => {
-          sentCommand = cmd;
+          sentCommands.push(cmd);
           return {};
         },
       };
@@ -159,9 +197,7 @@ describe('Image Storage & Cloudflare R2 Adapter', () => {
 
       // Mock de fetch global para simular descarga desde CDN de Instagram
       const originalFetch = globalThis.fetch;
-      const mockImageBytes = Buffer.from([
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x22,
-      ]);
+      const mockImageBytes = await makePngBuffer(100, 100);
 
       globalThis.fetch = async (url: any) => {
         return new Response(mockImageBytes, {
@@ -177,9 +213,11 @@ describe('Image Storage & Cloudflare R2 Adapter', () => {
         });
 
         expect(importRes.provider).toBe('cloudflare_r2');
-        expect(importRes.key).toMatch(/^imports\/[a-f0-9-]{36}\.png$/);
-        expect(importRes.url).toBe(`https://media.vayaplan.com/${importRes.key}`);
-        expect(sentCommand.input.Metadata?.source_url).toBe('https://www.instagram.com/p/DB123456/');
+        expect(importRes.key).toMatch(/^imports\/[a-f0-9-]{36}-detail\.webp$/);
+        expect(importRes.original_url).toMatch(/^\/api\/v1\/admin\/uploads\/originals\/[a-f0-9-]{36}-original\.png$/);
+
+        const detailCmd = sentCommands.find((c) => c.input.Key === importRes.variants.detail.key);
+        expect(detailCmd?.input.Metadata?.source_url).toBe('https://www.instagram.com/p/DB123456/');
       } finally {
         globalThis.fetch = originalFetch;
       }

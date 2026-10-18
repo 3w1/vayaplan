@@ -15,6 +15,7 @@ import type {
   WeekendDayAgenda,
   WeekendResponseContract,
 } from '@vayaplan/types';
+import { hasImageVariantsColumns } from '../services/image-storage';
 
 export const weekendRoutes = new Hono();
 
@@ -124,6 +125,11 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
   const sundayDate = addDays(startFriday, 2);
   const targetDates = [startFriday, saturdayDate, sundayDate];
 
+  const hasVariants = await hasImageVariantsColumns();
+  const variantsEventCols = hasVariants
+    ? 'e.image_thumb_url,'
+    : 'NULL::text AS image_thumb_url,';
+
   // 3. Consultar los eventos para los tres días del fin de semana
   const eventsSql = `
     SELECT 
@@ -137,6 +143,7 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       e.price_cents,
       e.is_free,
       e.image_url,
+      ${variantsEventCols}
       e.source_type,
       e.source_url,
       e.status,
@@ -212,6 +219,7 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
         google_maps_url: mapsUrl,
       },
       image_url: row.image_url,
+      image_thumb_url: row.image_thumb_url || row.image_url,
       actions: {
         maps_url: mapsUrl,
         booking_url: null,
