@@ -4417,10 +4417,16 @@ export function renderAdminHtml(): string {
       const lngVal = document.getElementById('venue-longitude')?.value.trim() || '';
 
       // Prevalidación: website_url no puede ser Facebook
-      if (websiteVal && /(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)*facebook\.com(?:\/|$|\?)/i.test(websiteVal)) {
-        showFormError('Las URLs de Facebook deben guardarse en el campo específico "Página de Facebook", no en "Sitio Web Oficial".');
-        document.getElementById('venue-website')?.focus();
-        return;
+      if (websiteVal) {
+        try {
+          const parsedWeb = new URL(websiteVal.startsWith('http://') || websiteVal.startsWith('https://') ? websiteVal : 'https://' + websiteVal);
+          const webHost = parsedWeb.hostname.toLowerCase();
+          if (webHost === 'facebook.com' || webHost.endsWith('.facebook.com')) {
+            showFormError('Las URLs de Facebook deben guardarse en el campo específico "Página de Facebook", no en "Sitio Web Oficial".');
+            document.getElementById('venue-website')?.focus();
+            return;
+          }
+        } catch {}
       }
 
       // Prevalidación URLs válidas si se introducen
