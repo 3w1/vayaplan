@@ -2174,14 +2174,51 @@ export function renderAdminHtml(): string {
             <textarea id="ev-description" rows="3" placeholder="Detalles de la actuación..."></textarea>
           </div>
 
-          <div class="form-grid two-cols" style="gap:0.75rem;">
-            <div class="form-group">
-              <label for="ev-source-url" style="font-weight:700; color:var(--text-main);">URL de entradas / reserva</label>
-              <input type="url" id="ev-source-url" placeholder="https://...">
+          <div class="form-group" style="margin-bottom:0.75rem;">
+            <label for="ev-source-url" style="font-weight:700; color:var(--text-main);">URL de entradas / reserva</label>
+            <input type="url" id="ev-source-url" placeholder="https://...">
+          </div>
+
+          <!-- SECCIÓN: CARTEL O IMAGEN DEL EVENTO -->
+          <div class="form-group" style="margin-bottom:1rem;">
+            <label style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Cartel o imagen del evento</label>
+            
+            <input type="file" id="ev-image-file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleEventImageFileSelect(event)">
+            <input type="hidden" id="ev-image-url">
+
+            <!-- Caja de subida / selector -->
+            <div id="ev-image-upload-box" style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 1.25rem 1rem; text-align: center; background: #f8fafc; transition: border-color 0.2s;">
+              <button type="button" class="btn-secondary" id="btn-trigger-upload-image" onclick="document.getElementById('ev-image-file').click()" style="display:inline-flex; align-items:center; gap:0.5rem; font-weight:600; cursor:pointer;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Subir cartel o imagen
+              </button>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">Formatos admitidos: JPEG, PNG, WebP (máx. 5 MB). Compatible con galería y cámara móvil.</div>
+              <div id="ev-image-uploading" role="status" style="display:none; font-size:0.875rem; color:#4f46e5; font-weight:600; margin-top:0.6rem; align-items:center; justify-content:center; gap:0.5rem;">
+                <span>⏳ Subiendo imagen al servidor...</span>
+              </div>
+              <div id="ev-image-error" role="alert" style="display:none; margin-top:0.6rem; padding:0.5rem 0.75rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; color:#991b1b; font-size:0.8rem; text-align:left; line-height:1.4;"></div>
             </div>
-            <div class="form-group">
-              <label for="ev-image-url" style="font-weight:700; color:var(--text-main);">URL de imagen / cartel</label>
-              <input type="url" id="ev-image-url" placeholder="https://...">
+
+            <!-- Vista previa y controles de sustitución / borrado -->
+            <div id="ev-image-preview-wrap" style="display:none; border:1px solid var(--border-color); border-radius:8px; padding:0.75rem; background:var(--bg-main); align-items:center; gap:1rem; flex-wrap:wrap;">
+              <div style="position:relative; width:90px; height:90px; flex-shrink:0; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); background:#0B0F3B;">
+                <img id="ev-image-preview" src="" alt="Vista previa del cartel" style="width:100%; height:100%; object-fit:cover;">
+              </div>
+              <div style="flex:1; min-width:180px;">
+                <div id="ev-image-preview-info" style="font-size:0.8rem; font-weight:600; color:var(--text-main); margin-bottom:0.4rem; word-break:break-all;">Cartel cargado</div>
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                  <button type="button" class="btn-sm btn-secondary" onclick="document.getElementById('ev-image-file').click()" id="btn-replace-image">Sustituir</button>
+                  <button type="button" class="btn-sm btn-logout" onclick="removeEventImage()" id="btn-remove-image">Quitar imagen</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Opción secundaria para introducir URL externa -->
+            <div style="margin-top:0.35rem; text-align:right;">
+              <button type="button" id="btn-toggle-manual-url" onclick="toggleManualImageUrl()" style="background:none; border:none; color:var(--text-muted); font-size:0.75rem; text-decoration:underline; cursor:pointer; padding:0;">O introducir URL externa</button>
+            </div>
+            <div id="ev-image-manual-wrap" style="display:none; margin-top:0.35rem;">
+              <input type="url" id="ev-image-url-manual" placeholder="https://ejemplo.com/cartel.jpg" oninput="handleManualImageUrl(this.value)" style="font-size:0.85rem; width:100%;">
             </div>
           </div>
         </div>
@@ -2766,6 +2803,7 @@ export function renderAdminHtml(): string {
     let adminEventsRequestId = 0;
     const eventActionsInProgress = new Set();
     let modalEventSaveInProgress = false;
+    let isEventImageUploading = false;
     let modalVenueSaveInProgress = false;
     let currentEditingEvent = null;
     let editEventOrigin = 'events';
@@ -3799,6 +3837,175 @@ export function renderAdminHtml(): string {
       openNewVenueModal();
     };
 
+    window.handleEventImageFileSelect = async function(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const errBox = document.getElementById('ev-image-error');
+      const uploadingEl = document.getElementById('ev-image-uploading');
+      const saveBtn = document.getElementById('btn-save-event');
+      const cancelBtn = document.querySelector('#modal-event .btn-logout');
+
+      if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
+
+      // 1. Validación previa en cliente (formato)
+      const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      const validExts = /\.(jpe?g|png|webp)$/i;
+      const isValidType = (file.type && validTypes.includes(file.type)) || validExts.test(file.name);
+      if (!isValidType) {
+        if (errBox) {
+          errBox.innerHTML = '<strong>⚠️ Error:</strong> Formato no admitido. Selecciona una imagen JPEG, PNG o WebP.';
+          errBox.style.display = 'block';
+        }
+        event.target.value = '';
+        return;
+      }
+
+      // 2. Validación de tamaño (máx 5 MB)
+      const MAX_SIZE = 5 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        if (errBox) {
+          errBox.innerHTML = '<strong>⚠️ Error:</strong> La imagen seleccionada supera el límite máximo permitido de 5 MB (' + (file.size / (1024 * 1024)).toFixed(2) + ' MB).';
+          errBox.style.display = 'block';
+        }
+        event.target.value = '';
+        return;
+      }
+
+      // 3. Estado de subida en progreso
+      isEventImageUploading = true;
+      if (uploadingEl) uploadingEl.style.display = 'flex';
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Subiendo imagen...'; }
+      if (cancelBtn) cancelBtn.disabled = true;
+
+      // Vista previa local inmediata
+      let localPreviewUrl = null;
+      try {
+        localPreviewUrl = URL.createObjectURL(file);
+      } catch (_) {}
+
+      const previewImg = document.getElementById('ev-image-preview');
+      const previewWrap = document.getElementById('ev-image-preview-wrap');
+      const uploadBox = document.getElementById('ev-image-upload-box');
+      const previewInfo = document.getElementById('ev-image-preview-info');
+
+      if (localPreviewUrl && previewImg) {
+        previewImg.src = localPreviewUrl;
+        if (previewInfo) previewInfo.textContent = 'Subiendo: ' + file.name + '...';
+        if (previewWrap) previewWrap.style.display = 'flex';
+        if (uploadBox) uploadBox.style.display = 'none';
+      }
+
+      try {
+        const token = getToken();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/api/v1/admin/uploads', {
+          method: 'POST',
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+          body: formData,
+          signal: AbortSignal.timeout(30000),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data.message || 'Error al subir la imagen al servidor.');
+        }
+
+        // Subida exitosa: actualizar campo oculto, input manual y vista previa definitiva
+        document.getElementById('ev-image-url').value = data.url;
+        const manualInput = document.getElementById('ev-image-url-manual');
+        if (manualInput) manualInput.value = data.url;
+
+        if (previewImg) previewImg.src = data.url;
+        if (previewInfo) previewInfo.textContent = 'Cartel subido (' + (data.size_bytes ? (data.size_bytes / 1024).toFixed(1) + ' KB' : file.name) + ')';
+        if (previewWrap) previewWrap.style.display = 'flex';
+        if (uploadBox) uploadBox.style.display = 'none';
+      } catch (err) {
+        if (errBox) {
+          errBox.innerHTML = '<strong>⚠️ Error de subida:</strong> ' + escapeHtml(err.message || 'No se pudo subir la imagen.');
+          errBox.style.display = 'block';
+        }
+        // Si falló y no había imagen previa, volver a mostrar caja de subida
+        const currentUrl = document.getElementById('ev-image-url').value;
+        if (!currentUrl) {
+          if (previewImg) previewImg.src = '';
+          if (previewWrap) previewWrap.style.display = 'none';
+          if (uploadBox) uploadBox.style.display = 'block';
+        } else {
+          if (previewImg) previewImg.src = currentUrl;
+          if (previewWrap) previewWrap.style.display = 'flex';
+          if (uploadBox) uploadBox.style.display = 'none';
+        }
+      } finally {
+        if (localPreviewUrl) {
+          try { URL.revokeObjectURL(localPreviewUrl); } catch (_) {}
+        }
+        isEventImageUploading = false;
+        event.target.value = '';
+        if (uploadingEl) uploadingEl.style.display = 'none';
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar Evento'; }
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
+    };
+
+    window.removeEventImage = function() {
+      const urlInput = document.getElementById('ev-image-url');
+      if (urlInput) urlInput.value = '';
+      const manualInput = document.getElementById('ev-image-url-manual');
+      if (manualInput) manualInput.value = '';
+
+      const previewImg = document.getElementById('ev-image-preview');
+      if (previewImg) previewImg.src = '';
+
+      const previewWrap = document.getElementById('ev-image-preview-wrap');
+      if (previewWrap) previewWrap.style.display = 'none';
+
+      const uploadBox = document.getElementById('ev-image-upload-box');
+      if (uploadBox) uploadBox.style.display = 'block';
+
+      const errBox = document.getElementById('ev-image-error');
+      if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
+      const uploadingEl = document.getElementById('ev-image-uploading');
+      if (uploadingEl) uploadingEl.style.display = 'none';
+    };
+
+    window.toggleManualImageUrl = function() {
+      const manualWrap = document.getElementById('ev-image-manual-wrap');
+      if (!manualWrap) return;
+      const isHidden = manualWrap.style.display === 'none';
+      manualWrap.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) {
+        const manualInput = document.getElementById('ev-image-url-manual');
+        if (manualInput) {
+          manualInput.value = document.getElementById('ev-image-url').value;
+          manualInput.focus();
+        }
+      }
+    };
+
+    window.handleManualImageUrl = function(val) {
+      const trimmed = (val || '').trim();
+      document.getElementById('ev-image-url').value = trimmed;
+      const previewImg = document.getElementById('ev-image-preview');
+      const previewWrap = document.getElementById('ev-image-preview-wrap');
+      const uploadBox = document.getElementById('ev-image-upload-box');
+      const previewInfo = document.getElementById('ev-image-preview-info');
+
+      if (trimmed) {
+        if (previewImg) previewImg.src = trimmed;
+        if (previewInfo) previewInfo.textContent = 'Imagen por URL externa';
+        if (previewWrap) previewWrap.style.display = 'flex';
+        if (uploadBox) uploadBox.style.display = 'none';
+      } else {
+        if (previewImg) previewImg.src = '';
+        if (previewWrap) previewWrap.style.display = 'none';
+        if (uploadBox) uploadBox.style.display = 'block';
+      }
+    };
+
     window.openNewEventModal = function() {
       currentEditingEvent = null;
       editEventOrigin = 'events';
@@ -3807,6 +4014,12 @@ export function renderAdminHtml(): string {
       document.getElementById('modal-event-title').innerText = 'Nuevo Evento';
       document.getElementById('form-event').reset();
       document.getElementById('ev-id').value = '';
+
+      // Resetear estado del cartel / imagen
+      removeEventImage();
+      const manualWrap = document.getElementById('ev-image-manual-wrap');
+      if (manualWrap) manualWrap.style.display = 'none';
+      isEventImageUploading = false;
 
       // Fecha y hora de inicio por defecto en Europe/Madrid a las 22:00
       const nowMadrid = formatToMadridDatetimeLocal(new Date());
@@ -3851,6 +4064,32 @@ export function renderAdminHtml(): string {
         document.getElementById('ev-source-url').value = ev.source_url || '';
         document.getElementById('ev-image-url').value = ev.image_url || '';
 
+        const manualInput = document.getElementById('ev-image-url-manual');
+        if (manualInput) manualInput.value = ev.image_url || '';
+        const manualWrap = document.getElementById('ev-image-manual-wrap');
+        if (manualWrap) manualWrap.style.display = 'none';
+
+        const previewImg = document.getElementById('ev-image-preview');
+        const previewWrap = document.getElementById('ev-image-preview-wrap');
+        const uploadBox = document.getElementById('ev-image-upload-box');
+        const previewInfo = document.getElementById('ev-image-preview-info');
+        const errBox = document.getElementById('ev-image-error');
+        if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
+        const uploadingEl = document.getElementById('ev-image-uploading');
+        if (uploadingEl) uploadingEl.style.display = 'none';
+        isEventImageUploading = false;
+
+        if (ev.image_url) {
+          if (previewImg) previewImg.src = ev.image_url;
+          if (previewInfo) previewInfo.textContent = 'Cartel actual del evento';
+          if (previewWrap) previewWrap.style.display = 'flex';
+          if (uploadBox) uploadBox.style.display = 'none';
+        } else {
+          if (previewImg) previewImg.src = '';
+          if (previewWrap) previewWrap.style.display = 'none';
+          if (uploadBox) uploadBox.style.display = 'block';
+        }
+
         const hint = document.getElementById('ev-editorial-date-hint');
         if (hint) hint.textContent = 'Frontera editorial a las 06:00 (Europe/Madrid)';
 
@@ -3865,6 +4104,10 @@ export function renderAdminHtml(): string {
     window.saveEvent = async function(e) {
       e.preventDefault();
       if (modalEventSaveInProgress) return;
+      if (isEventImageUploading) {
+        alert('Espera a que finalice la subida de la imagen antes de guardar el evento.');
+        return;
+      }
 
       const id = document.getElementById('ev-id').value;
       const startVal = document.getElementById('ev-start-time').value;
@@ -6032,7 +6275,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           // Bloquear Escape si hay una petición de reasignación en vuelo
           if (activeModal.id === 'modal-reassign-venue' && modalSaveInProgress) return;
           if (activeModal.id === 'modal-promotion' && promoSaveInProgress) return;
-          if (activeModal.id === 'modal-event' && modalEventSaveInProgress) return;
+          if (activeModal.id === 'modal-event' && (modalEventSaveInProgress || isEventImageUploading)) return;
           if (activeModal.id === 'modal-venue' && modalVenueSaveInProgress) return;
           if (activeModal.id === 'modal-delete-venue' && modalVenueDeleteInProgress) return;
           if (activeModal.id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
@@ -6061,7 +6304,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       // Bloquear cierre del modal de reasignación si hay petición activa en vuelo
       if (id === 'modal-reassign-venue' && modalSaveInProgress) return;
       if (id === 'modal-promotion' && promoSaveInProgress) return;
-      if (id === 'modal-event' && modalEventSaveInProgress) return;
+      if (id === 'modal-event' && (modalEventSaveInProgress || isEventImageUploading)) return;
       if (id === 'modal-venue' && modalVenueSaveInProgress) return;
       if (id === 'modal-delete-venue' && modalVenueDeleteInProgress) return;
       if (id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;

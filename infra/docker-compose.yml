@@ -33,6 +33,14 @@ services:
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-1261cb40e118080f4f5a3424d8520db7218685e1302ee81fbfb1c1ba36511b0b}
       JWT_SECRET: ${JWT_SECRET:-vayaplan_jwt_secret_dev_2026}
       WHATSAPP_WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-vayaplan_whatsapp_verify_token_2026}
+      UPLOADS_DIR: /app/uploads
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-vayaplan-media}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-https://media.vayaplan.com}
+    volumes:
+      - vayaplan_uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -58,6 +66,7 @@ services:
 
 volumes:
   vayaplan_db_data:
+  vayaplan_uploads_data:
 
 networks:
   vayaplan_net:

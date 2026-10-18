@@ -17,6 +17,8 @@ import { adminPlacesRoutes } from './routes/admin/places';
 import { adminMetricsRoutes } from './routes/admin/metrics';
 import { adminQrRoutes } from './routes/admin/qr';
 import { adminPromotionsRoutes } from './routes/admin/promotions';
+import { adminUploadsRoutes } from './routes/admin/uploads';
+import { publicUploadsRoutes } from './routes/uploads';
 import { whatsappWebhookRoutes } from './routes/webhooks/whatsapp';
 import { qrRedirectRoutes } from './routes/qr-redirect';
 import { startExpirationWorker, stopExpirationWorker } from './services/expiration';
@@ -59,6 +61,8 @@ app.route('/api/v1', placesRoutes);
 app.route('/api/v1', singleEventRoutes);
 app.route('/api/v1', metricsRoutes);
 app.route('/api/v1', activePromotionsRoutes);
+app.route('/api/v1', publicUploadsRoutes);
+app.route('/', publicUploadsRoutes);
 
 // Webhook de WhatsApp Business
 app.route('/api/v1/webhooks', whatsappWebhookRoutes);
@@ -76,6 +80,7 @@ app.route('/api/v1/admin', adminPlacesRoutes);
 app.route('/api/v1/admin', adminMetricsRoutes);
 app.route('/api/v1/admin', adminQrRoutes);
 app.route('/api/v1/admin', adminPromotionsRoutes);
+app.route('/api/v1/admin', adminUploadsRoutes);
 
 // Iniciar worker de caducidad automática de eventos pasados
 startExpirationWorker();
