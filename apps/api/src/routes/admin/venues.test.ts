@@ -331,3 +331,314 @@ describe('6. Borrado Seguro y Protegido (DELETE /venues/:id)', () => {
     createdTestVenueId = null; // ya fue borrado
   });
 });
+
+describe('7. Edición Completa de Locales y Soporte Facebook', () => {
+  let fullVenueId: number | null = null;
+
+  afterAll(async () => {
+    if (fullVenueId) {
+      await pool.query(`DELETE FROM venues WHERE id = $1`, [fullVenueId]);
+    }
+  });
+
+  test('POST /api/v1/admin/venues crea un local con todos los campos incluyendo facebook_url', async () => {
+    const payload = {
+      name: 'Local Completo Facebook Test',
+      slug: 'local-completo-facebook-test',
+      city_id: 1,
+      category: 'bar',
+      zone: 'centro_puebla',
+      is_active: true,
+      address: 'Calle Mayor 45, Palencia',
+      latitude: 42.0085587,
+      longitude: -4.5295375,
+      google_maps_url: 'https://maps.google.com/?cid=12345',
+      phone: '+34 979 11 22 33',
+      whatsapp_contact: '+34600112233',
+      website_url: 'https://www.localcompleto.com',
+      instagram_handle: '@localcompleto',
+      facebook_url: 'https://m.facebook.com/localcompleto/',
+    };
+
+    const res = await app.request('/api/v1/admin/venues', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.status).toBe('ok');
+    expect(data.venue).toBeDefined();
+    fullVenueId = data.venue.id;
+
+    // Normalización de instagram (@ eliminado)
+    expect(data.venue.instagram_handle).toBe('localcompleto');
+    // Normalización de facebook (m.facebook.com -> www.facebook.com)
+    expect(data.venue.facebook_url).toBe('https://www.facebook.com/localcompleto');
+    expect(data.venue.website_url).toBe('https://www.localcompleto.com/');
+    expect(data.venue.zone).toBe('centro_puebla');
+    expect(Number(data.venue.latitude)).toBeCloseTo(42.0085587, 5);
+    expect(Number(data.venue.longitude)).toBeCloseTo(-4.5295375, 5);
+    expect(data.venue.is_active).toBe(true);
+  });
+
+  test('GET /api/v1/admin/venues devuelve facebook_url y website_url en el listado', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const res = await app.request('/api/v1/admin/venues?q=Local+Completo+Facebook+Test', {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    const venue = data.venues.find((v: any) => v.id === fullVenueId);
+    expect(venue).toBeDefined();
+    expect(venue.facebook_url).toBe('https://www.facebook.com/localcompleto');
+    expect(venue.website_url).toBe('https://www.localcompleto.com/');
+  });
+
+  test('Rechaza URL de Facebook en website_url con 400 y código facebook_url_required', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${fullVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        website_url: 'https://www.facebook.com/mi-local-fb',
+      }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('facebook_url_required');
+    expect(data.message).toContain('facebook_url');
+  });
+
+  test('PATCH normaliza subdominios regionales (es-la., es-es.) y apex a www.facebook.com', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${fullVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        facebook_url: 'https://es-la.facebook.com/Agora-Palencia-1704363213143529/',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.venue.facebook_url).toBe('https://www.facebook.com/Agora-Palencia-1704363213143529');
+  });
+
+  test('Rechaza dominio no perteneciente a facebook.com en facebook_url', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${fullVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        facebook_url: 'https://www.otra-web.com/perfil',
+      }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('invalid_parameter');
+    expect(data.message).toContain('Facebook');
+  });
+
+  test('Rechaza subdominio de Facebook en website_url con 400 y código facebook_url_required', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${fullVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        website_url: 'https://es-es.facebook.com/ElPortalPalencia/',
+      }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('facebook_url_required');
+    expect(data.message).toContain('facebook_url');
+  });
+
+  test('Rechaza coordenadas inválidas (latitud fuera de rango)', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${fullVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        latitude: 999.99,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('invalid_parameter');
+  });
+
+  test('Rechaza coordenadas inválidas (longitud fuera de rango)', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${fullVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        longitude: -200.5,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('invalid_parameter');
+  });
+
+  test('PATCH actualiza y vacía campos explícitamente a null', async () => {
+    expect(fullVenueId).not.toBeNull();
+    const clearPayload = {
+      website_url: null,
+      facebook_url: null,
+      instagram_handle: null,
+      phone: null,
+      whatsapp_contact: null,
+      google_maps_url: null,
+      zone: null,
+      category: null,
+      latitude: null,
+      longitude: null,
+      is_active: false,
+    };
+
+    const res = await app.request(`/api/v1/admin/venues/${fullVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(clearPayload),
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.status).toBe('ok');
+    expect(data.venue.website_url).toBeNull();
+    expect(data.venue.facebook_url).toBeNull();
+    expect(data.venue.instagram_handle).toBeNull();
+    expect(data.venue.phone).toBeNull();
+    expect(data.venue.whatsapp_contact).toBeNull();
+    expect(data.venue.google_maps_url).toBeNull();
+    expect(data.venue.latitude).toBeNull();
+    expect(data.venue.longitude).toBeNull();
+    expect(data.venue.is_active).toBe(false);
+
+    // Comprobación directa en BD
+    const dbRes = await pool.query(
+      `SELECT website_url, facebook_url, instagram_handle, is_active FROM venues WHERE id = $1`,
+      [fullVenueId]
+    );
+    expect(dbRes.rows[0].website_url).toBeNull();
+    expect(dbRes.rows[0].facebook_url).toBeNull();
+    expect(dbRes.rows[0].instagram_handle).toBeNull();
+    expect(dbRes.rows[0].is_active).toBe(false);
+  });
+});
+
+describe('8. Migración y Rollback DML (transition_facebook_urls.sql y rollback)', () => {
+  let syntheticFbVenueId: number | null = null;
+  let syntheticOwnVenueId: number | null = null;
+  const originalFbUrl = 'https://es-la.facebook.com/Agora-Palencia-1704363213143529/';
+  const originalOwnUrl = 'https://www.barpropia.es/';
+
+  beforeAll(async () => {
+    // Crear local con URL de Facebook en website_url
+    const fbRes = await pool.query<{ id: number }>(`
+      INSERT INTO venues (city_id, name, slug, website_url, is_active)
+      VALUES (1, 'Bar Migracion FB Test', 'bar-migracion-fb-test', $1, true)
+      RETURNING id;
+    `, [originalFbUrl]);
+    syntheticFbVenueId = fbRes.rows[0].id;
+
+    // Crear local con web propia en website_url
+    const ownRes = await pool.query<{ id: number }>(`
+      INSERT INTO venues (city_id, name, slug, website_url, is_active)
+      VALUES (1, 'Bar Migracion Web Propia Test', 'bar-migracion-web-propia-test', $1, true)
+      RETURNING id;
+    `, [originalOwnUrl]);
+    syntheticOwnVenueId = ownRes.rows[0].id;
+  });
+
+  afterAll(async () => {
+    if (syntheticFbVenueId) {
+      await pool.query(`DELETE FROM venues WHERE id = $1`, [syntheticFbVenueId]);
+    }
+    if (syntheticOwnVenueId) {
+      await pool.query(`DELETE FROM venues WHERE id = $1`, [syntheticOwnVenueId]);
+    }
+  });
+
+  test('La lógica de transición migra y normaliza Facebook y preserva la web propia', async () => {
+    // Ejecutar lógica de transición en la BD de pruebas
+    await pool.query(`
+      UPDATE venues
+      SET facebook_url = REGEXP_REPLACE(website_url, '^https?://([a-zA-Z0-9-]+\\.)*facebook\\.com/', 'https://www.facebook.com/'),
+          website_url = NULL
+      WHERE website_url ~* '^(https?://)?([a-zA-Z0-9-]+\\.)*facebook\\.com(/|$)';
+    `);
+
+    // 1. Local de Facebook: website_url -> NULL, facebook_url -> poblado y normalizado
+    const checkFb = await pool.query(
+      `SELECT website_url, facebook_url FROM venues WHERE id = $1`,
+      [syntheticFbVenueId]
+    );
+    expect(checkFb.rows[0].website_url).toBeNull();
+    expect(checkFb.rows[0].facebook_url).toBe('https://www.facebook.com/Agora-Palencia-1704363213143529/');
+
+    // 2. Local con web propia: website_url intacto, facebook_url -> NULL
+    const checkOwn = await pool.query(
+      `SELECT website_url, facebook_url FROM venues WHERE id = $1`,
+      [syntheticOwnVenueId]
+    );
+    expect(checkOwn.rows[0].website_url).toBe(originalOwnUrl);
+    expect(checkOwn.rows[0].facebook_url).toBeNull();
+  });
+
+  test('La lógica de reversión restaura website_url, limpia facebook_url y no altera webs propias', async () => {
+    // Ejecutar lógica de rollback generada
+    await pool.query(`
+      UPDATE venues
+      SET website_url = facebook_url,
+          facebook_url = NULL
+      WHERE id = $1
+        AND website_url IS NULL
+        AND facebook_url IS NOT NULL;
+    `, [syntheticFbVenueId]);
+
+    // 1. Local de Facebook revertido
+    const checkFb = await pool.query(
+      `SELECT website_url, facebook_url FROM venues WHERE id = $1`,
+      [syntheticFbVenueId]
+    );
+    expect(checkFb.rows[0].website_url).toBe('https://www.facebook.com/Agora-Palencia-1704363213143529/');
+    expect(checkFb.rows[0].facebook_url).toBeNull();
+
+    // 2. Local con web propia sigue intacto
+    const checkOwn = await pool.query(
+      `SELECT website_url, facebook_url FROM venues WHERE id = $1`,
+      [syntheticOwnVenueId]
+    );
+    expect(checkOwn.rows[0].website_url).toBe(originalOwnUrl);
+    expect(checkOwn.rows[0].facebook_url).toBeNull();
+  });
+});
+

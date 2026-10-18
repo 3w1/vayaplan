@@ -91,6 +91,7 @@ export interface Venue {
   whatsapp_contact: string | null;
   phone?: string | null;
   website_url: string | null;
+  facebook_url?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

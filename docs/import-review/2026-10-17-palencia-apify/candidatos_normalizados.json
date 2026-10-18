@@ -1,0 +1,1147 @@
+[
+  {
+    "candidateId": "CAND-01",
+    "placeId": "ChIJaVu-i0OwRw0RDWNvzZO0cR0",
+    "originRows": [
+      0
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia"
+    ],
+    "titleOriginal": "Restaurante y Cervecería la Vieja Bruselas",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Pl. de los Dominicos, 3, 34005 Palencia",
+    "postalCode": "34005",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante"
+    ],
+    "latitude": 42.0147879,
+    "longitude": -4.536809,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJaVu-i0OwRw0RDWNvzZO0cR0",
+    "phoneOriginal": "+34 979 70 28 17",
+    "phoneUnformatted": "+34979702817",
+    "websiteOriginal": "http://www.restaurantelaviejabruselas.es/",
+    "websiteOwn": "http://www.restaurantelaviejabruselas.es/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Categoría Google \"Restaurante\". VayaPlan no dispone de categoría \"restaurante\" en venues.category; se propone \"general\" para evitar forzarlo como bar.",
+    "proposedZone": "seminario",
+    "proposedZoneReason": "Sector Mayor Antigua / Dominicos próximo a zona Seminario.",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Evaluar si clasificar como \"general\" o si tiene actividad de bar/tapas.",
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-02",
+    "placeId": "ChIJExpODWvicg0RcrTYrRA54x4",
+    "originRows": [
+      1
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia"
+    ],
+    "titleOriginal": "Taberna Plaza Vieja",
+    "cityOriginal": "Fuengirola",
+    "addressOriginal": "C. España, 21, 29640 Fuengirola, Málaga",
+    "postalCode": "29640",
+    "categoryOriginal": "Taberna",
+    "typesOriginal": [
+      "Taberna",
+      "Restaurante"
+    ],
+    "latitude": 36.5377444,
+    "longitude": -4.62239,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJExpODWvicg0RcrTYrRA54x4",
+    "phoneOriginal": "+34 951 31 19 04",
+    "phoneUnformatted": "+34951311904",
+    "websiteOriginal": "http://www.tabernaplazavieja.es/",
+    "websiteOwn": "http://www.tabernaplazavieja.es/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Fuera de ámbito; categoría no evaluada para censo local.",
+    "proposedZone": "otros",
+    "proposedZoneReason": "Fuera de ámbito.",
+    "classification": "FUERA_DE_AMBITO",
+    "classificationReason": "Ubicación fuera de Palencia capital (Fuengirola, prov. Málaga, lat 36.5377444)",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": []
+  },
+  {
+    "candidateId": "CAND-03",
+    "placeId": "ChIJxcK6CcqxRw0RCVmwyyKPJqU",
+    "originRows": [
+      2
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia"
+    ],
+    "titleOriginal": "TABERNA LA HERRADA",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Av. de los Vacceos, 9, 34003 Palencia",
+    "postalCode": "34003",
+    "categoryOriginal": "Bar de tapas",
+    "typesOriginal": [
+      "Bar de tapas"
+    ],
+    "latitude": 42.0135037,
+    "longitude": -4.5295424,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJxcK6CcqxRw0RCVmwyyKPJqU",
+    "phoneOriginal": null,
+    "phoneUnformatted": null,
+    "websiteOriginal": "https://instagram.com/tabernalaherradapalencia?igshid=YmMyMTA2M2Y=",
+    "websiteOwn": null,
+    "instagramUrl": "https://instagram.com/tabernalaherradapalencia?igshid=YmMyMTA2M2Y=",
+    "instagramHandle": "tabernalaherradapalencia",
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "bar",
+    "proposedCategoryReason": "Categoría Google \"Bar de tapas\" mapea directamente a categoría VayaPlan \"bar\".",
+    "proposedZone": "otros",
+    "proposedZoneReason": "Dirección fuera de los tres sectores históricos principales.",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Local sin teléfono de contacto en Google Maps."
+    ]
+  },
+  {
+    "candidateId": "CAND-04",
+    "placeId": "ChIJPRDzdACxRw0RoGvKB2ecj5U",
+    "originRows": [
+      3,
+      15
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia",
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "La Clásica",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "C. Mayor Principal, 1, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante"
+    ],
+    "latitude": 42.0136081,
+    "longitude": -4.5342207,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJPRDzdACxRw0RoGvKB2ecj5U",
+    "phoneOriginal": "+34 979 61 24 11",
+    "phoneUnformatted": "+34979612411",
+    "websiteOriginal": "https://www.laclasicapalencia.com/",
+    "websiteOwn": "https://www.laclasicapalencia.com/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Categoría Google \"Restaurante\". VayaPlan no dispone de categoría \"restaurante\" en venues.category; se propone \"general\" para evitar forzarlo como bar.",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Eje de calle Mayor / Don Sancho / Soldados (Zona Centro).",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [
+      {
+        "field": "query",
+        "rowA": 3,
+        "valA": "Taberna Plaza Vieja Palencia",
+        "rowB": 15,
+        "valB": "Bar Plaza Mayor Palencia"
+      },
+      {
+        "field": "searchString",
+        "rowA": 3,
+        "valA": "Taberna Plaza Vieja Palencia",
+        "rowB": 15,
+        "valB": "Bar Plaza Mayor Palencia"
+      },
+      {
+        "field": "rank",
+        "rowA": 3,
+        "valA": 4,
+        "rowB": 15,
+        "valB": 6
+      },
+      {
+        "field": "position",
+        "rowA": 3,
+        "valA": 4,
+        "rowB": 15,
+        "valB": 6
+      },
+      {
+        "field": "reviewsCount",
+        "rowA": 3,
+        "valA": 109,
+        "rowB": 15,
+        "valB": null
+      },
+      {
+        "field": "ratingCount",
+        "rowA": 3,
+        "valA": 109,
+        "rowB": 15,
+        "valB": null
+      },
+      {
+        "field": "openingHours",
+        "rowA": 3,
+        "valA": {
+          "sábado": "9:30–23:30",
+          "domingo": "9:30–23:30",
+          "lunes": "Cerrado",
+          "martes": "Cerrado",
+          "miércoles": "9:00–23:30",
+          "jueves": "9:00–23:30",
+          "viernes": "9:00–23:30"
+        },
+        "rowB": 15,
+        "valB": {
+          "sábado": "9:30–23:30"
+        }
+      },
+      {
+        "field": "openingHoursDetailed",
+        "rowA": 3,
+        "valA": [
+          {
+            "day": "sábado",
+            "hours": [
+              "9:30–23:30"
+            ]
+          },
+          {
+            "day": "domingo",
+            "hours": [
+              "9:30–23:30"
+            ]
+          },
+          {
+            "day": "lunes",
+            "hours": [
+              "Cerrado"
+            ]
+          },
+          {
+            "day": "martes",
+            "hours": [
+              "Cerrado"
+            ]
+          },
+          {
+            "day": "miércoles",
+            "hours": [
+              "9:00–23:30"
+            ]
+          },
+          {
+            "day": "jueves",
+            "hours": [
+              "9:00–23:30"
+            ]
+          },
+          {
+            "day": "viernes",
+            "hours": [
+              "9:00–23:30"
+            ]
+          }
+        ],
+        "rowB": 15,
+        "valB": [
+          {
+            "day": "sábado",
+            "hours": [
+              "9:30–23:30"
+            ]
+          }
+        ]
+      },
+      {
+        "field": "free_usage",
+        "rowA": 3,
+        "valA": {
+          "count": 13,
+          "limit": 100
+        },
+        "rowB": 15,
+        "valB": {
+          "count": 21,
+          "limit": 100
+        }
+      }
+    ],
+    "pendingDecisions": [
+      "Evaluar si clasificar como \"general\" o si tiene actividad de bar/tapas.",
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-05",
+    "placeId": "ChIJZVXar0WxRw0RdlhAqZydG2c",
+    "originRows": [
+      4,
+      12
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia",
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "La Parrilla de Don Jamón",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Pl. Mayor, 14, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante"
+    ],
+    "latitude": 42.0103723,
+    "longitude": -4.5323486,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJZVXar0WxRw0RdlhAqZydG2c",
+    "phoneOriginal": "+34 979 74 12 12",
+    "phoneUnformatted": "+34979741212",
+    "websiteOriginal": "http://www.laparrilladedonjamon.es/",
+    "websiteOwn": "http://www.laparrilladedonjamon.es/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Restaurante gastronómico/asador. Asignado a \"general\" al no existir categoría \"restaurante\".",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Plaza Mayor de Palencia.",
+    "classification": "REVISAR_COINCIDENCIA",
+    "classificationReason": "Duda entre registros del lote: comparte marca comercial y proximidad en Plaza Mayor con otro candidato del lote.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [
+      {
+        "field": "query",
+        "rowA": 4,
+        "valA": "Taberna Plaza Vieja Palencia",
+        "rowB": 12,
+        "valB": "Bar Plaza Mayor Palencia"
+      },
+      {
+        "field": "searchString",
+        "rowA": 4,
+        "valA": "Taberna Plaza Vieja Palencia",
+        "rowB": 12,
+        "valB": "Bar Plaza Mayor Palencia"
+      },
+      {
+        "field": "rank",
+        "rowA": 4,
+        "valA": 5,
+        "rowB": 12,
+        "valB": 3
+      },
+      {
+        "field": "position",
+        "rowA": 4,
+        "valA": 5,
+        "rowB": 12,
+        "valB": 3
+      },
+      {
+        "field": "reviewsCount",
+        "rowA": 4,
+        "valA": 601,
+        "rowB": 12,
+        "valB": null
+      },
+      {
+        "field": "ratingCount",
+        "rowA": 4,
+        "valA": 601,
+        "rowB": 12,
+        "valB": null
+      },
+      {
+        "field": "openingHours",
+        "rowA": 4,
+        "valA": {
+          "sábado": "9:00–23:00",
+          "domingo": "9:00–23:00",
+          "lunes": "9:00–23:00",
+          "martes": "9:00–23:00",
+          "miércoles": "9:00–23:00",
+          "jueves": "9:00–23:00",
+          "viernes": "9:00–23:00"
+        },
+        "rowB": 12,
+        "valB": {
+          "sábado": "9:00–23:00"
+        }
+      },
+      {
+        "field": "openingHoursDetailed",
+        "rowA": 4,
+        "valA": [
+          {
+            "day": "sábado",
+            "hours": [
+              "9:00–23:00"
+            ]
+          },
+          {
+            "day": "domingo",
+            "hours": [
+              "9:00–23:00"
+            ]
+          },
+          {
+            "day": "lunes",
+            "hours": [
+              "9:00–23:00"
+            ]
+          },
+          {
+            "day": "martes",
+            "hours": [
+              "9:00–23:00"
+            ]
+          },
+          {
+            "day": "miércoles",
+            "hours": [
+              "9:00–23:00"
+            ]
+          },
+          {
+            "day": "jueves",
+            "hours": [
+              "9:00–23:00"
+            ]
+          },
+          {
+            "day": "viernes",
+            "hours": [
+              "9:00–23:00"
+            ]
+          }
+        ],
+        "rowB": 12,
+        "valB": [
+          {
+            "day": "sábado",
+            "hours": [
+              "9:00–23:00"
+            ]
+          }
+        ]
+      },
+      {
+        "field": "free_usage",
+        "rowA": 4,
+        "valA": {
+          "count": 13,
+          "limit": 100
+        },
+        "rowB": 12,
+        "valB": {
+          "count": 21,
+          "limit": 100
+        }
+      }
+    ],
+    "pendingDecisions": [
+      "Duda interna del lote: CAND-05 (La Parrilla de Don Jamón, Pl. Mayor 14) vs CAND-07 (Restaurante Don Jamón, Pl. Mayor). Determinar si operan como locales independientes o si corresponden al mismo establecimiento."
+    ]
+  },
+  {
+    "candidateId": "CAND-06",
+    "placeId": "ChIJ0a5wX0iwRw0R3Ddf9JSy2Jo",
+    "originRows": [
+      5
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia"
+    ],
+    "titleOriginal": "Hotel Castilla Vieja",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Av. de Casado del Alisal, 26, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Hotel",
+    "typesOriginal": [
+      "Hotel",
+      "Hotel de larga estancia",
+      "Restaurante",
+      "Alojamiento con servicio"
+    ],
+    "latitude": 42.0103912,
+    "longitude": -4.5296125,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJ0a5wX0iwRw0R3Ddf9JSy2Jo",
+    "phoneOriginal": "+34 979 74 90 44",
+    "phoneUnformatted": "+34979749044",
+    "websiteOriginal": "http://www.hotelcastillavieja.com/?referer_code=GOOGLEBP",
+    "websiteOwn": "http://www.hotelcastillavieja.com/?referer_code=GOOGLEBP",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 0,
+    "openingHoursSummary": "Sin horarios",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Hotel no es categoría en venues.category. Excluido del lote de hostelería/ocio.",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Av. Casado del Alisal zona centro.",
+    "classification": "FUERA_DE_AMBITO",
+    "classificationReason": "Excluido por alcance de esta operación (establecimiento de alojamiento/hotel). Coincide con qr_sources ID 1.",
+    "matchingInternalId": 1,
+    "matchingInternalTable": "qr_sources",
+    "matchingEvidence": "Coincidencia exacta de nombre y dirección con qr_sources ID 1 (Hotel Castilla Vieja)",
+    "conflicts": [],
+    "pendingDecisions": [
+      "Decisión de producto: excluido por alcance de esta operación; no por incompatibilidad técnica entre tablas."
+    ]
+  },
+  {
+    "candidateId": "CAND-07",
+    "placeId": "ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+    "originRows": [
+      6,
+      13
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia",
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "Restaurante Don Jamón",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Pl. Mayor, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante",
+      "Bar restaurante"
+    ],
+    "latitude": 42.0106662,
+    "longitude": -4.5321117,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJ0RPiu0ewRw0RsDiuTerqBKc",
+    "phoneOriginal": "+34 979 70 22 70",
+    "phoneUnformatted": "+34979702270",
+    "websiteOriginal": "http://www.restaurantedonjamon.com/",
+    "websiteOwn": "http://www.restaurantedonjamon.com/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Restaurante gastronómico/asador. Asignado a \"general\" al no existir categoría \"restaurante\".",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Plaza Mayor de Palencia.",
+    "classification": "REVISAR_COINCIDENCIA",
+    "classificationReason": "Duda entre registros del lote: comparte marca comercial y proximidad en Plaza Mayor con otro candidato del lote.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [
+      {
+        "field": "query",
+        "rowA": 6,
+        "valA": "Taberna Plaza Vieja Palencia",
+        "rowB": 13,
+        "valB": "Bar Plaza Mayor Palencia"
+      },
+      {
+        "field": "searchString",
+        "rowA": 6,
+        "valA": "Taberna Plaza Vieja Palencia",
+        "rowB": 13,
+        "valB": "Bar Plaza Mayor Palencia"
+      },
+      {
+        "field": "rank",
+        "rowA": 6,
+        "valA": 7,
+        "rowB": 13,
+        "valB": 4
+      },
+      {
+        "field": "position",
+        "rowA": 6,
+        "valA": 7,
+        "rowB": 13,
+        "valB": 4
+      },
+      {
+        "field": "reviewsCount",
+        "rowA": 6,
+        "valA": 2187,
+        "rowB": 13,
+        "valB": null
+      },
+      {
+        "field": "ratingCount",
+        "rowA": 6,
+        "valA": 2187,
+        "rowB": 13,
+        "valB": null
+      },
+      {
+        "field": "openingHours",
+        "rowA": 6,
+        "valA": {
+          "sábado": "8:00–24:00",
+          "domingo": "8:00–24:00",
+          "lunes": "8:00–24:00",
+          "martes": "8:00–24:00",
+          "miércoles": "8:00–24:00",
+          "jueves": "8:00–24:00",
+          "viernes": "8:00–24:00"
+        },
+        "rowB": 13,
+        "valB": {
+          "sábado": "8:00–24:00"
+        }
+      },
+      {
+        "field": "openingHoursDetailed",
+        "rowA": 6,
+        "valA": [
+          {
+            "day": "sábado",
+            "hours": [
+              "8:00–24:00"
+            ]
+          },
+          {
+            "day": "domingo",
+            "hours": [
+              "8:00–24:00"
+            ]
+          },
+          {
+            "day": "lunes",
+            "hours": [
+              "8:00–24:00"
+            ]
+          },
+          {
+            "day": "martes",
+            "hours": [
+              "8:00–24:00"
+            ]
+          },
+          {
+            "day": "miércoles",
+            "hours": [
+              "8:00–24:00"
+            ]
+          },
+          {
+            "day": "jueves",
+            "hours": [
+              "8:00–24:00"
+            ]
+          },
+          {
+            "day": "viernes",
+            "hours": [
+              "8:00–24:00"
+            ]
+          }
+        ],
+        "rowB": 13,
+        "valB": [
+          {
+            "day": "sábado",
+            "hours": [
+              "8:00–24:00"
+            ]
+          }
+        ]
+      },
+      {
+        "field": "free_usage",
+        "rowA": 6,
+        "valA": {
+          "count": 13,
+          "limit": 100
+        },
+        "rowB": 13,
+        "valB": {
+          "count": 21,
+          "limit": 100
+        }
+      }
+    ],
+    "pendingDecisions": [
+      "Duda interna del lote: CAND-05 (La Parrilla de Don Jamón, Pl. Mayor 14) vs CAND-07 (Restaurante Don Jamón, Pl. Mayor). Determinar si operan como locales independientes o si corresponden al mismo establecimiento."
+    ]
+  },
+  {
+    "candidateId": "CAND-08",
+    "placeId": "ChIJl0cuDEGwRw0RzAoRdx1g1Jc",
+    "originRows": [
+      7
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia"
+    ],
+    "titleOriginal": "Bar javi",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "C. Mayor Antigua, 32, 34005 Palencia",
+    "postalCode": "34005",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante",
+      "Bar restaurante"
+    ],
+    "latitude": 42.0117602,
+    "longitude": -4.5387308,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJl0cuDEGwRw0RzAoRdx1g1Jc",
+    "phoneOriginal": "+34 607 43 03 56",
+    "phoneUnformatted": "+34607430356",
+    "websiteOriginal": null,
+    "websiteOwn": null,
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Categoría Google \"Restaurante\". VayaPlan no dispone de categoría \"restaurante\" en venues.category; se propone \"general\" para evitar forzarlo como bar.",
+    "proposedZone": "seminario",
+    "proposedZoneReason": "Sector Mayor Antigua / Dominicos próximo a zona Seminario.",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Evaluar si clasificar como \"general\" o si tiene actividad de bar/tapas.",
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-09",
+    "placeId": "ChIJw_EdhDiwRw0R8N3S6Fv2Yn0",
+    "originRows": [
+      8
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia"
+    ],
+    "titleOriginal": "La Barra de Villoldo",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Pl. la Rinconada de San Miguel, 2, 34005 Palencia",
+    "postalCode": "34005",
+    "categoryOriginal": "Bar restaurante",
+    "typesOriginal": [
+      "Bar restaurante"
+    ],
+    "latitude": 42.0083438,
+    "longitude": -4.5340714,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJw_EdhDiwRw0R8N3S6Fv2Yn0",
+    "phoneOriginal": "+34 979 61 02 02",
+    "phoneUnformatted": "+34979610202",
+    "websiteOriginal": "http://labarradevilloldo.com/",
+    "websiteOwn": "http://labarradevilloldo.com/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "bar",
+    "proposedCategoryReason": "Categoría Google \"Bar restaurante\" (bar con comidas) mapea a \"bar\" como categoría admisible en venues.",
+    "proposedZone": "otros",
+    "proposedZoneReason": "Dirección fuera de los tres sectores históricos principales.",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-10",
+    "placeId": "ChIJPXkrE0ewRw0RRJNYaKx4bCQ",
+    "originRows": [
+      9
+    ],
+    "queries": [
+      "Taberna Plaza Vieja Palencia"
+    ],
+    "titleOriginal": "Restaurante La Traserilla",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "C. Don Sancho, 1, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Restaurante de cocina española",
+    "typesOriginal": [
+      "Restaurante de cocina española"
+    ],
+    "latitude": 42.0097175,
+    "longitude": -4.5327614,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJPXkrE0ewRw0RRJNYaKx4bCQ",
+    "phoneOriginal": "+34 979 74 54 21",
+    "phoneUnformatted": "+34979745421",
+    "websiteOriginal": "http://www.latraserilla.es/",
+    "websiteOwn": "http://www.latraserilla.es/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 7,
+    "openingHoursSummary": "7 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Categoría Google \"Restaurante de cocina española\". VayaPlan no dispone de categoría \"restaurante\" en venues.category; se propone \"general\" para evitar forzarlo como bar.",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Eje de calle Mayor / Don Sancho / Soldados (Zona Centro).",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Evaluar si clasificar como \"general\" o si tiene actividad de bar/tapas.",
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-11",
+    "placeId": "ChIJoxA_z0ewRw0Rl9JuNSb1qxM",
+    "originRows": [
+      10
+    ],
+    "queries": [
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "Debla - Palencia.",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Pl. Mayor, 15, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Bar",
+    "typesOriginal": [
+      "Bar"
+    ],
+    "latitude": 42.0108776,
+    "longitude": -4.532495,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJoxA_z0ewRw0Rl9JuNSb1qxM",
+    "phoneOriginal": "+34 979 74 29 27",
+    "phoneUnformatted": "+34979742927",
+    "websiteOriginal": null,
+    "websiteOwn": null,
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 1,
+    "openingHoursSummary": "1 días informados",
+    "proposedCategory": "bar",
+    "proposedCategoryReason": "Categoría Google \"Bar\" mapea a \"bar\".",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Plaza Mayor de Palencia.",
+    "classification": "REVISAR_COINCIDENCIA",
+    "classificationReason": "Duda entre registros del lote y posible sucesión/cambio de negocio: mismo portal exacto (Pl. Mayor 15).",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Duda interna del lote y posible cambio comercial: CAND-11 (Debla, Bar) y CAND-17 (La Cuchillería, Restaurante) en Pl. Mayor 15. Verificar si coexisten o si La Cuchillería sustituyó a Debla."
+    ]
+  },
+  {
+    "candidateId": "CAND-12",
+    "placeId": "ChIJg39ojCSxRw0RPuTihIE3drU",
+    "originRows": [
+      11
+    ],
+    "queries": [
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "Restaurante D'Candela",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Pl. Mayor, 10, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante"
+    ],
+    "latitude": 42.0103543,
+    "longitude": -4.5328077,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJg39ojCSxRw0RPuTihIE3drU",
+    "phoneOriginal": "+34 979 87 28 78",
+    "phoneUnformatted": "+34979872878",
+    "websiteOriginal": "https://decandelarestaurante.com/",
+    "websiteOwn": "https://decandelarestaurante.com/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 1,
+    "openingHoursSummary": "1 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Categoría Google \"Restaurante\". VayaPlan no dispone de categoría \"restaurante\" en venues.category; se propone \"general\" para evitar forzarlo como bar.",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Plaza Mayor de Palencia, adyacente a la zona Centro/La Puebla.",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Evaluar si clasificar como \"general\" o si tiene actividad de bar/tapas.",
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-13",
+    "placeId": "ChIJc1oAmQmxRw0RvUgJkeKZTqE",
+    "originRows": [
+      14
+    ],
+    "queries": [
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "Habana, Cafetería Restaurante en Palencia",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "C. Mayor Principal, 101, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Bar",
+    "typesOriginal": [
+      "Bar",
+      "Cafetería",
+      "Restaurante de desayunos",
+      "Restaurante de postres",
+      "Tienda de postres",
+      "Restaurante de comida para llevar",
+      "Restaurante"
+    ],
+    "latitude": 42.0065824,
+    "longitude": -4.5311761,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJc1oAmQmxRw0RvUgJkeKZTqE",
+    "phoneOriginal": "+34 979 04 16 24",
+    "phoneUnformatted": "+34979041624",
+    "websiteOriginal": "https://habanacafeteria.com/",
+    "websiteOwn": "https://habanacafeteria.com/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 1,
+    "openingHoursSummary": "1 días informados",
+    "proposedCategory": "bar",
+    "proposedCategoryReason": "Categoría Google \"Bar\" mapea directamente a categoría VayaPlan \"bar\".",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Eje de calle Mayor / Don Sancho / Soldados (Zona Centro).",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-14",
+    "placeId": "ChIJl8APWUawRw0RwP9_EtNKUaQ",
+    "originRows": [
+      16
+    ],
+    "queries": [
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "Bar Alaska",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "C. Mayor Principal, 26, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Bar",
+    "typesOriginal": [
+      "Bar"
+    ],
+    "latitude": 42.0117435,
+    "longitude": -4.5337235,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJl8APWUawRw0RwP9_EtNKUaQ",
+    "phoneOriginal": "+34 979 74 28 35",
+    "phoneUnformatted": "+34979742835",
+    "websiteOriginal": "https://www.facebook.com/AlaskaPalencia/",
+    "websiteOwn": null,
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": "https://www.facebook.com/AlaskaPalencia/",
+    "openingHoursCount": 1,
+    "openingHoursSummary": "1 días informados",
+    "proposedCategory": "bar",
+    "proposedCategoryReason": "Categoría Google \"Bar\" mapea directamente a categoría VayaPlan \"bar\".",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Eje de calle Mayor / Don Sancho / Soldados (Zona Centro).",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-15",
+    "placeId": "ChIJyb7ka0awRw0RVHYqQbeonRY",
+    "originRows": [
+      17
+    ],
+    "queries": [
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "La Mejillonera",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "C. los Soldados, 7, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Bar",
+    "typesOriginal": [
+      "Bar",
+      "Restaurante de cocina española"
+    ],
+    "latitude": 42.0127427,
+    "longitude": -4.5330224,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJyb7ka0awRw0RVHYqQbeonRY",
+    "phoneOriginal": "+34 979 74 47 68",
+    "phoneUnformatted": "+34979744768",
+    "websiteOriginal": null,
+    "websiteOwn": null,
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 1,
+    "openingHoursSummary": "1 días informados",
+    "proposedCategory": "bar",
+    "proposedCategoryReason": "Categoría Google \"Bar\" mapea directamente a categoría VayaPlan \"bar\".",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Eje de calle Mayor / Don Sancho / Soldados (Zona Centro).",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-16",
+    "placeId": "ChIJg79yMESxRw0RypSCPtTvNPQ",
+    "originRows": [
+      18
+    ],
+    "queries": [
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "DIECINUEVE",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "C. Mayor Principal, 80, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante",
+      "Bar restaurante"
+    ],
+    "latitude": 42.0091573,
+    "longitude": -4.5328523,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJg79yMESxRw0RypSCPtTvNPQ",
+    "phoneOriginal": "+34 979 70 10 22",
+    "phoneUnformatted": "+34979701022",
+    "websiteOriginal": "https://www.muchodiecinueve.com/",
+    "websiteOwn": "https://www.muchodiecinueve.com/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 1,
+    "openingHoursSummary": "1 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Categoría Google \"Restaurante\". VayaPlan no dispone de categoría \"restaurante\" en venues.category; se propone \"general\" para evitar forzarlo como bar.",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Eje de calle Mayor / Don Sancho / Soldados (Zona Centro).",
+    "classification": "POSIBLE_ALTA",
+    "classificationReason": "Establecimiento hostelero en Palencia capital sin dudas ni coincidencias en censo.",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Evaluar si clasificar como \"general\" o si tiene actividad de bar/tapas.",
+      "Teléfono maps disponible: almacenar en venues.phone, NO en venues.whatsapp_contact (requiere verificación previa)."
+    ]
+  },
+  {
+    "candidateId": "CAND-17",
+    "placeId": "ChIJCVZbNACxRw0RxW5Jjg55UH8",
+    "originRows": [
+      19
+    ],
+    "queries": [
+      "Bar Plaza Mayor Palencia"
+    ],
+    "titleOriginal": "La Cuchillería",
+    "cityOriginal": "Palencia",
+    "addressOriginal": "Pl. Mayor, 15, 34001 Palencia",
+    "postalCode": "34001",
+    "categoryOriginal": "Restaurante",
+    "typesOriginal": [
+      "Restaurante"
+    ],
+    "latitude": 42.0107472,
+    "longitude": -4.5324184,
+    "googleMapsUrl": "https://www.google.com/maps/place/?q=place_id:ChIJCVZbNACxRw0RxW5Jjg55UH8",
+    "phoneOriginal": "+34 673 03 22 75",
+    "phoneUnformatted": "+34673032275",
+    "websiteOriginal": "https://lacuchilleriapalencia.com/",
+    "websiteOwn": "https://lacuchilleriapalencia.com/",
+    "instagramUrl": null,
+    "instagramHandle": null,
+    "facebookUrl": null,
+    "openingHoursCount": 1,
+    "openingHoursSummary": "1 días informados",
+    "proposedCategory": "general",
+    "proposedCategoryReason": "Categoría Google \"Restaurante\" mapea a \"general\".",
+    "proposedZone": "centro_puebla",
+    "proposedZoneReason": "Plaza Mayor de Palencia.",
+    "classification": "REVISAR_COINCIDENCIA",
+    "classificationReason": "Duda entre registros del lote y posible sucesión/cambio de negocio: mismo portal exacto (Pl. Mayor 15).",
+    "matchingInternalId": null,
+    "matchingInternalTable": null,
+    "matchingEvidence": null,
+    "conflicts": [],
+    "pendingDecisions": [
+      "Duda interna del lote y posible cambio comercial: CAND-11 (Debla, Bar) y CAND-17 (La Cuchillería, Restaurante) en Pl. Mayor 15. Verificar si coexisten o si La Cuchillería sustituyó a Debla."
+    ]
+  }
+]

@@ -9,3 +9,5 @@ dist/
 build/
 *.log
 .DS_Store
+backups/
+listado_locales.txt

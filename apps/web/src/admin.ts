@@ -2328,14 +2328,20 @@ export function renderAdminHtml(): string {
 
   <!-- MODAL: NUEVO / EDITAR LOCAL (TEMA CLARO) -->
   <div id="modal-venue" class="modal-overlay">
-    <div class="modal-card">
+    <div class="modal-card" style="max-width: 640px;">
       <div class="modal-header">
         <h3 id="modal-venue-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nuevo Local</h3>
         <button class="modal-close" onclick="closeModal('modal-venue')" aria-label="Cerrar modal">✕</button>
       </div>
       <form id="form-venue" onsubmit="saveVenue(event)">
-        <div class="modal-body">
+        <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding-right: 0.5rem;">
           <input type="hidden" id="venue-id">
+
+          <!-- Banner de error accesible -->
+          <div id="venue-form-error" role="alert" style="display:none; padding:0.65rem 0.85rem; border-radius:8px; background:#fef2f2; border:1px solid #fecaca; color:var(--red); font-size:0.8125rem; font-weight:600; margin-bottom:1rem;"></div>
+
+          <!-- SECCIÓN 1: IDENTIDAD -->
+          <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-bottom:0.65rem; border-bottom:1px solid var(--border); padding-bottom:0.25rem;">Identidad</div>
 
           <div class="form-group">
             <label for="venue-name" style="font-weight:700; color:var(--text-main);">Nombre del local *</label>
@@ -2344,34 +2350,83 @@ export function renderAdminHtml(): string {
 
           <div class="form-grid two-cols" style="gap:0.75rem;">
             <div class="form-group">
+              <label for="venue-slug" style="font-weight:700; color:var(--text-main);">Slug (identificador URL)</label>
+              <input type="text" id="venue-slug" placeholder="bar-central (generado si se vacía)">
+            </div>
+            <div class="form-group">
               <label for="venue-category" style="font-weight:700; color:var(--text-main);">Categoría</label>
               <input type="text" id="venue-category" placeholder="Ej: bar, restaurante, café">
             </div>
+          </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem; align-items:center;">
             <div class="form-group">
-              <label for="venue-phone" style="font-weight:700; color:var(--text-main);">Teléfono</label>
-              <input type="text" id="venue-phone" placeholder="Ej: +34 979 12 34 56">
+              <label for="venue-zone" style="font-weight:700; color:var(--text-main);">Zona</label>
+              <input type="text" id="venue-zone" placeholder="Ej: centro_puebla, seminario, salon, otros">
+            </div>
+            <div class="form-group" style="padding-top:1.25rem;">
+              <label class="checkbox-label" style="display:inline-flex; align-items:center; gap:0.5rem; cursor:pointer; font-weight:700; color:var(--text-main);">
+                <input type="checkbox" id="venue-is-active" style="width:1.15rem; height:1.15rem; accent-color:var(--primary); cursor:pointer;">
+                <span>Local activo en catálogo</span>
+              </label>
             </div>
           </div>
 
+          <!-- SECCIÓN 2: UBICACIÓN -->
+          <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-top:1.25rem; margin-bottom:0.65rem; border-bottom:1px solid var(--border); padding-bottom:0.25rem;">Ubicación</div>
+
           <div class="form-group">
             <label for="venue-address" style="font-weight:700; color:var(--text-main);">Dirección</label>
-            <input type="text" id="venue-address" placeholder="Calle Mayor 12, Palencia">
+            <input type="text" id="venue-address" placeholder="Calle Mayor 12, 34001 Palencia">
           </div>
 
           <div class="form-grid two-cols" style="gap:0.75rem;">
             <div class="form-group">
-              <label for="venue-whatsapp" style="font-weight:700; color:var(--text-main);">WhatsApp de contacto</label>
-              <input type="text" id="venue-whatsapp" placeholder="+34600112233">
+              <label for="venue-latitude" style="font-weight:700; color:var(--text-main);">Latitud</label>
+              <input type="number" step="any" id="venue-latitude" placeholder="Ej: 42.0085587">
             </div>
             <div class="form-group">
-              <label for="venue-instagram" style="font-weight:700; color:var(--text-main);">Instagram (@usuario)</label>
-              <input type="text" id="venue-instagram" placeholder="barcentral">
+              <label for="venue-longitude" style="font-weight:700; color:var(--text-main);">Longitud</label>
+              <input type="number" step="any" id="venue-longitude" placeholder="Ej: -4.5295375">
             </div>
           </div>
 
           <div class="form-group">
             <label for="venue-maps-url" style="font-weight:700; color:var(--text-main);">Enlace Google Maps</label>
             <input type="url" id="venue-maps-url" placeholder="https://maps.google.com/?cid=...">
+          </div>
+
+          <!-- SECCIÓN 3: CONTACTO -->
+          <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-top:1.25rem; margin-bottom:0.65rem; border-bottom:1px solid var(--border); padding-bottom:0.25rem;">Contacto</div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="venue-phone" style="font-weight:700; color:var(--text-main);">Teléfono</label>
+              <input type="tel" id="venue-phone" placeholder="Ej: +34 979 12 34 56">
+            </div>
+            <div class="form-group">
+              <label for="venue-whatsapp" style="font-weight:700; color:var(--text-main);">WhatsApp de contacto</label>
+              <input type="tel" id="venue-whatsapp" placeholder="Ej: +34 600 11 22 33">
+            </div>
+          </div>
+
+          <!-- SECCIÓN 4: WEB Y REDES OFICIALES -->
+          <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); margin-top:1.25rem; margin-bottom:0.65rem; border-bottom:1px solid var(--border); padding-bottom:0.25rem;">Web y Redes Oficiales</div>
+
+          <div class="form-group">
+            <label for="venue-website" style="font-weight:700; color:var(--text-main);">Sitio Web Oficial</label>
+            <input type="url" id="venue-website" placeholder="https://www.barcentral.com (solo web oficial, no redes)">
+          </div>
+
+          <div class="form-grid two-cols" style="gap:0.75rem;">
+            <div class="form-group">
+              <label for="venue-instagram" style="font-weight:700; color:var(--text-main);">Instagram</label>
+              <input type="text" id="venue-instagram" placeholder="barcentral (usuario sin @)">
+            </div>
+            <div class="form-group">
+              <label for="venue-facebook" style="font-weight:700; color:var(--text-main);">Página de Facebook</label>
+              <input type="url" id="venue-facebook" placeholder="https://www.facebook.com/barcentral">
+            </div>
           </div>
         </div>
 
@@ -4150,9 +4205,15 @@ export function renderAdminHtml(): string {
             if (v.instagram_handle) {
               extLinks.push(\`<a href=\"https://instagram.com/\${encodeURIComponent(v.instagram_handle)}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-flex; align-items:center; gap:0.2rem; font-size:0.75rem; color:var(--primary); text-decoration:none;\">📷 @\${escapeHtml(v.instagram_handle)}</a>\`);
             }
+            if (v.facebook_url) {
+              extLinks.push(\`<a href=\"\${escapeHtml(v.facebook_url)}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-flex; align-items:center; gap:0.2rem; font-size:0.75rem; color:var(--primary); text-decoration:none;\">📘 FB ↗</a>\`);
+            }
             if (v.website_url) {
               extLinks.push(\`<a href=\"\${escapeHtml(v.website_url)}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-flex; align-items:center; gap:0.2rem; font-size:0.75rem; color:var(--primary); text-decoration:none;\">🌐 Web ↗</a>\`);
             }
+            const linksHtml = extLinks.length > 0
+              ? \`<div style=\"display:flex; gap:0.5rem; margin-top:0.25rem; flex-wrap:wrap;\">\${extLinks.join('')}</div>\`
+              : \`<div style=\"font-size:0.75rem; color:var(--text-dim); margin-top:0.25rem;\">Sin enlaces registrados</div>\`;
 
             return \`
               <tr id=\"venue-row-\${v.id}\">
@@ -4162,7 +4223,7 @@ export function renderAdminHtml(): string {
                     <span style=\"color:var(--text-dim); font-size:0.75rem; font-weight:500; margin-left:0.25rem;\">#\${v.id}</span>
                   </div>
                   \${v.address ? \`<div style=\"font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;\">📍 \${escapeHtml(v.address)}</div>\` : ''}
-                  \${extLinks.length > 0 ? \`<div style=\"display:flex; gap:0.5rem; margin-top:0.25rem; flex-wrap:wrap;\">\${extLinks.join('')}</div>\` : ''}
+                  \${linksHtml}
                   \${is9999 ? \`<div style=\"margin-top:0.35rem;\"><span class=\"badge-unverified\">⚠️ Registro técnico para eventos pendientes de asignación</span></div>\` : ''}
                 </td>
                 <td><strong style=\"color:var(--text-main); font-size:0.875rem;\">\${escapeHtml(cityName)}</strong></td>
@@ -4211,8 +4272,10 @@ export function renderAdminHtml(): string {
                   \${v.phone ? \`<div>📞 Teléfono: <strong>\${escapeHtml(v.phone)}</strong></div>\` : ''}
                   \${v.whatsapp_contact ? \`<div>💬 WhatsApp: <strong>\${escapeHtml(v.whatsapp_contact)}</strong></div>\` : ''}
                   \${v.instagram_handle ? \`<div>📷 Instagram: <strong>@\${escapeHtml(v.instagram_handle)}</strong></div>\` : ''}
+                  \${v.facebook_url ? \`<div>📘 Facebook: <a href=\"\${escapeHtml(v.facebook_url)}\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--primary); font-size:0.8125rem;\">Página de Facebook ↗</a></div>\` : ''}
                   \${v.google_maps_url ? \`<div>🗺️ <a href=\"\${escapeHtml(v.google_maps_url)}\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--primary); font-size:0.8125rem;\">Ver en Google Maps ↗</a></div>\` : ''}
                   \${v.website_url ? \`<div>🌐 <a href=\"\${escapeHtml(v.website_url)}\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--primary); font-size:0.8125rem;\">Web oficial ↗</a></div>\` : ''}
+                  \${(!v.google_maps_url && !v.instagram_handle && !v.facebook_url && !v.website_url) ? \`<div style=\"font-size:0.75rem; color:var(--text-dim); margin-top:0.25rem;\">Sin enlaces registrados</div>\` : ''}
                   <div style=\"font-size:0.75rem; color:var(--text-dim); margin-top:0.25rem;\">📅 Alta: \${formatMadridDate(v.created_at)}</div>
                 </div>
                 <div class=\"venue-card-actions\" style=\"display:flex; gap:0.5rem; margin-top:0.5rem;\">
@@ -4235,6 +4298,16 @@ export function renderAdminHtml(): string {
       document.getElementById('modal-venue-title').innerText = 'Nuevo Local';
       document.getElementById('form-venue').reset();
       document.getElementById('venue-id').value = '';
+
+      const errBanner = document.getElementById('venue-form-error');
+      if (errBanner) {
+        errBanner.style.display = 'none';
+        errBanner.textContent = '';
+      }
+
+      const activeCheckbox = document.getElementById('venue-is-active');
+      if (activeCheckbox) activeCheckbox.checked = true;
+
       const saveBtn = document.getElementById('btn-save-venue');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -4252,15 +4325,49 @@ export function renderAdminHtml(): string {
       lastActiveElementBeforeModal = document.activeElement;
       document.getElementById('modal-venue-title').innerText = 'Editar Local #' + v.id;
       document.getElementById('venue-id').value = v.id;
+
+      const errBanner = document.getElementById('venue-form-error');
+      if (errBanner) {
+        errBanner.style.display = 'none';
+        errBanner.textContent = '';
+      }
+
+      // Identidad
       document.getElementById('venue-name').value = v.name || '';
-      document.getElementById('venue-address').value = v.address || '';
-      const phoneEl = document.getElementById('venue-phone');
-      if (phoneEl) phoneEl.value = v.phone || '';
+      const slugEl = document.getElementById('venue-slug');
+      if (slugEl) slugEl.value = v.slug || '';
       const catEl = document.getElementById('venue-category');
       if (catEl) catEl.value = v.category || '';
-      document.getElementById('venue-whatsapp').value = v.whatsapp_contact || '';
-      document.getElementById('venue-instagram').value = v.instagram_handle || '';
-      document.getElementById('venue-maps-url').value = v.google_maps_url || '';
+      const zoneEl = document.getElementById('venue-zone');
+      if (zoneEl) zoneEl.value = v.zone || '';
+      const activeCheckbox = document.getElementById('venue-is-active');
+      if (activeCheckbox) {
+        activeCheckbox.checked = v.is_active !== false;
+      }
+
+      // Ubicación
+      document.getElementById('venue-address').value = v.address || '';
+      const latEl = document.getElementById('venue-latitude');
+      if (latEl) latEl.value = v.latitude != null ? v.latitude : '';
+      const lngEl = document.getElementById('venue-longitude');
+      if (lngEl) lngEl.value = v.longitude != null ? v.longitude : '';
+      const mapsEl = document.getElementById('venue-maps-url');
+      if (mapsEl) mapsEl.value = v.google_maps_url || '';
+
+      // Contacto
+      const phoneEl = document.getElementById('venue-phone');
+      if (phoneEl) phoneEl.value = v.phone || '';
+      const waEl = document.getElementById('venue-whatsapp');
+      if (waEl) waEl.value = v.whatsapp_contact || '';
+
+      // Web y redes
+      const webEl = document.getElementById('venue-website');
+      if (webEl) webEl.value = v.website_url || '';
+      const igEl = document.getElementById('venue-instagram');
+      if (igEl) igEl.value = v.instagram_handle || '';
+      const fbEl = document.getElementById('venue-facebook');
+      if (fbEl) fbEl.value = v.facebook_url || '';
+
       const saveBtn = document.getElementById('btn-save-venue');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -4274,22 +4381,138 @@ export function renderAdminHtml(): string {
     window.saveVenue = async function(e) {
       e.preventDefault();
       if (modalVenueSaveInProgress) return;
+
+      const errBanner = document.getElementById('venue-form-error');
+      const showFormError = (msg) => {
+        if (errBanner) {
+          errBanner.textContent = msg;
+          errBanner.style.display = 'block';
+          const modalBody = errBanner.closest('.modal-body');
+          if (modalBody) modalBody.scrollTop = 0;
+        } else {
+          alert(msg);
+        }
+      };
+
+      if (errBanner) {
+        errBanner.style.display = 'none';
+        errBanner.textContent = '';
+      }
+
       const saveBtn = document.getElementById('btn-save-venue');
       const id = document.getElementById('venue-id').value;
       const nameVal = document.getElementById('venue-name').value.trim();
-      if (!nameVal) {
-        alert('El nombre del local es obligatorio.');
+
+      // Prevalidación: nombre obligatorio >= 2 caracteres
+      if (!nameVal || nameVal.length < 2) {
+        showFormError('El nombre del local debe tener al menos 2 caracteres.');
+        document.getElementById('venue-name')?.focus();
         return;
       }
 
+      const websiteVal = document.getElementById('venue-website')?.value.trim() || '';
+      const facebookVal = document.getElementById('venue-facebook')?.value.trim() || '';
+      const mapsVal = document.getElementById('venue-maps-url')?.value.trim() || '';
+      const latVal = document.getElementById('venue-latitude')?.value.trim() || '';
+      const lngVal = document.getElementById('venue-longitude')?.value.trim() || '';
+
+      // Prevalidación: website_url no puede ser Facebook
+      if (websiteVal && /(?:https?:\/\/)?(?:[a-zA-Z0-9-]+\.)*facebook\.com(?:\/|$|\?)/i.test(websiteVal)) {
+        showFormError('Las URLs de Facebook deben guardarse en el campo específico "Página de Facebook", no en "Sitio Web Oficial".');
+        document.getElementById('venue-website')?.focus();
+        return;
+      }
+
+      // Prevalidación URLs válidas si se introducen
+      const isValidHttpUrl = (str) => {
+        try {
+          const u = new URL(str.startsWith('http://') || str.startsWith('https://') ? str : 'https://' + str);
+          return u.protocol === 'http:' || u.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      };
+
+      if (websiteVal && !isValidHttpUrl(websiteVal)) {
+        showFormError('El formato del Sitio Web Oficial no es válido.');
+        document.getElementById('venue-website')?.focus();
+        return;
+      }
+
+      if (facebookVal) {
+        if (!isValidHttpUrl(facebookVal)) {
+          showFormError('El formato de la Página de Facebook no es válido.');
+          document.getElementById('venue-facebook')?.focus();
+          return;
+        }
+        try {
+          const parsedFb = new URL(facebookVal.startsWith('http://') || facebookVal.startsWith('https://') ? facebookVal : 'https://' + facebookVal);
+          const fbHost = parsedFb.hostname.toLowerCase();
+          if (fbHost !== 'facebook.com' && !fbHost.endsWith('.facebook.com')) {
+            showFormError('La URL de Facebook debe pertenecer a facebook.com o a sus subdominios oficiales.');
+            document.getElementById('venue-facebook')?.focus();
+            return;
+          }
+          if (!parsedFb.pathname || parsedFb.pathname === '/' || parsedFb.pathname.trim() === '') {
+            showFormError('La URL de Facebook debe incluir la ruta de la página o perfil.');
+            document.getElementById('venue-facebook')?.focus();
+            return;
+          }
+        } catch {
+          showFormError('El formato de la Página de Facebook no es válido.');
+          document.getElementById('venue-facebook')?.focus();
+          return;
+        }
+      }
+
+      if (mapsVal && !isValidHttpUrl(mapsVal)) {
+        showFormError('El formato del enlace de Google Maps no es válido.');
+        document.getElementById('venue-maps-url')?.focus();
+        return;
+      }
+
+      // Prevalidación coordenadas
+      let parsedLat = null;
+      if (latVal !== '') {
+        parsedLat = parseFloat(latVal);
+        if (Number.isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+          showFormError('La latitud debe ser un número decimal entre -90 y 90.');
+          document.getElementById('venue-latitude')?.focus();
+          return;
+        }
+      }
+
+      let parsedLng = null;
+      if (lngVal !== '') {
+        parsedLng = parseFloat(lngVal);
+        if (Number.isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+          showFormError('La longitud debe ser un número decimal entre -180 y 180.');
+          document.getElementById('venue-longitude')?.focus();
+          return;
+        }
+      }
+
+      const activeCheckbox = document.getElementById('venue-is-active');
+      const isActiveVal = activeCheckbox ? activeCheckbox.checked : true;
+
+      const instagramRaw = document.getElementById('venue-instagram')?.value.trim() || '';
+      const instagramClean = instagramRaw.replace(/^@+/, '').trim();
+
       const payload = {
         name: nameVal,
-        address: document.getElementById('venue-address').value.trim() || null,
-        phone: document.getElementById('venue-phone')?.value.trim() || null,
+        slug: document.getElementById('venue-slug')?.value.trim() || null,
         category: document.getElementById('venue-category')?.value.trim() || null,
-        whatsapp_contact: document.getElementById('venue-whatsapp').value.trim() || null,
-        instagram_handle: document.getElementById('venue-instagram').value.trim()?.replace('@', '') || null,
-        google_maps_url: document.getElementById('venue-maps-url').value.trim() || null,
+        zone: document.getElementById('venue-zone')?.value.trim() || null,
+        is_active: isActiveVal,
+        address: document.getElementById('venue-address')?.value.trim() || null,
+        latitude: parsedLat,
+        longitude: parsedLng,
+        google_maps_url: mapsVal || null,
+        phone: document.getElementById('venue-phone')?.value.trim() || null,
+        whatsapp_contact: document.getElementById('venue-whatsapp')?.value.trim() || null,
+        website_url: websiteVal || null,
+        instagram_handle: instagramClean || null,
+        facebook_url: facebookVal || null,
       };
 
       modalVenueSaveInProgress = true;
@@ -4301,14 +4524,14 @@ export function renderAdminHtml(): string {
       try {
         let res;
         if (id) {
-          res = await apiFetch(\`/api/v1/admin/venues/\${id}\`, { method: 'PATCH', body: JSON.stringify(payload) });
+          res = await apiFetch('/api/v1/admin/venues/' + id, { method: 'PATCH', body: JSON.stringify(payload) });
         } else {
           res = await apiFetch('/api/v1/admin/venues', { method: 'POST', body: JSON.stringify(payload) });
         }
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          alert(errData.message || 'Error al guardar el local.');
+          showFormError(errData.message || 'Error al guardar el local.');
           return;
         }
 
@@ -4316,7 +4539,7 @@ export function renderAdminHtml(): string {
         await loadVenuesCache();
         loadAdminVenues();
       } catch (err) {
-        alert('Error de conexión al guardar el local.');
+        showFormError('Error de conexión al guardar el local.');
       } finally {
         modalVenueSaveInProgress = false;
         if (saveBtn) {

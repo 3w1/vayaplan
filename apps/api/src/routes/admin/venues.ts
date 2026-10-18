@@ -202,6 +202,7 @@ adminVenuesRoutes.get('/venues', async (c) => {
       v.instagram_handle,
       v.whatsapp_contact,
       v.website_url,
+      v.facebook_url,
       v.is_active,
       v.created_at,
       v.updated_at,
@@ -374,6 +375,128 @@ adminVenuesRoutes.delete('/venues/:id', async (c) => {
 });
 
 /**
+ * Normaliza y valida la URL de Facebook.
+ * Acepta URLs completas pertenecientes al dominio facebook.com.
+ * Normaliza m.facebook.com a www.facebook.com.
+ * Convierte valores vacíos a NULL. Rechaza texto libre e identificadores sueltos.
+ */
+export function normalizeFacebookUrl(input: unknown): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input !== 'string') {
+    throw new Error('invalid_facebook_url');
+  }
+  const trimmed = input.trim();
+  if (trimmed === '') return null;
+
+  let parsed: URL;
+  try {
+    const urlToParse = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    parsed = new URL(urlToParse);
+  } catch {
+    throw new Error('invalid_facebook_url');
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  const isFacebookHost = host === 'facebook.com' || host.endsWith('.facebook.com');
+  if (!isFacebookHost) {
+    throw new Error('invalid_facebook_url');
+  }
+
+  if (!parsed.pathname || parsed.pathname === '/' || parsed.pathname.trim() === '') {
+    throw new Error('invalid_facebook_url');
+  }
+
+  // Normaliza cualquier subdominio (m., es-la., es-es., etc.) o facebook.com a www.facebook.com
+  parsed.hostname = 'www.facebook.com';
+
+  if (parsed.pathname && parsed.pathname.length > 1 && parsed.pathname.endsWith('/')) {
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+  }
+
+  parsed.protocol = 'https:';
+  return parsed.toString();
+}
+
+/**
+ * Normaliza y valida website_url.
+ * Rechaza URLs pertenecientes a Facebook (facebook.com y sus subdominios) con error 'facebook_url_required'.
+ * Convierte valores vacíos a NULL.
+ */
+export function normalizeWebsiteUrl(input: unknown): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input !== 'string') {
+    throw new Error('invalid_website_url');
+  }
+  const trimmed = input.trim();
+  if (trimmed === '') return null;
+
+  let parsed: URL;
+  try {
+    const urlToParse = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    parsed = new URL(urlToParse);
+  } catch {
+    throw new Error('invalid_website_url');
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (host === 'facebook.com' || host.endsWith('.facebook.com')) {
+    const err = new Error('Las URLs de Facebook deben guardarse en el campo facebook_url.');
+    err.name = 'facebook_url_required';
+    throw err;
+  }
+
+  parsed.protocol = 'https:';
+  return parsed.toString();
+}
+
+/**
+ * Normaliza instagram_handle eliminando '@', espacios y URLs completas.
+ * Convierte valores vacíos a NULL.
+ */
+export function normalizeInstagramHandle(input: unknown): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input !== 'string') return null;
+  let val = input.trim();
+  if (val === '') return null;
+
+  const match = val.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/([a-zA-Z0-9_.]+)/i);
+  if (match) {
+    val = match[1];
+  }
+  val = val.replace(/@+/g, '').trim();
+  return val === '' ? null : val;
+}
+
+/**
+ * Valida coordenadas geográficas (latitud / longitud).
+ */
+export function validateCoordinate(input: unknown, type: 'latitude' | 'longitude'): number | null {
+  if (input === undefined) return null;
+  if (input === null || input === '') return null;
+  const num = Number(input);
+  if (Number.isNaN(num)) {
+    throw new Error(`invalid_${type}`);
+  }
+  if (type === 'latitude' && (num < -90 || num > 90)) {
+    throw new Error('invalid_latitude');
+  }
+  if (type === 'longitude' && (num < -180 || num > 180)) {
+    throw new Error('invalid_longitude');
+  }
+  return num;
+}
+
+/**
+ * Valida campo is_active como booleano.
+ */
+export function validateIsActive(input: unknown): boolean {
+  if (typeof input === 'boolean') return input;
+  if (input === 'true' || input === '1' || input === 1) return true;
+  if (input === 'false' || input === '0' || input === 0) return false;
+  throw new Error('invalid_is_active');
+}
+
+/**
  * POST /api/v1/admin/venues
  * Crear un nuevo local
  */
@@ -386,34 +509,65 @@ adminVenuesRoutes.post('/venues', async (c) => {
   }
 
   const cityId = Number(body.city_id || 1);
-  const name = body.name?.trim();
-  const rawSlug = body.slug?.trim() || name?.toLowerCase()?.replace(/[^a-z0-9]/g, '-');
-  const address = body.address?.trim() || null;
-  const latitude = body.latitude !== undefined && body.latitude !== null ? Number(body.latitude) : null;
-  const longitude = body.longitude !== undefined && body.longitude !== null ? Number(body.longitude) : null;
-  const googleMapsUrl = body.google_maps_url?.trim() || null;
-  const instagramHandle = body.instagram_handle?.trim()?.replace('@', '') || null;
-  const whatsappContact = body.whatsapp_contact?.trim() || null;
-  const websiteUrl = body.website_url?.trim() || null;
-  const isActive = body.is_active !== undefined ? Boolean(body.is_active) : true;
-  const zone = body.zone?.trim() || null;
-  const category = body.category?.trim() || 'general';
-  const phone = body.phone?.trim() || null;
-
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name || name.length < 2) {
-    return c.json({ error: 'invalid_parameter', message: 'El nombre del local es obligatorio.' }, 400);
+    return c.json({ error: 'invalid_parameter', message: 'El nombre del local es obligatorio y debe tener al menos 2 caracteres.' }, 400);
   }
 
-  const slug = rawSlug || `local-${Date.now()}`;
+  const rawSlug = typeof body.slug === 'string' ? body.slug.trim() : '';
+  const slug = rawSlug || name.toLowerCase().replace(/[^a-z0-9]/g, '-') || `local-${Date.now()}`;
+  const address = typeof body.address === 'string' ? body.address.trim() || null : null;
+  const googleMapsUrl = typeof body.google_maps_url === 'string' ? body.google_maps_url.trim() || null : null;
+  const whatsappContact = typeof body.whatsapp_contact === 'string' ? body.whatsapp_contact.trim() || null : null;
+  const zone = typeof body.zone === 'string' ? body.zone.trim() || null : null;
+  const category = typeof body.category === 'string' ? body.category.trim() || 'general' : 'general';
+  const phone = typeof body.phone === 'string' ? body.phone.trim() || null : null;
+
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  try {
+    latitude = validateCoordinate(body.latitude, 'latitude');
+    longitude = validateCoordinate(body.longitude, 'longitude');
+  } catch {
+    return c.json({ error: 'invalid_parameter', message: 'Coordenadas geográficas inválidas (latitud: -90 a 90, longitud: -180 a 180).' }, 400);
+  }
+
+  let isActive = true;
+  if (body.is_active !== undefined) {
+    try {
+      isActive = validateIsActive(body.is_active);
+    } catch {
+      return c.json({ error: 'invalid_parameter', message: 'El campo is_active debe ser un booleano.' }, 400);
+    }
+  }
+
+  let websiteUrl: string | null = null;
+  try {
+    websiteUrl = normalizeWebsiteUrl(body.website_url);
+  } catch (err: any) {
+    if (err.name === 'facebook_url_required') {
+      return c.json({ error: 'facebook_url_required', message: err.message }, 400);
+    }
+    return c.json({ error: 'invalid_parameter', message: 'URL de sitio web oficial inválida.' }, 400);
+  }
+
+  let facebookUrl: string | null = null;
+  try {
+    facebookUrl = normalizeFacebookUrl(body.facebook_url);
+  } catch {
+    return c.json({ error: 'invalid_parameter', message: 'URL de Facebook inválida. Debe ser una URL completa de Facebook (ej: https://www.facebook.com/pagina).' }, 400);
+  }
+
+  const instagramHandle = normalizeInstagramHandle(body.instagram_handle);
 
   const insertSql = `
     INSERT INTO venues (
       city_id, name, slug, address, latitude, longitude,
-      google_maps_url, instagram_handle, whatsapp_contact, website_url,
+      google_maps_url, instagram_handle, whatsapp_contact, website_url, facebook_url,
       is_active, zone, category, phone, created_at, updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), now())
-    RETURNING id, name, slug;
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), now())
+    RETURNING *;
   `;
 
   try {
@@ -428,6 +582,7 @@ adminVenuesRoutes.post('/venues', async (c) => {
       instagramHandle,
       whatsappContact,
       websiteUrl,
+      facebookUrl,
       isActive,
       zone,
       category,
@@ -467,6 +622,7 @@ adminVenuesRoutes.patch('/venues/:id', async (c) => {
     'instagram_handle',
     'whatsapp_contact',
     'website_url',
+    'facebook_url',
     'is_active',
     'zone',
     'category',
@@ -478,7 +634,61 @@ adminVenuesRoutes.patch('/venues/:id', async (c) => {
 
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
-      values.push(body[field]);
+      let normalizedValue: any = body[field];
+
+      if (field === 'name') {
+        const trimmed = typeof body.name === 'string' ? body.name.trim() : '';
+        if (trimmed.length < 2) {
+          return c.json({ error: 'invalid_parameter', message: 'El nombre del local debe tener al menos 2 caracteres.' }, 400);
+        }
+        normalizedValue = trimmed;
+      } else if (field === 'slug') {
+        const trimmed = typeof body.slug === 'string' ? body.slug.trim() : '';
+        if (trimmed.length === 0) {
+          return c.json({ error: 'invalid_parameter', message: 'El slug no puede estar vacío.' }, 400);
+        }
+        normalizedValue = trimmed;
+      } else if (field === 'website_url') {
+        try {
+          normalizedValue = normalizeWebsiteUrl(body.website_url);
+        } catch (err: any) {
+          if (err.name === 'facebook_url_required') {
+            return c.json({ error: 'facebook_url_required', message: err.message }, 400);
+          }
+          return c.json({ error: 'invalid_parameter', message: 'URL de sitio web oficial inválida.' }, 400);
+        }
+      } else if (field === 'facebook_url') {
+        try {
+          normalizedValue = normalizeFacebookUrl(body.facebook_url);
+        } catch {
+          return c.json({ error: 'invalid_parameter', message: 'URL de Facebook inválida. Debe ser una URL completa de Facebook (ej: https://www.facebook.com/pagina).' }, 400);
+        }
+      } else if (field === 'instagram_handle') {
+        normalizedValue = normalizeInstagramHandle(body.instagram_handle);
+      } else if (field === 'latitude') {
+        try {
+          normalizedValue = validateCoordinate(body.latitude, 'latitude');
+        } catch {
+          return c.json({ error: 'invalid_parameter', message: 'Latitud inválida (debe estar entre -90 y 90).' }, 400);
+        }
+      } else if (field === 'longitude') {
+        try {
+          normalizedValue = validateCoordinate(body.longitude, 'longitude');
+        } catch {
+          return c.json({ error: 'invalid_parameter', message: 'Longitud inválida (debe estar entre -180 y 180).' }, 400);
+        }
+      } else if (field === 'is_active') {
+        try {
+          normalizedValue = validateIsActive(body.is_active);
+        } catch {
+          return c.json({ error: 'invalid_parameter', message: 'El campo is_active debe ser un booleano.' }, 400);
+        }
+      } else if (typeof normalizedValue === 'string') {
+        const trimmed = normalizedValue.trim();
+        normalizedValue = trimmed === '' ? null : trimmed;
+      }
+
+      values.push(normalizedValue);
       updates.push(`${field} = $${values.length}`);
     }
   }
