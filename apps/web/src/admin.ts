@@ -2579,7 +2579,7 @@ export function renderAdminHtml(): string {
             <div class="venue-search-wrap">
               <label for="ev-venue-search" style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Local</label>
               <div style="position:relative;">
-                <input type="text" id="ev-venue-search" class="event-input" placeholder="Escribe el nombre o calle del establecimiento..." autocomplete="off" oninput="onEventVenueSearchInput(this.value)" onfocus="onEventVenueSearchFocus()">
+                <input type="text" id="ev-venue-search" class="event-input" placeholder="Escribe el nombre o calle del establecimiento..." autocomplete="off" aria-describedby="ev-venue-unassigned-notice" oninput="onEventVenueSearchInput(this.value)" onfocus="onEventVenueSearchFocus()">
                 <input type="hidden" id="ev-venue-id">
                 <div id="ev-venue-dropdown" class="venue-search-results" style="display:none;" role="listbox"></div>
               </div>
@@ -4422,7 +4422,11 @@ export function renderAdminHtml(): string {
         venueErr.style.display = 'none';
       }
       const venueInput = document.getElementById('ev-venue-search');
-      if (venueInput) venueInput.style.borderColor = '';
+      if (venueInput) {
+        venueInput.style.borderColor = '';
+        venueInput.removeAttribute('aria-invalid');
+        venueInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+      }
     }
 
     // Cálculo y resumen de jornada editorial (Europe/Madrid)
@@ -4562,19 +4566,30 @@ export function renderAdminHtml(): string {
 
     // Selector y búsqueda de local para el evento
     window.onEventVenueSearchInput = function(val) {
+      // Si se modifica el texto del buscador, desvincular el local seleccionado previamente
+      document.getElementById('ev-venue-id').value = '';
+      const selectedCard = document.getElementById('ev-venue-selected-card');
+      if (selectedCard) selectedCard.style.display = 'none';
+      const notice = document.getElementById('ev-venue-unassigned-notice');
+      if (notice) notice.style.display = 'block';
+
       const venueErr = document.getElementById('ev-venue-field-error');
       if (venueErr) {
         venueErr.innerText = '';
         venueErr.style.display = 'none';
       }
       const venueInput = document.getElementById('ev-venue-search');
-      if (venueInput) venueInput.style.borderColor = '';
+      if (venueInput) {
+        venueInput.style.borderColor = '';
+        venueInput.removeAttribute('aria-invalid');
+        venueInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+      }
 
       const query = normalizeSearchText(val || '');
       const dropdown = document.getElementById('ev-venue-dropdown');
       if (!dropdown) return;
 
-      const validVenues = (cachedVenues || []).filter(v => v.id !== 9999);
+      const validVenues = (cachedVenues || []).filter(v => Number(v.id) !== 9999);
       const matches = validVenues.filter(v => {
         if (!query) return true;
         const nName = normalizeSearchText(v.name || '');
@@ -4611,11 +4626,11 @@ export function renderAdminHtml(): string {
     };
 
     window.selectEventVenue = function(venueId) {
-      if (venueId === 9999) {
+      if (Number(venueId) === 9999) {
         alert('Prohibido seleccionar el local técnico provisional 9999.');
         return;
       }
-      const v = (cachedVenues || []).find(item => item.id === venueId);
+      const v = (cachedVenues || []).find(item => Number(item.id) === Number(venueId));
       if (!v) return;
 
       document.getElementById('ev-venue-id').value = v.id;
@@ -4625,7 +4640,12 @@ export function renderAdminHtml(): string {
       document.getElementById('ev-venue-unassigned-notice').style.display = 'none';
 
       const searchInput = document.getElementById('ev-venue-search');
-      if (searchInput) searchInput.value = '';
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.removeAttribute('aria-invalid');
+        searchInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+        searchInput.style.borderColor = '';
+      }
       const dropdown = document.getElementById('ev-venue-dropdown');
       if (dropdown) dropdown.style.display = 'none';
 
@@ -4640,6 +4660,9 @@ export function renderAdminHtml(): string {
       const searchInput = document.getElementById('ev-venue-search');
       if (searchInput) {
         searchInput.value = '';
+        searchInput.removeAttribute('aria-invalid');
+        searchInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+        searchInput.style.borderColor = '';
         searchInput.focus();
       }
       const dropdown = document.getElementById('ev-venue-dropdown');
@@ -5161,7 +5184,7 @@ export function renderAdminHtml(): string {
       }
 
       // Verificación de local: obligatorio para publicar
-      if (targetStatus === 'published' && (!venueId || venueId === 9999)) {
+      if (targetStatus === 'published' && (!venueId || Number(venueId) === 9999)) {
         const venueErrMsg = 'Para publicar el evento es obligatorio seleccionar un local del censo. Si aún no tienes local, guárdalo como borrador.';
         showFormError(venueErrMsg, 'ev-venue-search');
         const venueErr = document.getElementById('ev-venue-field-error');
@@ -5170,7 +5193,11 @@ export function renderAdminHtml(): string {
           venueErr.style.display = 'block';
         }
         const venueInput = document.getElementById('ev-venue-search');
-        if (venueInput) venueInput.style.borderColor = '#dc2626';
+        if (venueInput) {
+          venueInput.style.borderColor = '#dc2626';
+          venueInput.setAttribute('aria-invalid', 'true');
+          venueInput.setAttribute('aria-describedby', 'ev-venue-field-error ev-venue-unassigned-notice');
+        }
         return;
       }
 
@@ -5227,8 +5254,8 @@ export function renderAdminHtml(): string {
         image_url: imageUrl,
       };
 
-      if (venueId && venueId !== 9999) {
-        payload.venue_id = venueId;
+      if (venueId && Number(venueId) !== 9999) {
+        payload.venue_id = Number(venueId);
       }
 
       modalEventSaveInProgress = true;
@@ -5296,7 +5323,11 @@ export function renderAdminHtml(): string {
           venueErr.style.display = 'block';
         }
         const venueInput = document.getElementById('ev-venue-search');
-        if (venueInput) venueInput.style.borderColor = '#dc2626';
+        if (venueInput) {
+          venueInput.style.borderColor = '#dc2626';
+          venueInput.setAttribute('aria-invalid', 'true');
+          venueInput.setAttribute('aria-describedby', 'ev-venue-field-error ev-venue-unassigned-notice');
+        }
         return;
       }
 
