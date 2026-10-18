@@ -2445,7 +2445,7 @@ export function renderAdminHtml(): string {
         <h3 id="modal-delete-venue-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Eliminar Local</h3>
         <button class="modal-close" onclick="closeModal('modal-delete-venue')" aria-label="Cerrar modal">✕</button>
       </div>
-      <div id="modal-delete-venue-error" style="display:none; margin: 1rem 1.5rem 0 1.5rem; padding: 0.75rem 1rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #991b1b; font-size: 0.875rem; line-height: 1.4;"></div>
+      <div id="modal-delete-venue-error" role="alert" style="display:none; margin: 1rem 1.5rem 0 1.5rem; padding: 0.75rem 1rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #991b1b; font-size: 0.875rem; line-height: 1.4;"></div>
       <div class="modal-body" id="modal-delete-venue-body">
         <div style="text-align:center; padding:1.5rem; color:var(--text-muted);">Comprobando dependencias del local...</div>
       </div>
@@ -4694,7 +4694,7 @@ export function renderAdminHtml(): string {
 
         deleteSucceeded = true;
       } catch (err) {
-        const isTimeoutOrNetwork = err && (err.name === 'TimeoutError' || err.name === 'AbortError' || (err.message && (err.message.includes('fetch') || err.message.includes('network'))));
+        const isTimeoutOrNetwork = err && (err.name === 'TimeoutError' || err.name === 'AbortError' || err.name === 'TypeError' || (err.message && (err.message.includes('fetch') || err.message.includes('network'))));
         if (isTimeoutOrNetwork) {
           try {
             const checkRes = await apiFetch(\`/api/v1/admin/venues/\${targetId}/dependencies\`, {
