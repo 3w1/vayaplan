@@ -1498,6 +1498,429 @@ export function renderAdminHtml(): string {
     }
     .two-cols { grid-template-columns: 1fr 1fr; }
 
+    /* =========================================================================
+       NUEVO EDITOR DE CREACIÓN Y EDICIÓN DE EVENTOS (DESKTOP & MÓVIL)
+       ========================================================================= */
+    #modal-event {
+      z-index: 1000;
+      padding: 1.5rem;
+      overscroll-behavior: contain;
+    }
+    #modal-event.active {
+      display: flex;
+    }
+    .modal-event-editor {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 1180px;
+      height: 92vh;
+      max-height: 920px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 45px rgba(11, 15, 59, 0.18);
+      position: relative;
+      overflow: hidden;
+      animation: modalEventFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalEventFadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-event-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      flex-shrink: 0;
+      gap: 1rem;
+    }
+    .modal-event-header-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .modal-event-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin: 0;
+      line-height: 1.3;
+    }
+    .modal-event-body {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr);
+      grid-template-areas:
+        "data     poster"
+        "venue    poster"
+        "schedule poster"
+        "details  poster"
+        "source   poster"
+        "advanced poster";
+      gap: 1.25rem 1.75rem;
+      align-items: start;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+    .modal-event-footer {
+      padding: 0.875rem 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #ffffff;
+      flex-shrink: 0;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .modal-event-footer-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .modal-event-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+
+    /* Asignación de áreas para dos columnas en escritorio */
+    .sec-data     { grid-area: data; }
+    .sec-venue    { grid-area: venue; }
+    .sec-schedule { grid-area: schedule; }
+    .sec-poster   { grid-area: poster; position: sticky; top: 0; }
+    .sec-details  { grid-area: details; }
+    .sec-source   { grid-area: source; }
+    .sec-advanced { grid-area: advanced; }
+
+    /* Estilos unificados de campos del editor */
+    .event-field-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.15rem;
+      box-shadow: 0 1px 2px rgba(11, 15, 59, 0.03);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .event-field-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.15rem;
+    }
+    .event-section-label {
+      font-size: 0.8125rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .event-input,
+    .event-select,
+    .event-textarea {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.9375rem;
+      font-family: inherit;
+      color: var(--text-main);
+      background-color: #ffffff;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      min-height: 44px;
+      box-sizing: border-box;
+    }
+    .event-input:focus,
+    .event-select:focus,
+    .event-textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(108, 59, 255, 0.12);
+    }
+    .event-textarea {
+      min-height: 100px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+    .event-input-large {
+      font-size: 1.05rem;
+      font-weight: 600;
+      padding: 0.75rem 0.95rem;
+      min-height: 48px;
+    }
+
+    /* Alert / Error accesible */
+    .editor-alert-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: #991b1b;
+      font-size: 0.875rem;
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+
+    /* Selector de local con búsqueda */
+    .venue-search-wrap {
+      position: relative;
+    }
+    .venue-search-results {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow-lg);
+      max-height: 220px;
+      overflow-y: auto;
+      margin-top: 4px;
+    }
+    .venue-search-item {
+      padding: 0.65rem 0.85rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.12s ease;
+    }
+    .venue-search-item:last-child {
+      border-bottom: none;
+    }
+    .venue-search-item:hover,
+    .venue-search-item.highlighted {
+      background: var(--bg-selected);
+    }
+    .venue-search-item-name {
+      font-weight: 700;
+      font-size: 0.875rem;
+      color: var(--text-main);
+    }
+    .venue-search-item-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .venue-selected-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .venue-unassigned-notice {
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      background: #f1f5f9;
+      border: 1px dashed var(--border-strong);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      line-height: 1.4;
+      margin-top: 0.5rem;
+    }
+
+    /* Resumen de jornada editorial */
+    .editorial-summary-badge {
+      background: #f5f3ff;
+      border: 1px solid #ddd6fe;
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.85rem;
+      color: #5b21b6;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      line-height: 1.35;
+    }
+
+    /* Selector de Precio */
+    .price-type-toggle {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .price-type-btn {
+      flex: 1;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid var(--border-strong);
+      background: #ffffff;
+      color: var(--text-main);
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      transition: all 0.15s ease;
+      min-height: 40px;
+    }
+    .price-type-btn:hover {
+      background: var(--bg-subtle);
+    }
+    .price-type-btn.active {
+      background: var(--bg-selected);
+      border-color: var(--primary);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    /* Cartel / Panel de Previsualización */
+    .poster-panel-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.15rem;
+      box-shadow: 0 1px 2px rgba(11, 15, 59, 0.03);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .poster-upload-box {
+      border: 2px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 1.75rem 1rem;
+      text-align: center;
+      background: #f8fafc;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .poster-upload-box:hover,
+    .poster-upload-box.drag-over {
+      border-color: var(--primary);
+      background: #f5f3ff;
+    }
+    .poster-preview-card {
+      width: 100%;
+      background: #0b0f3b;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 240px;
+      max-height: 480px;
+      position: relative;
+    }
+    .poster-preview-img {
+      max-width: 100%;
+      max-height: 480px;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Acordeón Opciones Avanzadas */
+    .advanced-accordion {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .advanced-accordion summary {
+      padding: 0.85rem 1.15rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #fafbfd;
+      transition: background 0.15s ease;
+    }
+    .advanced-accordion summary:hover {
+      background: var(--bg-subtle);
+      color: var(--text-main);
+    }
+    .advanced-accordion[open] summary {
+      border-bottom: 1px solid var(--border);
+    }
+    .advanced-accordion-content {
+      padding: 1.15rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    /* ADAPTACIÓN MÓVIL ESTRICTA */
+    @media (max-width: 900px) {
+      #modal-event {
+        padding: 0 !important;
+      }
+      .modal-event-editor {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: 100vw !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+      }
+      .modal-event-header {
+        padding: 0.85rem 1rem !important;
+      }
+      .modal-event-body {
+        padding: 1rem !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 1.15rem !important;
+        overflow-x: hidden !important;
+      }
+      /* Orden explícito en móvil: datos principales, local, horario, cartel, detalles y fuente */
+      .sec-data     { order: 1 !important; width: 100% !important; }
+      .sec-venue    { order: 2 !important; width: 100% !important; }
+      .sec-schedule { order: 3 !important; width: 100% !important; }
+      .sec-poster   { order: 4 !important; width: 100% !important; position: static !important; }
+      .sec-details  { order: 5 !important; width: 100% !important; }
+      .sec-source   { order: 6 !important; width: 100% !important; }
+      .sec-advanced { order: 7 !important; width: 100% !important; }
+
+      .poster-preview-card {
+        min-height: 180px !important;
+        max-height: 320px !important;
+      }
+      .poster-preview-img {
+        max-height: 320px !important;
+      }
+      .modal-event-footer {
+        padding: 0.85rem 1rem !important;
+        gap: 0.5rem !important;
+      }
+      .modal-event-footer-right {
+        width: 100% !important;
+        justify-content: flex-end !important;
+      }
+      .modal-event-footer-left {
+        width: 100% !important;
+        justify-content: flex-start !important;
+      }
+    }
+
     /* Login View Claro */
     #login-view {
       display: flex;
@@ -2098,135 +2521,281 @@ export function renderAdminHtml(): string {
     </main>
   </div>
 
-  <!-- MODAL: CREAR / EDITAR EVENTO (TEMA CLARO) -->
-  <div id="modal-event" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-header">
-        <h3 id="modal-event-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nuevo Evento</h3>
-        <button class="modal-close" onclick="closeModal('modal-event')" aria-label="Cerrar modal">✕</button>
-      </div>
-      <form id="form-event" onsubmit="saveEvent(event)">
-        <div class="modal-body">
-          <input type="hidden" id="ev-id">
+  <!-- MODAL: EDITOR DE CREACIÓN Y EDICIÓN DE EVENTOS (REDISEÑO AMPLIO CLARO) -->
+  <div id="modal-event" class="modal-overlay" onclick="handleEventBackdropClick(event)">
+    <div class="modal-event-editor" role="dialog" aria-modal="true" aria-labelledby="modal-event-title" onclick="event.stopPropagation()">
+      
+      <!-- Cabecera Persistente -->
+      <header class="modal-event-header">
+        <div class="modal-event-header-left">
+          <h2 id="modal-event-title" class="modal-event-title">Nuevo evento</h2>
+          <span id="modal-event-status-badge" style="display:none;"></span>
+        </div>
+        <button type="button" class="modal-close" onclick="requestCloseEventModal()" aria-label="Cerrar editor de evento">✕</button>
+      </header>
 
-          <div class="form-group">
-            <label for="ev-title" style="font-weight:700; color:var(--text-main);">Título del evento *</label>
-            <input type="text" id="ev-title" required placeholder="Ej: Concierto acústico">
-          </div>
+      <!-- Mensaje de Error Accesible (Global al formulario) -->
+      <div id="ev-form-error" role="alert" style="display:none; margin: 1rem 1.5rem 0 1.5rem;" class="editor-alert-error"></div>
 
-          <div class="form-grid two-cols" style="gap:0.75rem;">
-            <div class="form-group">
-              <label for="ev-venue-id" style="font-weight:700; color:var(--text-main);">Local (Venue) *</label>
-              <select id="ev-venue-id" required></select>
+      <!-- Contenido Principal Desplazable -->
+      <form id="form-event" onsubmit="event.preventDefault();" style="display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden;">
+        <input type="hidden" id="ev-id">
+
+        <div class="modal-event-body">
+          
+          <!-- SECCIÓN A: DATOS DEL EVENTO -->
+          <section class="sec-data event-field-card" aria-labelledby="sec-data-title">
+            <div class="event-field-header">
+              <span id="sec-data-title" class="event-section-label">📌 Datos del evento</span>
             </div>
+            
+            <div class="form-group">
+              <label for="ev-title" style="font-weight:700; color:var(--text-main);">Título del evento *</label>
+              <input type="text" id="ev-title" class="event-input event-input-large" required placeholder="Ej: Concierto acústico de jazz" oninput="markFormDirty()">
+              <small style="font-size:0.75rem; color:var(--text-muted);">Nombre con el que se anunciará en la agenda pública (mínimo 3 caracteres).</small>
+            </div>
+
             <div class="form-group">
               <label for="ev-category" style="font-weight:700; color:var(--text-main);">Categoría *</label>
-              <select id="ev-category" required>
-                <option value="musica_directo">Música en directo</option>
-                <option value="dj_tardeo">DJ & Tardeo</option>
-                <option value="monologo">Monólogo</option>
-                <option value="cine">Cine</option>
-                <option value="teatro">Teatro</option>
-                <option value="exposicion">Exposición</option>
-                <option value="cultura">Cultura</option>
+              <select id="ev-category" class="event-select" required onchange="markFormDirty()">
+                <option value="" disabled selected>Selecciona una categoría...</option>
+                <option value="musica_directo">Música en directo (conciertos, acústicos, jam sessions)</option>
+                <option value="dj_tardeo">DJ & Tardeo (sesiones, tardeos, electrónica)</option>
+                <option value="monologo">Monólogo & Humor (stand-up, comedia)</option>
+                <option value="cine">Cine (proyecciones, cineclub, estrenos)</option>
+                <option value="teatro">Teatro & Artes escénicas</option>
+                <option value="exposicion">Exposición & Arte</option>
+                <option value="cultura">Cultura & Divulgación (charlas, talleres, catas)</option>
               </select>
             </div>
-          </div>
+          </section>
 
-          <!-- Bloque de Horarios (Europe/Madrid) -->
-          <div style="background:var(--bg-subtle); border:1px solid var(--border); border-radius:10px; padding:1rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.625rem;">
-              <span style="font-size:0.8125rem; font-weight:800; text-transform:uppercase; color:var(--primary);">Horarios y Jornada Editorial</span>
-              <span style="font-size:0.75rem; color:var(--text-dim); background:#ffffff; border:1px solid var(--border); padding:0.15rem 0.5rem; border-radius:9999px;">🌐 Europe/Madrid</span>
+          <!-- SECCIÓN B: LOCAL -->
+          <section class="sec-venue event-field-card" aria-labelledby="sec-venue-title">
+            <div class="event-field-header">
+              <span id="sec-venue-title" class="event-section-label">🏢 Local</span>
             </div>
-            <div class="form-grid two-cols" style="gap:0.75rem;">
-              <div class="form-group">
-                <label for="ev-start-time" style="font-weight:600; font-size:0.8125rem; color:var(--text-muted);">Fecha y hora de inicio *</label>
-                <input type="datetime-local" id="ev-start-time" required oninput="onEvStartTimeChange()">
-                <small style="font-size:0.6875rem; color:var(--text-dim); display:block; margin-top:0.25rem;">Hora oficial en Palencia</small>
+
+            <div class="venue-search-wrap">
+              <label for="ev-venue-search" style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Local</label>
+              <div style="position:relative;">
+                <input type="text" id="ev-venue-search" class="event-input" placeholder="Escribe el nombre o calle del establecimiento..." autocomplete="off" aria-describedby="ev-venue-unassigned-notice" oninput="onEventVenueSearchInput(this.value)" onfocus="onEventVenueSearchFocus()">
+                <input type="hidden" id="ev-venue-id">
+                <div id="ev-venue-dropdown" class="venue-search-results" style="display:none;" role="listbox"></div>
               </div>
-              <div class="form-group">
-                <label for="ev-editorial-date" style="font-weight:600; font-size:0.8125rem; color:var(--text-muted);">Fecha editorial (YYYY-MM-DD) *</label>
-                <input type="date" id="ev-editorial-date" required>
-                <small id="ev-editorial-date-hint" style="font-size:0.6875rem; color:var(--text-dim); display:block; margin-top:0.25rem;">Frontera editorial a las 06:00</small>
+              <div id="ev-venue-field-error" style="display:none; color:#dc2626; font-size:0.75rem; font-weight:600; margin-top:0.35rem;"></div>
+            </div>
+
+            <!-- Ficha de local seleccionado -->
+            <div id="ev-venue-selected-card" class="venue-selected-card" style="display:none;">
+              <div style="display:flex; align-items:center; gap:0.6rem; flex:1; min-width:0;">
+                <span style="font-size:1.25rem;">📍</span>
+                <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                  <div id="ev-venue-selected-name" style="font-weight:700; color:var(--text-main); font-size:0.9rem;"></div>
+                  <div id="ev-venue-selected-meta" style="font-size:0.75rem; color:var(--text-muted);"></div>
+                </div>
+              </div>
+              <div style="display:flex; gap:0.4rem; align-items:center;">
+                <button type="button" class="btn-sm btn-secondary" onclick="clearSelectedVenue()">Cambiar</button>
+                <button type="button" class="btn-sm btn-link" style="color:var(--text-muted); background:none; border:none; cursor:pointer; font-size:0.8125rem; padding:0.25rem 0.5rem;" onclick="clearSelectedVenue()">Quitar</button>
               </div>
             </div>
-          </div>
 
-          <div class="form-grid two-cols" style="gap:0.75rem;">
-            <div class="form-group">
-              <label for="ev-price-cents" style="font-weight:700; color:var(--text-main);">Precio en céntimos (0 = gratis)</label>
-              <input type="number" id="ev-price-cents" value="0" min="0">
+            <!-- Ayuda breve de asignación de local -->
+            <div id="ev-venue-unassigned-notice" class="venue-unassigned-notice" style="display:block;">
+              Obligatorio para publicar; opcional en borradores.
             </div>
-            <div class="form-group">
-              <label for="ev-status" style="font-weight:700; color:var(--text-main);">Estado</label>
-              <select id="ev-status">
-                <option value="published">Publicado</option>
-                <option value="tentative">Borrador Tentativo</option>
-                <option value="cancelled">Cancelado</option>
-                <option value="archived">Archivado</option>
-              </select>
+          </section>
+
+          <!-- SECCIÓN C: FECHA Y HORA -->
+          <section class="sec-schedule event-field-card" aria-labelledby="sec-schedule-title">
+            <div class="event-field-header">
+              <span id="sec-schedule-title" class="event-section-label">⏰ Horario y Jornada</span>
+              <span style="font-size:0.75rem; color:var(--text-dim); background:var(--bg-subtle); border:1px solid var(--border); padding:0.15rem 0.5rem; border-radius:9999px;">🌐 Europe/Madrid</span>
             </div>
-          </div>
 
-          <div class="form-group">
-            <label for="ev-description" style="font-weight:700; color:var(--text-main);">Descripción / Cartel texto</label>
-            <textarea id="ev-description" rows="3" placeholder="Detalles de la actuación..."></textarea>
-          </div>
+            <div class="form-group">
+              <label for="ev-start-time" style="font-weight:700; color:var(--text-main);">Fecha y hora de inicio *</label>
+              <input type="datetime-local" id="ev-start-time" class="event-input event-input-large" required oninput="onEvStartTimeChange()">
+              <small style="font-size:0.75rem; color:var(--text-muted);">Hora local oficial en Palencia</small>
+            </div>
 
-          <div class="form-group" style="margin-bottom:0.75rem;">
-            <label for="ev-source-url" style="font-weight:700; color:var(--text-main);">URL de entradas / reserva</label>
-            <input type="url" id="ev-source-url" placeholder="https://...">
-          </div>
+            <!-- Resumen humano de jornada editorial -->
+            <div id="ev-editorial-summary" class="editorial-summary-badge" role="status">
+              <span>📅</span> <span id="ev-editorial-summary-text">Calculando jornada editorial...</span>
+            </div>
 
-          <!-- SECCIÓN: CARTEL O IMAGEN DEL EVENTO -->
-          <div class="form-group" style="margin-bottom:1rem;">
-            <label style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Cartel o imagen del evento</label>
-            
+            <!-- Botón / Sección desplegable de finalización -->
+            <div>
+              <button type="button" id="btn-toggle-end-time" class="btn-sm btn-secondary" onclick="toggleEndTime()" style="display:inline-flex; align-items:center; gap:0.4rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Añadir hora de finalización (opcional)
+              </button>
+              
+              <div id="ev-end-time-container" style="display:none; margin-top:0.6rem; padding:0.75rem; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+                  <label for="ev-end-time" style="font-weight:700; font-size:0.8125rem; color:var(--text-main);">Fecha y hora de finalización</label>
+                  <button type="button" class="btn-sm btn-link" style="color:#dc2626; padding:0; font-size:0.75rem; background:none; border:none; cursor:pointer;" onclick="removeEndTime()">Quitar finalización</button>
+                </div>
+                <input type="datetime-local" id="ev-end-time" class="event-input" oninput="onEvEndTimeChange()">
+                <small style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:0.25rem;">Admite eventos que finalizan de madrugada o al día siguiente.</small>
+              </div>
+            </div>
+          </section>
+
+          <!-- SECCIÓN D: CARTEL O IMAGEN -->
+          <section class="sec-poster poster-panel-card" aria-labelledby="sec-poster-title">
+            <div class="event-field-header">
+              <span id="sec-poster-title" class="event-section-label">🖼️ Cartel o imagen</span>
+            </div>
+
             <input type="file" id="ev-image-file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleEventImageFileSelect(event)">
             <input type="hidden" id="ev-image-url">
 
-            <!-- Caja de subida / selector -->
-            <div id="ev-image-upload-box" style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 1.25rem 1rem; text-align: center; background: #f8fafc; transition: border-color 0.2s;">
-              <button type="button" class="btn-secondary" id="btn-trigger-upload-image" onclick="document.getElementById('ev-image-file').click()" style="display:inline-flex; align-items:center; gap:0.5rem; font-weight:600; cursor:pointer;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                Subir cartel o imagen
+            <!-- Caja de subida / Drag & Drop -->
+            <div id="ev-image-upload-box" class="poster-upload-box" onclick="triggerEventImageUpload()" ondragover="handleEventImageDragOver(event)" ondragleave="handleEventImageDragLeave(event)" ondrop="handleEventImageDrop(event)">
+              <div style="font-size:2rem; margin-bottom:0.4rem;">🎨</div>
+              <button type="button" class="btn-primary" style="pointer-events:none; margin-bottom:0.5rem;">
+                Subir cartel
               </button>
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">Formatos admitidos: JPEG, PNG, WebP (máx. 5 MB). Compatible con galería y cámara móvil.</div>
-              <div id="ev-image-uploading" role="status" style="display:none; font-size:0.875rem; color:#4f46e5; font-weight:600; margin-top:0.6rem; align-items:center; justify-content:center; gap:0.5rem;">
-                <span>⏳ Subiendo imagen al servidor...</span>
+              <div style="font-size:0.8125rem; font-weight:600; color:var(--text-main); margin-bottom:0.25rem;">O arrastra y suelta aquí tu archivo</div>
+              <div style="font-size:0.72rem; color:var(--text-muted); line-height:1.4;">JPEG, PNG o WebP (máx. 5 MB). Compatible con galería y cámara móvil.</div>
+
+              <!-- Indicador de subida -->
+              <div id="ev-image-uploading" role="status" style="display:none; font-size:0.875rem; color:#4f46e5; font-weight:600; margin-top:0.75rem; align-items:center; justify-content:center; gap:0.5rem;">
+                <span>⏳ Subiendo cartel a Cloudflare R2...</span>
               </div>
-              <div id="ev-image-error" role="alert" style="display:none; margin-top:0.6rem; padding:0.5rem 0.75rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; color:#991b1b; font-size:0.8rem; text-align:left; line-height:1.4;"></div>
             </div>
 
-            <!-- Vista previa y controles de sustitución / borrado -->
-            <div id="ev-image-preview-wrap" style="display:none; border:1px solid var(--border-color); border-radius:8px; padding:0.75rem; background:var(--bg-main); align-items:center; gap:1rem; flex-wrap:wrap;">
-              <div style="position:relative; width:90px; height:90px; flex-shrink:0; border-radius:6px; overflow:hidden; border:1px solid var(--border-color); background:#0B0F3B;">
-                <img id="ev-image-preview" src="" alt="Vista previa del cartel" style="width:100%; height:100%; object-fit:cover;">
+            <!-- Error accesible de imagen -->
+            <div id="ev-image-error" role="alert" style="display:none;" class="editor-alert-error"></div>
+
+            <!-- Vista previa completa sin recortes -->
+            <div id="ev-image-preview-wrap" style="display:none; flex-direction:column; gap:0.75rem;">
+              <div class="poster-preview-card">
+                <img id="ev-image-preview" class="poster-preview-img" src="" alt="Vista previa completa del cartel">
               </div>
-              <div style="flex:1; min-width:180px;">
-                <div id="ev-image-preview-info" style="font-size:0.8rem; font-weight:600; color:var(--text-main); margin-bottom:0.4rem; word-break:break-all;">Cartel cargado</div>
-                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                  <button type="button" class="btn-sm btn-secondary" onclick="document.getElementById('ev-image-file').click()" id="btn-replace-image">Sustituir</button>
-                  <button type="button" class="btn-sm btn-logout" onclick="removeEventImage()" id="btn-remove-image">Quitar imagen</button>
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                <span id="ev-image-preview-info" style="font-size:0.75rem; font-weight:600; color:var(--text-muted); word-break:break-all;"></span>
+                <div style="display:flex; gap:0.5rem;">
+                  <button type="button" class="btn-sm btn-secondary" onclick="triggerEventImageUpload()">Sustituir</button>
+                  <button type="button" class="btn-sm btn-logout" onclick="removeEventImage()">Quitar imagen</button>
                 </div>
               </div>
             </div>
 
             <!-- Opción secundaria para introducir URL externa -->
-            <div style="margin-top:0.35rem; text-align:right;">
+            <div style="margin-top:0.25rem; text-align:right;">
               <button type="button" id="btn-toggle-manual-url" onclick="toggleManualImageUrl()" style="background:none; border:none; color:var(--text-muted); font-size:0.75rem; text-decoration:underline; cursor:pointer; padding:0;">O introducir URL externa</button>
             </div>
             <div id="ev-image-manual-wrap" style="display:none; margin-top:0.35rem;">
-              <input type="url" id="ev-image-url-manual" placeholder="https://ejemplo.com/cartel.jpg" oninput="handleManualImageUrl(this.value)" style="font-size:0.85rem; width:100%;">
+              <input type="url" id="ev-image-url-manual" class="event-input" placeholder="https://ejemplo.com/cartel.jpg" oninput="handleManualImageUrl(this.value)" style="font-size:0.85rem;">
             </div>
-          </div>
+          </section>
+
+          <!-- SECCIÓN E: DETALLES -->
+          <section class="sec-details event-field-card" aria-labelledby="sec-details-title">
+            <div class="event-field-header">
+              <span id="sec-details-title" class="event-section-label">📝 Detalles y Precio</span>
+            </div>
+
+            <div class="form-group">
+              <label for="ev-description" style="font-weight:700; color:var(--text-main);">Descripción</label>
+              <textarea id="ev-description" class="event-textarea" placeholder="Detalles de la actuación, artistas, programa, horarios específicos o información relevante..." oninput="markFormDirty()"></textarea>
+            </div>
+
+            <!-- Selector de Precio -->
+            <div class="form-group">
+              <label style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Precio de entrada *</label>
+              <div class="price-type-toggle">
+                <button type="button" id="btn-price-free" class="price-type-btn" onclick="setPriceType('free')">
+                  Gratis (Entrada libre)
+                </button>
+                <button type="button" id="btn-price-paid" class="price-type-btn" onclick="setPriceType('paid')">
+                  💶 De pago
+                </button>
+              </div>
+              <input type="hidden" id="ev-is-free" value="">
+
+              <div id="ev-price-hint" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">
+                Selecciona Gratis o De pago.
+              </div>
+
+              <div id="ev-price-input-wrap" style="display:none; margin-top:0.5rem;">
+                <div style="position:relative; max-width:220px;">
+                  <input type="text" id="ev-price-euros" class="event-input" placeholder="0,00" style="padding-right:2rem; font-weight:700;" oninput="markFormDirty()">
+                  <span style="position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); color:var(--text-muted); font-weight:700;">€</span>
+                </div>
+                <small style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:0.25rem;">
+                  Admite coma o punto (ej. 15,50 €). Debe ser mayor que cero.
+                </small>
+              </div>
+            </div>
+          </section>
+
+          <!-- SECCIÓN F: FUENTE -->
+          <section class="sec-source event-field-card" aria-labelledby="sec-source-title">
+            <div class="event-field-header">
+              <span id="sec-source-title" class="event-section-label">🔗 Fuente del evento</span>
+            </div>
+
+            <div class="form-group">
+              <label for="ev-source-url" style="font-weight:700; color:var(--text-main);">Fuente del evento</label>
+              <input type="url" id="ev-source-url" class="event-input" placeholder="https://instagram.com/p/... o página oficial" oninput="markFormDirty()">
+              <small style="font-size:0.75rem; color:var(--text-muted);">Enlace a la publicación original, cartelera o página oficial.</small>
+            </div>
+          </section>
+
+          <!-- SECCIÓN G: OPCIONES AVANZADAS -->
+          <section class="sec-advanced">
+            <details class="advanced-accordion" id="ev-advanced-details">
+              <summary>
+                <span>⚙️</span>
+                <span>Opciones avanzadas (Jornada editorial y zona horaria)</span>
+              </summary>
+              <div class="advanced-accordion-content">
+                <div class="form-group">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+                    <label for="ev-editorial-date" style="font-weight:700; color:var(--text-main); font-size:0.8125rem;">Fecha editorial asignada (YYYY-MM-DD)</label>
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                      <span id="ev-manual-override-tag" style="display:none; font-size:0.72rem; font-weight:700; color:var(--amber-text); background:var(--amber-bg); border:1px solid var(--amber-border); padding:0.1rem 0.4rem; border-radius:4px;">⚠️ Ajuste manual</span>
+                      <button type="button" id="btn-reset-editorial-date" style="display:none; font-size:0.75rem; background:none; border:none; cursor:pointer;" class="btn-sm btn-link" onclick="resetToAutoEditorialDate()">Volver a auto</button>
+                    </div>
+                  </div>
+                  <input type="date" id="ev-editorial-date" class="event-input" oninput="onManualEditorialDateChange()">
+                  <small id="ev-editorial-date-hint" style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:0.25rem;">
+                    Por defecto se calcula con frontera a las 06:00 en Europe/Madrid.
+                  </small>
+                </div>
+
+                <div style="font-size:0.75rem; color:var(--text-dim); background:#f8fafc; border:1px solid var(--border); border-radius:6px; padding:0.6rem 0.75rem; line-height:1.4;">
+                  🌐 <strong>Zona horaria de la agenda:</strong> <code>Europe/Madrid</code> (fija por contrato editorial). Todos los cálculos de cambio de hora y frontera de madrugada operan sobre esta zona horaria.
+                </div>
+              </div>
+            </details>
+          </section>
+
         </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn-sm btn-logout" onclick="closeModal('modal-event')">Cancelar</button>
-          <button type="submit" class="btn-primary" id="btn-save-event">Guardar Evento</button>
-        </div>
+        <!-- Pie de Acciones Persistente -->
+        <footer class="modal-event-footer">
+          <div class="modal-event-footer-left">
+            <button type="button" class="btn-secondary" onclick="requestCloseEventModal()">Cancelar</button>
+          </div>
+          <div class="modal-event-footer-right">
+            <!-- Botones en Modo Creación -->
+            <div id="modal-event-create-actions" style="display:flex; gap:0.6rem;">
+              <button type="button" class="btn-secondary" id="btn-save-draft" onclick="submitEventForm('tentative')">Guardar borrador</button>
+              <button type="button" class="btn-primary" id="btn-publish-event" onclick="submitEventForm('published')">Publicar</button>
+            </div>
+            <!-- Botones en Modo Edición -->
+            <div id="modal-event-edit-actions" style="display:none; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+              <div id="modal-event-secondary-status-btns" style="display:inline-flex; gap:0.5rem;"></div>
+              <button type="button" class="btn-primary" id="btn-save-event-changes" onclick="submitEventForm()">Guardar cambios</button>
+            </div>
+          </div>
+        </footer>
+
       </form>
     </div>
   </div>
@@ -2807,6 +3376,9 @@ export function renderAdminHtml(): string {
     let modalVenueSaveInProgress = false;
     let currentEditingEvent = null;
     let editEventOrigin = 'events';
+    let eventModalFormDirty = false;
+    let editorialDateManualOverride = false;
+    let eventImageUploadSessionId = 0;
 
     function formatVenueZone(zone) {
       if (!zone) return '';
@@ -2828,30 +3400,6 @@ export function renderAdminHtml(): string {
       if (status === 'duplicate') return '<span class="status-pill status-duplicate">Duplicado</span>';
       return \`<span class="status-pill">\${escapeHtml(status)}</span>\`;
     }
-
-    window.onEvStartTimeChange = function() {
-      const startVal = document.getElementById('ev-start-time').value;
-      if (!startVal) return;
-      const [datePart, timePart] = startVal.split('T');
-      if (!datePart || !timePart) return;
-      const [h] = timePart.split(':').map(Number);
-      let editDate = datePart;
-      if (h < 6) {
-        const [y, m, d] = datePart.split('-').map(Number);
-        const prev = new Date(Date.UTC(y, m - 1, d - 1));
-        const py = prev.getUTCFullYear();
-        const pm = String(prev.getUTCMonth() + 1).padStart(2, '0');
-        const pd = String(prev.getUTCDate()).padStart(2, '0');
-        editDate = \`\${py}-\${pm}-\${pd}\`;
-      }
-      document.getElementById('ev-editorial-date').value = editDate;
-      const hint = document.getElementById('ev-editorial-date-hint');
-      if (hint) {
-        hint.textContent = h < 6
-          ? \`Madrugada (<06:00): jornada anterior (\${editDate})\`
-          : \`Jornada del mismo día (\${editDate})\`;
-      }
-    };
 
     // Control de Drawer Móvil (con focus trap para D1-D4)
     let drawerTrapAttached = false;
@@ -3134,13 +3682,17 @@ export function renderAdminHtml(): string {
         cachedVenues = data.venues || [];
 
         // Rellenar selects
-        const selects = ['ev-venue-id', 'rec-venue-id'];
+        const selects = ['rec-venue-id'];
         selects.forEach(id => {
           const el = document.getElementById(id);
-          if (el) {
+          if (el && el.tagName === 'SELECT') {
             el.innerHTML = cachedVenues.map(v => \`<option value="\${v.id}">\${escapeHtml(v.name)}</option>\`).join('');
           }
         });
+        const evVenueId = document.getElementById('ev-venue-id')?.value;
+        if (evVenueId && typeof window.selectVenue === 'function') {
+          window.selectVenue(evVenueId);
+        }
       } catch {}
     }
 
@@ -3837,27 +4389,397 @@ export function renderAdminHtml(): string {
       openNewVenueModal();
     };
 
-    window.handleEventImageFileSelect = async function(event) {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
+    // ==============================================================================
+    // EDITOR DE EVENTOS (REDISEÑO AMPLIO, CLARO Y ACCESIBLE)
+    // ==============================================================================
 
+    window.markFormDirty = function() {
+      eventModalFormDirty = true;
+    };
+
+    function showFormError(msg, focusElId) {
+      const errBox = document.getElementById('ev-form-error');
+      if (errBox) {
+        errBox.innerHTML = '<strong>⚠️ Error:</strong> ' + escapeHtml(msg);
+        errBox.style.display = 'block';
+        errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      if (focusElId) {
+        const el = document.getElementById(focusElId);
+        if (el) el.focus();
+      }
+    }
+
+    function clearFormError() {
+      const errBox = document.getElementById('ev-form-error');
+      if (errBox) {
+        errBox.innerHTML = '';
+        errBox.style.display = 'none';
+      }
+      const venueErr = document.getElementById('ev-venue-field-error');
+      if (venueErr) {
+        venueErr.innerText = '';
+        venueErr.style.display = 'none';
+      }
+      const venueInput = document.getElementById('ev-venue-search');
+      if (venueInput) {
+        venueInput.style.borderColor = '';
+        venueInput.removeAttribute('aria-invalid');
+        venueInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+      }
+    }
+
+    // Cálculo y resumen de jornada editorial (Europe/Madrid)
+    function computeEditorialDateFromLocal(madridLocalStr) {
+      if (!madridLocalStr) return '';
+      const parts = madridLocalStr.split('T');
+      if (parts.length < 2) return '';
+      const dateParts = parts[0].split('-').map(Number);
+      const timeParts = parts[1].split(':').map(Number);
+      if (dateParts.length < 3 || timeParts.length < 1) return '';
+      const y = dateParts[0];
+      const m = dateParts[1];
+      const d = dateParts[2];
+      const h = timeParts[0];
+      const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      if (h < 6) {
+        dt.setUTCDate(dt.getUTCDate() - 1);
+      }
+      const ry = dt.getUTCFullYear();
+      const rm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+      const rd = String(dt.getUTCDate()).padStart(2, '0');
+      return \`\${ry}-\${rm}-\${rd}\`;
+    }
+
+    function formatHumanEditorialSummary(editorialDateStr, madridLocalStr) {
+      if (!editorialDateStr) return 'Fecha no especificada';
+      const parts = editorialDateStr.split('-').map(Number);
+      if (parts.length < 3) return editorialDateStr;
+      const dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
+      let humanDate = dt.toLocaleDateString('es-ES', {
+        timeZone: 'UTC',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+      humanDate = humanDate.charAt(0).toUpperCase() + humanDate.slice(1);
+
+      let timeNote = '';
+      if (madridLocalStr && madridLocalStr.includes('T')) {
+        const tParts = madridLocalStr.split('T')[1].split(':');
+        const h = parseInt(tParts[0], 10);
+        const m = tParts[1] || '00';
+        if (h < 6) {
+          timeNote = \` • 🌙 Madrugada (\${String(h).padStart(2, '0')}:\${m})\`;
+        } else {
+          timeNote = \` • ⏰ Comienza a las \${String(h).padStart(2, '0')}:\${m}\`;
+        }
+      }
+      return \`Jornada del \${humanDate}\${timeNote}\`;
+    }
+
+    function updateEditorialDateUI() {
+      const startVal = document.getElementById('ev-start-time').value;
+      const editorialDateInput = document.getElementById('ev-editorial-date');
+      const tagManual = document.getElementById('ev-manual-override-tag');
+      const btnReset = document.getElementById('btn-reset-editorial-date');
+      const summaryText = document.getElementById('ev-editorial-summary-text');
+
+      if (!editorialDateManualOverride) {
+        const autoDate = computeEditorialDateFromLocal(startVal);
+        if (autoDate) {
+          editorialDateInput.value = autoDate;
+        }
+        if (tagManual) tagManual.style.display = 'none';
+        if (btnReset) btnReset.style.display = 'none';
+      } else {
+        if (tagManual) tagManual.style.display = 'inline-block';
+        if (btnReset) btnReset.style.display = 'inline-block';
+      }
+
+      if (summaryText) {
+        summaryText.innerHTML = escapeHtml(formatHumanEditorialSummary(editorialDateInput.value, startVal));
+      }
+    }
+
+    window.onEvStartTimeChange = function() {
+      markFormDirty();
+      clearFormError();
+      updateEditorialDateUI();
+    };
+
+    window.onManualEditorialDateChange = function() {
+      editorialDateManualOverride = true;
+      markFormDirty();
+      updateEditorialDateUI();
+    };
+
+    window.resetToAutoEditorialDate = function() {
+      editorialDateManualOverride = false;
+      markFormDirty();
+      updateEditorialDateUI();
+    };
+
+    // Horario de finalización
+    window.toggleEndTime = function() {
+      const container = document.getElementById('ev-end-time-container');
+      const toggleBtn = document.getElementById('btn-toggle-end-time');
+      const endInput = document.getElementById('ev-end-time');
+      if (container) container.style.display = 'block';
+      if (toggleBtn) toggleBtn.style.display = 'none';
+
+      if (endInput && !endInput.value) {
+        const startVal = document.getElementById('ev-start-time').value;
+        if (startVal && startVal.includes('T')) {
+          const [dp, tp] = startVal.split('T');
+          const [y, m, d] = dp.split('-').map(Number);
+          const [h, min] = tp.split(':').map(Number);
+          const endDt = new Date(Date.UTC(y, m - 1, d, h + 2, min, 0));
+          const ey = endDt.getUTCFullYear();
+          const em = String(endDt.getUTCMonth() + 1).padStart(2, '0');
+          const ed = String(endDt.getUTCDate()).padStart(2, '0');
+          const eh = String(endDt.getUTCHours()).padStart(2, '0');
+          const emin = String(endDt.getUTCMinutes()).padStart(2, '0');
+          endInput.value = \`\${ey}-\${em}-\${ed}T\${eh}:\${emin}\`;
+        }
+        endInput.focus();
+      }
+      markFormDirty();
+    };
+
+    window.removeEndTime = function() {
+      const container = document.getElementById('ev-end-time-container');
+      const toggleBtn = document.getElementById('btn-toggle-end-time');
+      const endInput = document.getElementById('ev-end-time');
+      if (endInput) endInput.value = '';
+      if (container) container.style.display = 'none';
+      if (toggleBtn) toggleBtn.style.display = 'inline-flex';
+      markFormDirty();
+      clearFormError();
+    };
+
+    window.onEvEndTimeChange = function() {
+      markFormDirty();
+      clearFormError();
+    };
+
+    // Selector y búsqueda de local para el evento
+    window.onEventVenueSearchInput = function(val) {
+      // Si se modifica el texto del buscador, desvincular el local seleccionado previamente
+      document.getElementById('ev-venue-id').value = '';
+      const selectedCard = document.getElementById('ev-venue-selected-card');
+      if (selectedCard) selectedCard.style.display = 'none';
+      const notice = document.getElementById('ev-venue-unassigned-notice');
+      if (notice) notice.style.display = 'block';
+
+      const venueErr = document.getElementById('ev-venue-field-error');
+      if (venueErr) {
+        venueErr.innerText = '';
+        venueErr.style.display = 'none';
+      }
+      const venueInput = document.getElementById('ev-venue-search');
+      if (venueInput) {
+        venueInput.style.borderColor = '';
+        venueInput.removeAttribute('aria-invalid');
+        venueInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+      }
+
+      const query = normalizeSearchText(val || '');
+      const dropdown = document.getElementById('ev-venue-dropdown');
+      if (!dropdown) return;
+
+      const validVenues = (cachedVenues || []).filter(v => Number(v.id) !== 9999);
+      const matches = validVenues.filter(v => {
+        if (!query) return true;
+        const nName = normalizeSearchText(v.name || '');
+        const nAddr = normalizeSearchText(v.address || '');
+        const nZone = normalizeSearchText(v.zone || '');
+        return nName.includes(query) || nAddr.includes(query) || nZone.includes(query);
+      }).slice(0, 10);
+
+      if (matches.length === 0) {
+        dropdown.innerHTML = \`
+          <div style="padding:0.75rem 1rem; color:var(--text-muted); font-size:0.8125rem;">
+            No se encontró ningún local para "<strong>\${escapeHtml(query)}</strong>".
+          </div>
+        \`;
+      } else {
+        dropdown.innerHTML = matches.map(v => \`
+          <div class="venue-search-item" onclick="selectEventVenue(\${v.id})" role="option" tabindex="0" onkeydown="if(event.key==='Enter') selectEventVenue(\${v.id})">
+            <div>
+              <div style="font-weight:700; color:var(--text-main); font-size:0.875rem;">\${escapeHtml(v.name)}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.15rem;">📍 \${escapeHtml(v.address || 'Sin dirección')}</div>
+            </div>
+            <div style="text-align:right;">
+              <span class="venue-badge">\${escapeHtml(v.zone || 'otros')}</span>
+            </div>
+          </div>
+        \`).join('');
+      }
+      dropdown.style.display = 'block';
+    };
+
+    window.onEventVenueSearchFocus = function() {
+      const input = document.getElementById('ev-venue-search');
+      onEventVenueSearchInput(input ? input.value : '');
+    };
+
+    window.selectEventVenue = function(venueId) {
+      if (Number(venueId) === 9999) {
+        alert('Prohibido seleccionar el local técnico provisional 9999.');
+        return;
+      }
+      const v = (cachedVenues || []).find(item => Number(item.id) === Number(venueId));
+      if (!v) return;
+
+      document.getElementById('ev-venue-id').value = v.id;
+      document.getElementById('ev-venue-selected-name').innerText = v.name;
+      document.getElementById('ev-venue-selected-meta').innerText = '📍 ' + (v.address || 'Sin dirección') + ' • Zona: ' + (v.zone || 'otros');
+      document.getElementById('ev-venue-selected-card').style.display = 'flex';
+      document.getElementById('ev-venue-unassigned-notice').style.display = 'none';
+
+      const searchInput = document.getElementById('ev-venue-search');
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.removeAttribute('aria-invalid');
+        searchInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+        searchInput.style.borderColor = '';
+      }
+      const dropdown = document.getElementById('ev-venue-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
+
+      markFormDirty();
+      clearFormError();
+    };
+
+    window.clearSelectedVenue = function() {
+      document.getElementById('ev-venue-id').value = '';
+      document.getElementById('ev-venue-selected-card').style.display = 'none';
+      document.getElementById('ev-venue-unassigned-notice').style.display = 'block';
+      const searchInput = document.getElementById('ev-venue-search');
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.removeAttribute('aria-invalid');
+        searchInput.setAttribute('aria-describedby', 'ev-venue-unassigned-notice');
+        searchInput.style.borderColor = '';
+        searchInput.focus();
+      }
+      const dropdown = document.getElementById('ev-venue-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
+
+      markFormDirty();
+      clearFormError();
+    };
+
+    // Cerrar dropdown al hacer clic fuera
+    document.addEventListener('click', function(e) {
+      const dropdown = document.getElementById('ev-venue-dropdown');
+      const searchInput = document.getElementById('ev-venue-search');
+      if (!dropdown || !searchInput) return;
+      if (!dropdown.contains(e.target) && e.target !== searchInput) {
+        dropdown.style.display = 'none';
+      }
+    });
+
+    // Control de precio
+    window.setPriceType = function(type) {
+      const isFreeHidden = document.getElementById('ev-is-free');
+      const btnFree = document.getElementById('btn-price-free');
+      const btnPaid = document.getElementById('btn-price-paid');
+      const wrap = document.getElementById('ev-price-input-wrap');
+      const hint = document.getElementById('ev-price-hint');
+      const eurosInput = document.getElementById('ev-price-euros');
+
+      if (type === 'free') {
+        isFreeHidden.value = 'true';
+        btnFree.classList.add('active');
+        btnPaid.classList.remove('active');
+        wrap.style.display = 'none';
+        eurosInput.value = '';
+        if (hint) hint.style.display = 'none';
+      } else if (type === 'paid') {
+        isFreeHidden.value = 'false';
+        btnPaid.classList.add('active');
+        btnFree.classList.remove('active');
+        wrap.style.display = 'block';
+        if (hint) hint.style.display = 'none';
+        eurosInput.focus();
+      } else {
+        isFreeHidden.value = '';
+        btnFree.classList.remove('active');
+        btnPaid.classList.remove('active');
+        wrap.style.display = 'none';
+        eurosInput.value = '';
+        if (hint) {
+          hint.style.display = 'block';
+          hint.textContent = 'Selecciona Gratis o De pago.';
+        }
+      }
+      markFormDirty();
+      clearFormError();
+    };
+
+    function parseEurosToCents(val) {
+      if (val === null || val === undefined) return null;
+      const clean = String(val).trim().replace(',', '.');
+      if (!clean) return null;
+      const num = Number(clean);
+      if (isNaN(num) || num < 0) return null;
+      return Math.round(num * 100);
+    }
+
+    // Gestión de cartel / imagen del evento (Cloudflare R2)
+    window.triggerEventImageUpload = function() {
+      const fileInput = document.getElementById('ev-image-file');
+      if (fileInput) fileInput.click();
+    };
+
+    window.handleEventImageDragOver = function(e) {
+      e.preventDefault();
+      const box = document.getElementById('ev-image-upload-box');
+      if (box) box.classList.add('dragover');
+    };
+
+    window.handleEventImageDragLeave = function(e) {
+      e.preventDefault();
+      const box = document.getElementById('ev-image-upload-box');
+      if (box) box.classList.remove('dragover');
+    };
+
+    window.handleEventImageDrop = function(e) {
+      e.preventDefault();
+      const box = document.getElementById('ev-image-upload-box');
+      if (box) box.classList.remove('dragover');
+      const files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files.length > 0) {
+        processEventImageFile(files[0]);
+      }
+    };
+
+    window.handleEventImageFileSelect = function(e) {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        processEventImageFile(files[0]);
+      }
+      e.target.value = '';
+    };
+
+    async function processEventImageFile(file) {
       const errBox = document.getElementById('ev-image-error');
       const uploadingEl = document.getElementById('ev-image-uploading');
-      const saveBtn = document.getElementById('btn-save-event');
-      const cancelBtn = document.querySelector('#modal-event .btn-logout');
-
       if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
 
-      // 1. Validación previa en cliente (formato)
+      // 1. Validación de formato JPEG, PNG, WebP
       const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
-      const validExts = /\.(jpe?g|png|webp)$/i;
-      const isValidType = (file.type && validTypes.includes(file.type)) || validExts.test(file.name);
+      const nameLower = (file.name || '').toLowerCase();
+      const hasValidExt = nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png') || nameLower.endsWith('.webp');
+      const isValidType = (file.type && validTypes.includes(file.type)) || hasValidExt;
       if (!isValidType) {
         if (errBox) {
           errBox.innerHTML = '<strong>⚠️ Error:</strong> Formato no admitido. Selecciona una imagen JPEG, PNG o WebP.';
           errBox.style.display = 'block';
         }
-        event.target.value = '';
         return;
       }
 
@@ -3865,20 +4787,20 @@ export function renderAdminHtml(): string {
       const MAX_SIZE = 5 * 1024 * 1024;
       if (file.size > MAX_SIZE) {
         if (errBox) {
-          errBox.innerHTML = '<strong>⚠️ Error:</strong> La imagen seleccionada supera el límite máximo permitido de 5 MB (' + (file.size / (1024 * 1024)).toFixed(2) + ' MB).';
+          errBox.innerHTML = '<strong>⚠️ Error:</strong> La imagen supera el límite máximo permitido de 5 MB (' + (file.size / (1024 * 1024)).toFixed(2) + ' MB).';
           errBox.style.display = 'block';
         }
-        event.target.value = '';
         return;
       }
 
-      // 3. Estado de subida en progreso
+      // 3. Concurrencia y sesiones de subida
+      eventImageUploadSessionId++;
+      const currentSessionId = eventImageUploadSessionId;
+
       isEventImageUploading = true;
       if (uploadingEl) uploadingEl.style.display = 'flex';
-      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Subiendo imagen...'; }
-      if (cancelBtn) cancelBtn.disabled = true;
+      setSaveButtonsLoading(true, 'Subiendo cartel...');
 
-      // Vista previa local inmediata
       let localPreviewUrl = null;
       try {
         localPreviewUrl = URL.createObjectURL(file);
@@ -3909,12 +4831,12 @@ export function renderAdminHtml(): string {
         });
 
         const data = await res.json().catch(() => ({}));
+        if (currentSessionId !== eventImageUploadSessionId) return; // Sesión descartada por otra subida
 
         if (!res.ok) {
-          throw new Error(data.message || 'Error al subir la imagen al servidor.');
+          throw new Error(data.message || 'Error al subir la imagen al almacenamiento.');
         }
 
-        // Subida exitosa: actualizar campo oculto, input manual y vista previa definitiva
         document.getElementById('ev-image-url').value = data.url;
         const manualInput = document.getElementById('ev-image-url-manual');
         if (manualInput) manualInput.value = data.url;
@@ -3923,12 +4845,13 @@ export function renderAdminHtml(): string {
         if (previewInfo) previewInfo.textContent = 'Cartel subido (' + (data.size_bytes ? (data.size_bytes / 1024).toFixed(1) + ' KB' : file.name) + ')';
         if (previewWrap) previewWrap.style.display = 'flex';
         if (uploadBox) uploadBox.style.display = 'none';
+        markFormDirty();
       } catch (err) {
+        if (currentSessionId !== eventImageUploadSessionId) return;
         if (errBox) {
           errBox.innerHTML = '<strong>⚠️ Error de subida:</strong> ' + escapeHtml(err.message || 'No se pudo subir la imagen.');
           errBox.style.display = 'block';
         }
-        // Si falló y no había imagen previa, volver a mostrar caja de subida
         const currentUrl = document.getElementById('ev-image-url').value;
         if (!currentUrl) {
           if (previewImg) previewImg.src = '';
@@ -3943,13 +4866,13 @@ export function renderAdminHtml(): string {
         if (localPreviewUrl) {
           try { URL.revokeObjectURL(localPreviewUrl); } catch (_) {}
         }
-        isEventImageUploading = false;
-        event.target.value = '';
-        if (uploadingEl) uploadingEl.style.display = 'none';
-        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Guardar Evento'; }
-        if (cancelBtn) cancelBtn.disabled = false;
+        if (currentSessionId === eventImageUploadSessionId) {
+          isEventImageUploading = false;
+          if (uploadingEl) uploadingEl.style.display = 'none';
+          setSaveButtonsLoading(false);
+        }
       }
-    };
+    }
 
     window.removeEventImage = function() {
       const urlInput = document.getElementById('ev-image-url');
@@ -3970,6 +4893,8 @@ export function renderAdminHtml(): string {
       if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
       const uploadingEl = document.getElementById('ev-image-uploading');
       if (uploadingEl) uploadingEl.style.display = 'none';
+
+      markFormDirty();
     };
 
     window.toggleManualImageUrl = function() {
@@ -4004,46 +4929,96 @@ export function renderAdminHtml(): string {
         if (previewWrap) previewWrap.style.display = 'none';
         if (uploadBox) uploadBox.style.display = 'block';
       }
+      markFormDirty();
     };
 
+    // Estados de carga de botones
+    function setSaveButtonsLoading(isLoading, customText) {
+      const btnSaveDraft = document.getElementById('btn-save-draft');
+      const btnPublish = document.getElementById('btn-publish-event');
+      const btnSaveEdit = document.getElementById('btn-save-event-changes');
+      const btnCancel = document.querySelector('.modal-event-footer .btn-secondary');
+      const btnClose = document.querySelector('.modal-event-header .modal-close');
+
+      const btns = [btnSaveDraft, btnPublish, btnSaveEdit];
+      btns.forEach(b => {
+        if (!b) return;
+        b.disabled = isLoading;
+        if (isLoading && customText) {
+          b.dataset.prevText = b.textContent;
+          b.textContent = customText;
+        } else if (!isLoading && b.dataset.prevText) {
+          b.textContent = b.dataset.prevText;
+          delete b.dataset.prevText;
+        }
+      });
+
+      if (btnCancel) btnCancel.disabled = isLoading;
+      if (btnClose) btnClose.disabled = isLoading;
+
+      const secondaryBtns = document.querySelectorAll('#modal-event-secondary-status-btns button');
+      secondaryBtns.forEach(sb => { sb.disabled = isLoading; });
+    };
+
+    // Modal: Apertura en modo creación
     window.openNewEventModal = function() {
       currentEditingEvent = null;
       editEventOrigin = 'events';
       lastActiveElementBeforeModal = document.activeElement;
 
-      document.getElementById('modal-event-title').innerText = 'Nuevo Evento';
+      document.getElementById('modal-event-title').innerText = 'Nuevo evento';
       document.getElementById('form-event').reset();
       document.getElementById('ev-id').value = '';
 
-      // Resetear estado del cartel / imagen
+      // Visibilidad de cabecera y acciones
+      const statusBadge = document.getElementById('modal-event-status-badge');
+      if (statusBadge) statusBadge.style.display = 'none';
+      document.getElementById('modal-event-create-actions').style.display = 'flex';
+      document.getElementById('modal-event-edit-actions').style.display = 'none';
+
+      // Resetear local
+      clearSelectedVenue();
+
+      // Resetear cartel / imagen
       removeEventImage();
       const manualWrap = document.getElementById('ev-image-manual-wrap');
       if (manualWrap) manualWrap.style.display = 'none';
       isEventImageUploading = false;
 
+      // Resetear finalización
+      removeEndTime();
+
+      // Resetear precio (sin preselección: exige elección explícita)
+      setPriceType(null);
+
+      // Limpiar errores
+      clearFormError();
+
+      // Categoría sin preselección
+      document.getElementById('ev-category').value = '';
+
       // Fecha y hora de inicio por defecto en Europe/Madrid a las 22:00
       const nowMadrid = formatToMadridDatetimeLocal(new Date());
       const todayMadridDate = nowMadrid ? nowMadrid.split('T')[0] : new Date().toISOString().split('T')[0];
-      document.getElementById('ev-editorial-date').value = todayMadridDate;
       document.getElementById('ev-start-time').value = todayMadridDate + 'T22:00';
+      editorialDateManualOverride = false;
+      updateEditorialDateUI();
 
-      const hint = document.getElementById('ev-editorial-date-hint');
-      if (hint) hint.textContent = 'Frontera editorial a las 06:00 (Europe/Madrid)';
-
-      const saveBtn = document.getElementById('btn-save-event');
-      if (saveBtn) { saveBtn.textContent = 'Guardar Evento'; saveBtn.disabled = false; }
+      setSaveButtonsLoading(false);
+      eventModalFormDirty = false;
 
       openModal('modal-event');
       const titleInput = document.getElementById('ev-title');
       if (titleInput) titleInput.focus();
     };
 
+    // Modal: Apertura en modo edición
     window.editEvent = async function(id) {
       lastActiveElementBeforeModal = document.activeElement;
       editEventOrigin = currentSection === 'inbox' ? 'inbox' : 'events';
 
-      const saveBtn = document.getElementById('btn-save-event');
-      if (saveBtn) { saveBtn.textContent = 'Guardar Evento'; saveBtn.disabled = false; }
+      clearFormError();
+      setSaveButtonsLoading(true, 'Cargando...');
 
       try {
         const res = await apiFetch(\`/api/v1/admin/events/\${id}\`);
@@ -4051,19 +5026,47 @@ export function renderAdminHtml(): string {
         const ev = data.event;
         currentEditingEvent = ev;
 
-        document.getElementById('modal-event-title').innerText = 'Editar Evento #' + ev.id;
+        document.getElementById('modal-event-title').innerText = 'Editar evento #' + ev.id;
         document.getElementById('ev-id').value = ev.id;
         document.getElementById('ev-title').value = ev.title || '';
-        document.getElementById('ev-venue-id').value = ev.venue_id;
-        document.getElementById('ev-category').value = ev.category;
-        document.getElementById('ev-editorial-date').value = ev.editorial_date;
-        document.getElementById('ev-start-time').value = formatToMadridDatetimeLocal(ev.start_time);
-        document.getElementById('ev-price-cents').value = ev.price_cents || 0;
-        document.getElementById('ev-status').value = ev.status;
+        document.getElementById('ev-category').value = ev.category || '';
         document.getElementById('ev-description').value = ev.description || '';
         document.getElementById('ev-source-url').value = ev.source_url || '';
-        document.getElementById('ev-image-url').value = ev.image_url || '';
 
+        // Local asignado
+        if (ev.venue_id && Number(ev.venue_id) !== 9999) {
+          selectEventVenue(Number(ev.venue_id));
+        } else {
+          clearSelectedVenue();
+        }
+
+        // Horario y jornada editorial
+        const localStart = formatToMadridDatetimeLocal(ev.start_time);
+        document.getElementById('ev-start-time').value = localStart;
+        const autoEditorial = computeEditorialDateFromLocal(localStart);
+        document.getElementById('ev-editorial-date').value = ev.editorial_date || autoEditorial;
+        editorialDateManualOverride = (ev.editorial_date && ev.editorial_date !== autoEditorial);
+        updateEditorialDateUI();
+
+        // Finalización
+        if (ev.end_time) {
+          document.getElementById('ev-end-time').value = formatToMadridDatetimeLocal(ev.end_time);
+          document.getElementById('ev-end-time-container').style.display = 'block';
+          document.getElementById('btn-toggle-end-time').style.display = 'none';
+        } else {
+          removeEndTime();
+        }
+
+        // Precio
+        if (!ev.is_free && ev.price_cents > 0) {
+          setPriceType('paid');
+          document.getElementById('ev-price-euros').value = (ev.price_cents / 100).toFixed(2).replace('.', ',');
+        } else {
+          setPriceType('free');
+        }
+
+        // Cartel / imagen
+        document.getElementById('ev-image-url').value = ev.image_url || '';
         const manualInput = document.getElementById('ev-image-url-manual');
         if (manualInput) manualInput.value = ev.image_url || '';
         const manualWrap = document.getElementById('ev-image-manual-wrap');
@@ -4073,11 +5076,6 @@ export function renderAdminHtml(): string {
         const previewWrap = document.getElementById('ev-image-preview-wrap');
         const uploadBox = document.getElementById('ev-image-upload-box');
         const previewInfo = document.getElementById('ev-image-preview-info');
-        const errBox = document.getElementById('ev-image-error');
-        if (errBox) { errBox.style.display = 'none'; errBox.innerHTML = ''; }
-        const uploadingEl = document.getElementById('ev-image-uploading');
-        if (uploadingEl) uploadingEl.style.display = 'none';
-        isEventImageUploading = false;
 
         if (ev.image_url) {
           if (previewImg) previewImg.src = ev.image_url;
@@ -4085,38 +5083,142 @@ export function renderAdminHtml(): string {
           if (previewWrap) previewWrap.style.display = 'flex';
           if (uploadBox) uploadBox.style.display = 'none';
         } else {
-          if (previewImg) previewImg.src = '';
-          if (previewWrap) previewWrap.style.display = 'none';
-          if (uploadBox) uploadBox.style.display = 'block';
+          removeEventImage();
         }
 
-        const hint = document.getElementById('ev-editorial-date-hint');
-        if (hint) hint.textContent = 'Frontera editorial a las 06:00 (Europe/Madrid)';
+        // Badge de estado en cabecera
+        const statusBadge = document.getElementById('modal-event-status-badge');
+        if (statusBadge) {
+          statusBadge.style.display = 'inline-block';
+          statusBadge.className = 'status-badge status-' + (ev.status || 'tentative');
+          const statusLabels = {
+            'published': 'Publicado',
+            'tentative': 'Borrador',
+            'cancelled': 'Cancelado',
+            'archived': 'Archivado',
+            'duplicate': 'Duplicado',
+            'outdated': 'Obsoleto'
+          };
+          statusBadge.innerText = statusLabels[ev.status] || ev.status;
+        }
+
+        // Botones de acción en modo edición
+        document.getElementById('modal-event-create-actions').style.display = 'none';
+        document.getElementById('modal-event-edit-actions').style.display = 'flex';
+        renderEditStatusActions(ev.status);
+
+        setSaveButtonsLoading(false);
+        eventModalFormDirty = false;
 
         openModal('modal-event');
         const titleInput = document.getElementById('ev-title');
         if (titleInput) titleInput.focus();
       } catch (err) {
         alert('Error al cargar datos del evento.');
+        setSaveButtonsLoading(false);
       }
     };
 
-    window.saveEvent = async function(e) {
-      e.preventDefault();
+    function renderEditStatusActions(status) {
+      const container = document.getElementById('modal-event-secondary-status-btns');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (status === 'tentative') {
+        container.innerHTML = \`<button type="button" class="btn-sm btn-publish" onclick="submitEventStatusChange('published')">🚀 Publicar ahora</button>\`;
+      } else if (status === 'published') {
+        container.innerHTML = \`<button type="button" class="btn-sm btn-logout" onclick="submitEventStatusChange('cancelled')">🚫 Cancelar evento</button>\`;
+      } else if (status === 'cancelled') {
+        container.innerHTML = \`<button type="button" class="btn-sm btn-secondary" onclick="submitEventStatusChange('published')">🔄 Republicar</button>\`;
+      }
+
+      if (status !== 'archived') {
+        container.innerHTML += \`<button type="button" class="btn-sm btn-secondary" onclick="submitEventStatusChange('archived')">📦 Archivar</button>\`;
+      }
+    }
+
+    // Guardado de evento con soporte para borrador y publicación
+    window.submitEventForm = async function(statusOverride) {
       if (modalEventSaveInProgress) return;
       if (isEventImageUploading) {
-        alert('Espera a que finalice la subida de la imagen antes de guardar el evento.');
+        showFormError('Espera a que finalice la subida del cartel antes de guardar el evento.');
         return;
       }
+
+      clearFormError();
 
       const id = document.getElementById('ev-id').value;
+      const title = document.getElementById('ev-title').value.trim();
+      const category = document.getElementById('ev-category').value;
+      const venueIdStr = document.getElementById('ev-venue-id').value;
+      const venueId = venueIdStr ? Number(venueIdStr) : null;
       const startVal = document.getElementById('ev-start-time').value;
-      if (!startVal) {
-        alert('Debes indicar una fecha y hora de inicio.');
+      const endVal = document.getElementById('ev-end-time').value;
+      const editorialDate = document.getElementById('ev-editorial-date').value;
+      const isFreeVal = document.getElementById('ev-is-free').value;
+      const eurosVal = document.getElementById('ev-price-euros').value;
+      const description = document.getElementById('ev-description').value.trim() || null;
+      const sourceUrl = document.getElementById('ev-source-url').value.trim() || null;
+      const imageUrl = document.getElementById('ev-image-url').value.trim() || null;
+
+      // Determinar estado objetivo
+      let targetStatus = statusOverride;
+      if (!targetStatus) {
+        targetStatus = currentEditingEvent ? currentEditingEvent.status : 'published';
+      }
+
+      // Validaciones de formulario
+      if (!title || title.length < 3) {
+        showFormError('El título del evento debe tener al menos 3 caracteres.', 'ev-title');
         return;
       }
 
-      // Si no se editó start_time, preservamos el timestamp ISO exacto original
+      if (!category) {
+        showFormError('Debes seleccionar una categoría para el evento.', 'ev-category');
+        return;
+      }
+
+      if (!startVal) {
+        showFormError('Debes indicar la fecha y hora de inicio del evento.', 'ev-start-time');
+        return;
+      }
+
+      // Verificación de local: obligatorio para publicar
+      if (targetStatus === 'published' && (!venueId || Number(venueId) === 9999)) {
+        const venueErrMsg = 'Para publicar el evento es obligatorio seleccionar un local del censo. Si aún no tienes local, guárdalo como borrador.';
+        showFormError(venueErrMsg, 'ev-venue-search');
+        const venueErr = document.getElementById('ev-venue-field-error');
+        if (venueErr) {
+          venueErr.innerText = venueErrMsg;
+          venueErr.style.display = 'block';
+        }
+        const venueInput = document.getElementById('ev-venue-search');
+        if (venueInput) {
+          venueInput.style.borderColor = '#dc2626';
+          venueInput.setAttribute('aria-invalid', 'true');
+          venueInput.setAttribute('aria-describedby', 'ev-venue-field-error ev-venue-unassigned-notice');
+        }
+        return;
+      }
+
+      // Validación de precio: obligatoria elección explícita antes de guardar o publicar
+      if (isFreeVal !== 'true' && isFreeVal !== 'false') {
+        showFormError('Debes seleccionar si el evento es Gratis o De pago antes de guardar.', 'btn-price-free');
+        return;
+      }
+
+      const isFree = isFreeVal === 'true';
+      let priceCents = 0;
+      if (!isFree) {
+        const parsed = parseEurosToCents(eurosVal);
+        if (parsed === null || parsed <= 0) {
+          showFormError('Para eventos de pago debes indicar un importe mayor que cero (ej. 15,50 €).', 'ev-price-euros');
+          return;
+        }
+        priceCents = parsed;
+      }
+
+      // Cálculo de ISO timestamps en Europe/Madrid
       let startTimeIso;
       if (currentEditingEvent && id && formatToMadridDatetimeLocal(currentEditingEvent.start_time) === startVal) {
         startTimeIso = currentEditingEvent.start_time;
@@ -4124,24 +5226,40 @@ export function renderAdminHtml(): string {
         startTimeIso = parseMadridToUtcIso(startVal);
       }
 
+      let endTimeIso = null;
+      if (endVal) {
+        if (currentEditingEvent && id && formatToMadridDatetimeLocal(currentEditingEvent.end_time) === endVal) {
+          endTimeIso = currentEditingEvent.end_time;
+        } else {
+          endTimeIso = parseMadridToUtcIso(endVal);
+        }
+
+        if (endTimeIso && startTimeIso && new Date(endTimeIso) <= new Date(startTimeIso)) {
+          showFormError('La fecha y hora de finalización debe ser posterior a la de inicio.', 'ev-end-time');
+          return;
+        }
+      }
+
       const payload = {
-        title: document.getElementById('ev-title').value.trim(),
-        venue_id: Number(document.getElementById('ev-venue-id').value),
-        category: document.getElementById('ev-category').value,
-        editorial_date: document.getElementById('ev-editorial-date').value,
+        title,
+        category,
+        editorial_date: editorialDate || computeEditorialDateFromLocal(startVal),
         start_time: startTimeIso,
-        price_cents: Number(document.getElementById('ev-price-cents').value),
-        status: document.getElementById('ev-status').value,
-        description: document.getElementById('ev-description').value.trim() || null,
-        source_url: document.getElementById('ev-source-url').value.trim() || null,
-        image_url: document.getElementById('ev-image-url').value.trim() || null,
+        end_time: endTimeIso,
+        price_cents: priceCents,
+        is_free: isFree,
+        status: targetStatus,
+        description,
+        source_url: sourceUrl,
+        image_url: imageUrl,
       };
 
-      const saveBtn = document.getElementById('btn-save-event');
-      const cancelBtn = document.querySelector('#modal-event .btn-logout');
+      if (venueId && Number(venueId) !== 9999) {
+        payload.venue_id = Number(venueId);
+      }
+
       modalEventSaveInProgress = true;
-      if (saveBtn) { saveBtn.textContent = 'Guardando…'; saveBtn.disabled = true; }
-      if (cancelBtn) cancelBtn.disabled = true;
+      setSaveButtonsLoading(true, 'Guardando...');
 
       try {
         let res;
@@ -4151,22 +5269,30 @@ export function renderAdminHtml(): string {
             body: JSON.stringify(payload),
           });
         } else {
-          res = await apiFetch('/api/v1/admin/events', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-          });
+          // Si es borrador sin local, utilizar endpoint dedicado de draft
+          if (targetStatus === 'tentative' && !payload.venue_id) {
+            res = await apiFetch('/api/v1/admin/events/draft', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+          } else {
+            res = await apiFetch('/api/v1/admin/events', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+          }
         }
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          alert(errData.message || 'Error al guardar el evento.');
+          showFormError(errData.message || 'Error al guardar el evento.');
           return;
         }
 
         modalEventSaveInProgress = false;
+        eventModalFormDirty = false;
         closeModal('modal-event');
 
-        // Refrescar según origen
         if (editEventOrigin === 'inbox') {
           await loadAdminInbox();
           updateCurationCounts();
@@ -4174,11 +5300,66 @@ export function renderAdminHtml(): string {
           await loadAdminEvents();
         }
       } catch (err) {
-        alert(err.message || 'Error de conexión al guardar el evento.');
+        showFormError(err.message || 'Error de conexión al guardar el evento.');
       } finally {
         modalEventSaveInProgress = false;
-        if (saveBtn) { saveBtn.textContent = 'Guardar Evento'; saveBtn.disabled = false; }
-        if (cancelBtn) cancelBtn.disabled = false;
+        setSaveButtonsLoading(false);
+      }
+    };
+
+    window.submitEventStatusChange = async function(newStatus) {
+      if (modalEventSaveInProgress) return;
+      const id = document.getElementById('ev-id').value;
+      if (!id) return;
+
+      // Si se pasa a published, verificar que tenga local asignado
+      const venueId = document.getElementById('ev-venue-id').value;
+      if (newStatus === 'published' && (!venueId || Number(venueId) === 9999)) {
+        const venueErrMsg = 'Para publicar el evento es obligatorio asignar un local del censo.';
+        showFormError(venueErrMsg, 'ev-venue-search');
+        const venueErr = document.getElementById('ev-venue-field-error');
+        if (venueErr) {
+          venueErr.innerText = venueErrMsg;
+          venueErr.style.display = 'block';
+        }
+        const venueInput = document.getElementById('ev-venue-search');
+        if (venueInput) {
+          venueInput.style.borderColor = '#dc2626';
+          venueInput.setAttribute('aria-invalid', 'true');
+          venueInput.setAttribute('aria-describedby', 'ev-venue-field-error ev-venue-unassigned-notice');
+        }
+        return;
+      }
+
+      await submitEventForm(newStatus);
+    };
+
+    // Alias retrocompatible
+    window.saveEvent = async function(e) {
+      if (e && e.preventDefault) e.preventDefault();
+      return submitEventForm();
+    };
+
+    // Cierre controlado y comprobación de cambios sin guardar
+    window.requestCloseEventModal = function() {
+      if (modalEventSaveInProgress || isEventImageUploading) return;
+      if (eventModalFormDirty) {
+        const ok = window.confirm('Hay cambios sin guardar en el evento. ¿Seguro que deseas salir y descartar los cambios?');
+        if (!ok) return;
+      }
+      forceCloseEventModal();
+    };
+
+    window.forceCloseEventModal = function() {
+      eventModalFormDirty = false;
+      closeModal('modal-event');
+      const dropdown = document.getElementById('ev-venue-dropdown');
+      if (dropdown) dropdown.style.display = 'none';
+    };
+
+    window.handleEventBackdropClick = function(event) {
+      if (event.target && event.target.id === 'modal-event') {
+        requestCloseEventModal();
       }
     };
 
@@ -6275,7 +7456,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           // Bloquear Escape si hay una petición de reasignación en vuelo
           if (activeModal.id === 'modal-reassign-venue' && modalSaveInProgress) return;
           if (activeModal.id === 'modal-promotion' && promoSaveInProgress) return;
-          if (activeModal.id === 'modal-event' && (modalEventSaveInProgress || isEventImageUploading)) return;
+          if (activeModal.id === 'modal-event') {
+            if (modalEventSaveInProgress || isEventImageUploading) return;
+            requestCloseEventModal();
+            return;
+          }
           if (activeModal.id === 'modal-venue' && modalVenueSaveInProgress) return;
           if (activeModal.id === 'modal-delete-venue' && modalVenueDeleteInProgress) return;
           if (activeModal.id === 'modal-recurrence' && modalRecurrenceSaveInProgress) return;
