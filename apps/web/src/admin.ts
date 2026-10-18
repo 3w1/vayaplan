@@ -2701,24 +2701,28 @@ export function renderAdminHtml(): string {
 
             <!-- Selector de Precio -->
             <div class="form-group">
-              <label style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Precio de entrada</label>
+              <label style="font-weight:700; color:var(--text-main); display:block; margin-bottom:0.35rem;">Precio de entrada *</label>
               <div class="price-type-toggle">
-                <button type="button" id="btn-price-free" class="price-type-btn active" onclick="setPriceType('free')">
-                  ✓ Gratis (Entrada libre)
+                <button type="button" id="btn-price-free" class="price-type-btn" onclick="setPriceType('free')">
+                  Gratis (Entrada libre)
                 </button>
                 <button type="button" id="btn-price-paid" class="price-type-btn" onclick="setPriceType('paid')">
                   💶 De pago
                 </button>
               </div>
-              <input type="hidden" id="ev-is-free" value="true">
+              <input type="hidden" id="ev-is-free" value="">
 
-              <div id="ev-price-input-wrap" style="display:none;">
+              <div id="ev-price-hint" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">
+                Selecciona Gratis o De pago.
+              </div>
+
+              <div id="ev-price-input-wrap" style="display:none; margin-top:0.5rem;">
                 <div style="position:relative; max-width:220px;">
                   <input type="text" id="ev-price-euros" class="event-input" placeholder="0,00" style="padding-right:2rem; font-weight:700;" oninput="markFormDirty()">
                   <span style="position:absolute; right:0.75rem; top:50%; transform:translateY(-50%); color:var(--text-muted); font-weight:700;">€</span>
                 </div>
                 <small style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:0.25rem;">
-                  Admite coma o punto (ej. 15,50 €).
+                  Admite coma o punto (ej. 15,50 €). Debe ser mayor que cero.
                 </small>
               </div>
             </div>
@@ -4641,6 +4645,7 @@ export function renderAdminHtml(): string {
       const btnFree = document.getElementById('btn-price-free');
       const btnPaid = document.getElementById('btn-price-paid');
       const wrap = document.getElementById('ev-price-input-wrap');
+      const hint = document.getElementById('ev-price-hint');
       const eurosInput = document.getElementById('ev-price-euros');
 
       if (type === 'free') {
@@ -4649,12 +4654,24 @@ export function renderAdminHtml(): string {
         btnPaid.classList.remove('active');
         wrap.style.display = 'none';
         eurosInput.value = '';
-      } else {
+        if (hint) hint.style.display = 'none';
+      } else if (type === 'paid') {
         isFreeHidden.value = 'false';
         btnPaid.classList.add('active');
         btnFree.classList.remove('active');
         wrap.style.display = 'block';
+        if (hint) hint.style.display = 'none';
         eurosInput.focus();
+      } else {
+        isFreeHidden.value = '';
+        btnFree.classList.remove('active');
+        btnPaid.classList.remove('active');
+        wrap.style.display = 'none';
+        eurosInput.value = '';
+        if (hint) {
+          hint.style.display = 'block';
+          hint.textContent = 'Selecciona Gratis o De pago.';
+        }
       }
       markFormDirty();
       clearFormError();
@@ -4928,8 +4945,8 @@ export function renderAdminHtml(): string {
       // Resetear finalización
       removeEndTime();
 
-      // Resetear precio
-      setPriceType('free');
+      // Resetear precio (sin preselección: exige elección explícita)
+      setPriceType(null);
 
       // Limpiar errores
       clearFormError();
@@ -5095,7 +5112,7 @@ export function renderAdminHtml(): string {
       const startVal = document.getElementById('ev-start-time').value;
       const endVal = document.getElementById('ev-end-time').value;
       const editorialDate = document.getElementById('ev-editorial-date').value;
-      const isFree = document.getElementById('ev-is-free').value === 'true';
+      const isFreeVal = document.getElementById('ev-is-free').value;
       const eurosVal = document.getElementById('ev-price-euros').value;
       const description = document.getElementById('ev-description').value.trim() || null;
       const sourceUrl = document.getElementById('ev-source-url').value.trim() || null;
@@ -5129,12 +5146,18 @@ export function renderAdminHtml(): string {
         return;
       }
 
-      // Validación de precio
+      // Validación de precio: obligatoria elección explícita antes de guardar o publicar
+      if (isFreeVal !== 'true' && isFreeVal !== 'false') {
+        showFormError('Debes seleccionar si el evento es Gratis o De pago antes de guardar.', 'btn-price-free');
+        return;
+      }
+
+      const isFree = isFreeVal === 'true';
       let priceCents = 0;
       if (!isFree) {
         const parsed = parseEurosToCents(eurosVal);
-        if (parsed === null || parsed < 0) {
-          showFormError('Indica un precio válido en euros (ej. 15,50 €) o marca el evento como gratuito.', 'ev-price-euros');
+        if (parsed === null || parsed <= 0) {
+          showFormError('Para eventos de pago debes indicar un importe mayor que cero (ej. 15,50 €).', 'ev-price-euros');
           return;
         }
         priceCents = parsed;
