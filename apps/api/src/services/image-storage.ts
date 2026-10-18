@@ -1,6 +1,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { query } from '@vayaplan/db';
+import {
+  isR2Configured,
+  getR2Config,
+  getPublicUrlForKey,
+  getKeyFromPublicUrl,
+  putR2Object,
+  deleteR2Object,
+  listR2Objects,
+  R2StorageConfig,
+} from './r2-client';
 
 export const MAX_UPLOAD_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -9,8 +20,27 @@ export interface DetectedImageFormat {
   mime: 'image/jpeg' | 'image/png' | 'image/webp';
 }
 
+export interface SavedImageResult {
+  key: string;
+  filename: string;
+  url: string;
+  size: number;
+  mimeType: string;
+  provider: 'cloudflare_r2';
+}
+
+export interface SaveImageOptions {
+  prefix?: string;
+  metadata?: Record<string, string>;
+  sourceUrl?: string;
+}
+
+// Re-exportar funciones de configuración y URLs para consumidores externos e importadores
+export { isR2Configured, getR2Config, getPublicUrlForKey, getKeyFromPublicUrl };
+export type { R2StorageConfig };
+
 /**
- * Valida el contenido real de los bytes de cabecera (magic bytes)
+ * Valida el contenido real de los bytes de cabecera (magic bytes).
  * Admite exclusivamente JPEG, PNG y WebP.
  */
 export function validateImageMagicBytes(buffer: Buffer): DetectedImageFormat | null {
@@ -53,7 +83,7 @@ export function validateImageMagicBytes(buffer: Buffer): DetectedImageFormat | n
 }
 
 /**
- * Obtiene la ruta del directorio de almacenamiento persistente de imágenes
+ * Obtiene la ruta del directorio local (utilizado solo para compatibilidad y archivos temporales)
  */
 export function getUploadsDir(): string {
   const dir = process.env.UPLOADS_DIR
@@ -66,85 +96,276 @@ export function getUploadsDir(): string {
 }
 
 /**
- * Guarda una imagen validada en almacenamiento persistente con nombre UUID seguro
+ * Ejecuta una operación con un archivo temporal en disco garantizando su borrado en finally.
  */
-export async function saveImageUpload(buffer: Buffer, ext: string): Promise<{ filename: string; url: string; size: number }> {
-  const uploadsDir = getUploadsDir();
-  const filename = `${crypto.randomUUID()}.${ext}`;
-  const filePath = path.join(uploadsDir, filename);
+export async function withTempFile<T>(
+  filenamePrefix: string,
+  ext: string,
+  action: (tempFilePath: string) => Promise<T>
+): Promise<T> {
+  const tempName = `${filenamePrefix}-${Date.now()}-${crypto.randomUUID()}.${ext.replace(/^\./, '')}`;
+  const tempPath = path.join(os.tmpdir(), tempName);
+  try {
+    return await action(tempPath);
+  } finally {
+    try {
+      if (fs.existsSync(tempPath)) {
+        await fs.promises.unlink(tempPath);
+      }
+    } catch {
+      // Ignorar error al limpiar temporal
+    }
+  }
+}
 
-  await fs.promises.writeFile(filePath, buffer);
+/**
+ * Guarda una imagen validada en almacenamiento persistente Cloudflare R2 con nombre UUID seguro.
+ * NO usa el disco local como fallback silencioso: si Cloudflare falla o no está configurado, lanza un error explícito.
+ */
+export async function saveImageUpload(
+  buffer: Buffer,
+  ext: string,
+  options: SaveImageOptions = {}
+): Promise<SavedImageResult> {
+  if (buffer.length > MAX_UPLOAD_SIZE) {
+    throw new Error(
+      `El archivo supera el tamaño máximo permitido de 5 MB (${(buffer.length / (1024 * 1024)).toFixed(2)} MB).`
+    );
+  }
+
+  const detected = validateImageMagicBytes(buffer);
+  if (!detected) {
+    throw new Error('Formato no admitido. La imagen debe ser un archivo auténtico JPEG, PNG o WebP.');
+  }
+
+  const prefix = (options.prefix || 'events').replace(/^\/+|\/+$/g, '');
+  const filename = `${crypto.randomUUID()}.${detected.ext}`;
+  const key = `${prefix}/${filename}`;
+
+  const metadata = { ...(options.metadata || {}) };
+  if (options.sourceUrl) {
+    metadata.source_url = options.sourceUrl;
+  }
+
+  try {
+    await putR2Object({
+      key,
+      body: buffer,
+      contentType: detected.mime,
+      cacheControl: 'public, max-age=31536000, immutable',
+      metadata,
+    });
+
+    // En modo de desarrollo o tests sintéticos locales, mantener copia para servirla por /media
+    if (process.env.SERVE_DEV_MEDIA === 'true') {
+      const devPath = path.join(getUploadsDir(), key);
+      const devDir = path.dirname(devPath);
+      if (!fs.existsSync(devDir)) fs.mkdirSync(devDir, { recursive: true });
+      await fs.promises.writeFile(devPath, buffer);
+    }
+  } catch (err: any) {
+    // Error explícito de Cloudflare R2 sin fallback silencioso al disco
+    throw new Error(`Error al transferir la imagen a Cloudflare R2: ${err.message || 'Fallo de conexión o autorización.'}`);
+  }
+
+  const publicUrl = getPublicUrlForKey(key);
 
   return {
+    key,
     filename,
-    url: `/api/v1/uploads/${filename}`,
+    url: publicUrl,
     size: buffer.length,
+    mimeType: detected.mime,
+    provider: 'cloudflare_r2',
   };
 }
 
 /**
- * Limpieza de subidas huérfanas:
- * Elimina imágenes no asociadas a ningún evento o lugar cuya antigüedad supere el periodo de gracia.
- * No borra imágenes compartidas o referenciadas en base de datos.
+ * Descarga y almacena en Cloudflare R2 una imagen desde una URL externa (ej. importador de Instagram).
+ * Punto de entrada compartido para importaciones automatizadas.
  */
-export async function cleanupOrphanUploads(options: { graceHours?: number; dryRun?: boolean } = {}) {
+export async function saveImageFromUrl(
+  imageUrl: string,
+  options: SaveImageOptions & { timeoutMs?: number } = {}
+): Promise<SavedImageResult> {
+  const timeoutMs = options.timeoutMs || 15000;
+
+  let response: Response;
+  try {
+    response = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: {
+        'User-Agent': 'VayaPlan-MediaImporter/1.0 (+https://vayaplan.com)',
+      },
+    });
+  } catch (err: any) {
+    throw new Error(`No se pudo descargar la imagen desde la fuente externa (${imageUrl}): ${err.message}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`La fuente externa devolvió un estado HTTP no válido (${response.status} ${response.statusText}) para ${imageUrl}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
+  const detected = validateImageMagicBytes(buffer);
+  if (!detected) {
+    throw new Error(`El archivo descargado desde ${imageUrl} no tiene formato válido JPEG, PNG o WebP.`);
+  }
+
+  return saveImageUpload(buffer, detected.ext, {
+    prefix: options.prefix || 'imports',
+    sourceUrl: options.sourceUrl || imageUrl,
+    metadata: options.metadata,
+  });
+}
+
+/**
+ * Elimina un objeto de imagen de Cloudflare R2 mediante su clave o URL pública.
+ */
+export async function deleteImageObject(keyOrUrl: string): Promise<boolean> {
+  const key = getKeyFromPublicUrl(keyOrUrl) || keyOrUrl;
+  try {
+    await deleteR2Object(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Limpieza de objetos huérfanos en Cloudflare R2:
+ * - Identifica imágenes en el bucket no asociadas a ningún evento (`events.image_url`) ni lugar (`places.image_url`).
+ * - Conserva objetos compartidos por múltiples eventos.
+ * - Protege imágenes en curso dentro del periodo de gracia (por defecto 24 horas), impidiendo que se borren
+ *   durante la edición o subida de formularios en proceso.
+ * - Limpia también archivos huérfanos legacy en almacenamiento local si existieran.
+ */
+export async function cleanupOrphanUploads(options: {
+  graceHours?: number;
+  dryRun?: boolean;
+  dbQuery?: (sql: string) => Promise<{ rows: any[] }>;
+} = {}) {
   const graceHours = options.graceHours !== undefined ? options.graceHours : 24;
   const dryRun = options.dryRun ?? false;
-  const uploadsDir = getUploadsDir();
+  const queryFn = options.dbQuery || query;
+  const cutoffTime = Date.now() - graceHours * 3600 * 1000;
 
-  if (!fs.existsSync(uploadsDir)) {
-    return { total_files: 0, deleted_count: 0, preserved_count: 0, grace_hours: graceHours };
-  }
+  // Consultar todas las imágenes referenciadas en base de datos
+  const eventsResult = await queryFn('SELECT image_url FROM events WHERE image_url IS NOT NULL');
+  const placesResult = await queryFn('SELECT image_url FROM places WHERE image_url IS NOT NULL');
 
-  const files = fs.readdirSync(uploadsDir);
-  const totalFiles = files.length;
-
-  // Consultar todas las imágenes referenciadas en events y places
-  const eventsResult = await query('SELECT image_url FROM events WHERE image_url IS NOT NULL');
-  const placesResult = await query('SELECT image_url FROM places WHERE image_url IS NOT NULL');
-
+  const referencedKeys = new Set<string>();
   const referencedBasenames = new Set<string>();
-  for (const row of eventsResult.rows) {
-    if (row.image_url) {
-      referencedBasenames.add(path.basename(row.image_url));
+
+  const registerReferencedUrl = (url: string | null) => {
+    if (!url) return;
+    const key = getKeyFromPublicUrl(url);
+    if (key) {
+      referencedKeys.add(key);
     }
+    const base = path.basename(url);
+    if (base) {
+      referencedBasenames.add(base);
+    }
+  };
+
+  for (const row of eventsResult.rows) {
+    registerReferencedUrl(row.image_url);
   }
   for (const row of placesResult.rows) {
-    if (row.image_url) {
-      referencedBasenames.add(path.basename(row.image_url));
-    }
+    registerReferencedUrl(row.image_url);
   }
 
-  const cutoffTime = Date.now() - graceHours * 3600 * 1000;
+  let totalObjects = 0;
   let deletedCount = 0;
   let preservedCount = 0;
 
-  for (const file of files) {
-    if (referencedBasenames.has(file)) {
-      preservedCount++;
-      continue;
+  // 1. Limpieza en Cloudflare R2
+  try {
+    const prefixes = ['events/', 'imports/'];
+    const r2Items: Array<{ key: string; size: number; lastModified?: Date }> = [];
+
+    for (const p of prefixes) {
+      try {
+        const items = await listR2Objects(p);
+        r2Items.push(...items);
+      } catch {
+        // Si el prefijo no existe o R2 no está configurado, continuar
+      }
     }
 
-    const fullPath = path.join(uploadsDir, file);
-    try {
-      const stats = fs.statSync(fullPath);
-      if (stats.isFile() && stats.mtimeMs < cutoffTime) {
-        if (!dryRun) {
-          fs.unlinkSync(fullPath);
-        }
-        deletedCount++;
-      } else {
+    totalObjects += r2Items.length;
+
+    for (const item of r2Items) {
+      const base = path.basename(item.key);
+      const isReferenced = referencedKeys.has(item.key) || referencedBasenames.has(base);
+
+      if (isReferenced) {
+        // Imagen asociada a uno o más eventos: se preserva siempre
         preservedCount++;
+        continue;
+      }
+
+      // Protección durante subida o edición activa: si fue modificado dentro de las graceHours, no se toca
+      const modifiedTime = item.lastModified ? item.lastModified.getTime() : Date.now();
+      if (modifiedTime >= cutoffTime) {
+        preservedCount++;
+        continue;
+      }
+
+      // Huérfana confirmada fuera del periodo de gracia
+      if (!dryRun) {
+        try {
+          await deleteR2Object(item.key);
+        } catch {
+          preservedCount++;
+          continue;
+        }
+      }
+      deletedCount++;
+    }
+  } catch {
+    // Si R2 no está configurado, la sección R2 se omite
+  }
+
+  // 2. Limpieza de compatibilidad en disco local (archivos legacy si los hubiera)
+  const uploadsDir = getUploadsDir();
+  if (fs.existsSync(uploadsDir)) {
+    try {
+      const localFiles = fs.readdirSync(uploadsDir);
+      for (const file of localFiles) {
+        totalObjects++;
+        if (referencedBasenames.has(file)) {
+          preservedCount++;
+          continue;
+        }
+        const fullPath = path.join(uploadsDir, file);
+        try {
+          const stats = fs.statSync(fullPath);
+          if (stats.isFile() && stats.mtimeMs < cutoffTime) {
+            if (!dryRun) {
+              fs.unlinkSync(fullPath);
+            }
+            deletedCount++;
+          } else {
+            preservedCount++;
+          }
+        } catch {
+          preservedCount++;
+        }
       }
     } catch {
-      preservedCount++;
+      // Ignorar fallos de lectura en directorio local
     }
   }
 
   return {
-    total_files: totalFiles,
+    total_objects: totalObjects,
     deleted_count: deletedCount,
     preserved_count: preservedCount,
     grace_hours: graceHours,
+    storage_provider: 'cloudflare_r2',
   };
 }

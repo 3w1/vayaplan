@@ -521,10 +521,12 @@ export interface CreatePromotionInput {
 
 export interface UploadImageResponse {
   status: 'ok';
+  key?: string;
   filename: string;
   url: string;
   size_bytes: number;
   mime_type: string;
+  provider?: string;
 }
 
 export interface CleanupUploadsResponse {

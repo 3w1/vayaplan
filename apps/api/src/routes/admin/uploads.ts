@@ -57,15 +57,26 @@ adminUploadsRoutes.post('/uploads', async (c) => {
     }, 400);
   }
 
-  const saved = await saveImageUpload(buffer, detected.ext);
+  try {
+    const saved = await saveImageUpload(buffer, detected.ext);
 
-  return c.json({
-    status: 'ok',
-    filename: saved.filename,
-    url: saved.url,
-    size_bytes: saved.size,
-    mime_type: detected.mime,
-  }, 201);
+    return c.json({
+      status: 'ok',
+      key: saved.key,
+      filename: saved.filename,
+      url: saved.url,
+      size_bytes: saved.size,
+      mime_type: detected.mime,
+      provider: saved.provider,
+    }, 201);
+  } catch (err: any) {
+    const isConfigError = err.message?.includes('no configurado') || err.message?.includes('R2_');
+    const statusCode = isConfigError ? 503 : 500;
+    return c.json({
+      error: 'storage_error',
+      message: err.message || 'Error al procesar o almacenar la imagen en Cloudflare R2.',
+    }, statusCode as any);
+  }
 });
 
 /**

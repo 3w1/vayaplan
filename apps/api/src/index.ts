@@ -62,6 +62,7 @@ app.route('/api/v1', singleEventRoutes);
 app.route('/api/v1', metricsRoutes);
 app.route('/api/v1', activePromotionsRoutes);
 app.route('/api/v1', publicUploadsRoutes);
+app.route('/', publicUploadsRoutes);
 
 // Webhook de WhatsApp Business
 app.route('/api/v1/webhooks', whatsappWebhookRoutes);
