@@ -2445,6 +2445,7 @@ export function renderAdminHtml(): string {
         <h3 id="modal-delete-venue-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Eliminar Local</h3>
         <button class="modal-close" onclick="closeModal('modal-delete-venue')" aria-label="Cerrar modal">✕</button>
       </div>
+      <div id="modal-delete-venue-error" role="alert" style="display:none; margin: 1rem 1.5rem 0 1.5rem; padding: 0.75rem 1rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #991b1b; font-size: 0.875rem; line-height: 1.4;"></div>
       <div class="modal-body" id="modal-delete-venue-body">
         <div style="text-align:center; padding:1.5rem; color:var(--text-muted);">Comprobando dependencias del local...</div>
       </div>
@@ -4559,6 +4560,11 @@ export function renderAdminHtml(): string {
       venueDeletingId = id;
       const modalBody = document.getElementById('modal-delete-venue-body');
       const confirmBtn = document.getElementById('btn-confirm-delete-venue');
+      const errBox = document.getElementById('modal-delete-venue-error');
+      if (errBox) {
+        errBox.style.display = 'none';
+        errBox.innerHTML = '';
+      }
 
       if (confirmBtn) {
         confirmBtn.disabled = true;
@@ -4650,38 +4656,88 @@ export function renderAdminHtml(): string {
       if (!venueDeletingId || modalVenueDeleteInProgress) return;
       modalVenueDeleteInProgress = true;
       const confirmBtn = document.getElementById('btn-confirm-delete-venue');
+      const cancelBtn = document.querySelector('#modal-delete-venue .btn-secondary');
+      const errBox = document.getElementById('modal-delete-venue-error');
+      if (errBox) {
+        errBox.style.display = 'none';
+        errBox.innerHTML = '';
+      }
       if (confirmBtn) {
         confirmBtn.disabled = true;
         confirmBtn.innerText = 'Eliminando...';
       }
+      if (cancelBtn) cancelBtn.disabled = true;
+
+      const targetId = venueDeletingId;
+      let deleteSucceeded = false;
+
+      const showModalError = (msg) => {
+        if (errBox) {
+          errBox.innerHTML = '<strong>⚠️ Error:</strong> ' + escapeHtml(msg);
+          errBox.style.display = 'block';
+        } else {
+          alert(msg);
+        }
+      };
 
       try {
-        const res = await apiFetch(\`/api/v1/admin/venues/\${venueDeletingId}\`, {
+        const res = await apiFetch(\`/api/v1/admin/venues/\${targetId}\`, {
           method: 'DELETE',
+          signal: AbortSignal.timeout(10000),
         });
 
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          alert(data.message || 'Error al eliminar el local.');
-          if (confirmBtn) {
-            confirmBtn.disabled = false;
-            confirmBtn.innerText = 'Eliminar definitivamente';
-          }
+          showModalError(data.message || 'Error al eliminar el local.');
           return;
         }
 
-        closeModal('modal-delete-venue');
-        await loadVenuesCache();
-        await loadAdminVenues();
+        deleteSucceeded = true;
       } catch (err) {
-        alert('Error al conectar con el servidor.');
+        const isTimeoutOrNetwork = err && (err.name === 'TimeoutError' || err.name === 'AbortError' || err.name === 'TypeError' || (err.message && (err.message.includes('fetch') || err.message.includes('network'))));
+        if (isTimeoutOrNetwork) {
+          try {
+            const checkRes = await apiFetch(\`/api/v1/admin/venues/\${targetId}/dependencies\`, {
+              signal: AbortSignal.timeout(5000),
+            });
+            if (checkRes.status === 404) {
+              // El local ya no existe en el servidor: el borrado se completó con éxito
+              deleteSucceeded = true;
+            } else if (checkRes.ok) {
+              showModalError('Tiempo de espera agotado. El local sigue existiendo en el servidor; puede reintentar la eliminación.');
+              return;
+            } else {
+              showModalError('Tiempo de espera agotado. No se pudo confirmar el estado del local; compruebe la conexión antes de reintentar.');
+              return;
+            }
+          } catch {
+            showModalError('Error de conexión con el servidor. No se pudo confirmar si el local fue eliminado; verifique la red antes de reintentar.');
+            return;
+          }
+        } else {
+          showModalError(err?.message || 'Error al conectar con el servidor.');
+          return;
+        }
+      } finally {
+        modalVenueDeleteInProgress = false;
         if (confirmBtn) {
           confirmBtn.disabled = false;
           confirmBtn.innerText = 'Eliminar definitivamente';
         }
-      } finally {
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
+
+      if (deleteSucceeded) {
         modalVenueDeleteInProgress = false;
+        closeModal('modal-delete-venue');
         venueDeletingId = null;
+
+        try {
+          await loadVenuesCache();
+          await loadAdminVenues();
+        } catch {
+          alert('Local eliminado; no se pudo actualizar el listado.');
+        }
       }
     };
 
