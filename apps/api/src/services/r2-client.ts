@@ -40,11 +40,19 @@ export function getR2Config(): R2StorageConfig | null {
     };
   }
 
-  const accountId = process.env.R2_ACCOUNT_ID?.trim() || '';
+  let accountId = process.env.R2_ACCOUNT_ID?.trim() || '';
   const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim() || '';
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim() || '';
   const bucket = process.env.R2_BUCKET?.trim() || 'vayaplan-media';
   let publicUrl = process.env.R2_PUBLIC_URL?.trim() || 'https://media.vayaplan.com';
+
+  // Sanitizar accountId si se configuró con la URL completa del endpoint S3
+  const endpointMatch = accountId.match(/([a-zA-Z0-9_-]+)\.r2\.cloudflarestorage\.com/);
+  if (endpointMatch) {
+    accountId = endpointMatch[1];
+  } else {
+    accountId = accountId.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  }
 
   if (!accountId || !accessKeyId || !secretAccessKey) {
     return null;
