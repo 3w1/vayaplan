@@ -519,5 +519,22 @@ export interface CreatePromotionInput {
   status?: PromotionStatus;
 }
 
+export interface UploadImageResponse {
+  status: 'ok';
+  filename: string;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+}
+
+export interface CleanupUploadsResponse {
+  status: 'ok';
+  total_files: number;
+  deleted_count: number;
+  preserved_count: number;
+  grace_hours: number;
+}
+
+
 
 

@@ -16,6 +16,8 @@ RUN bun install
 COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 
+RUN mkdir -p /app/uploads
+
 ENV NODE_ENV=production
 ENV PORT=4000
 
