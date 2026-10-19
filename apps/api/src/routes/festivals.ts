@@ -130,7 +130,7 @@ festivalsRoutes.get('/cities/:citySlug/festivals/:festivalSlug', async (c) => {
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
     WHERE e.city_id = $1 
-      AND e.festival_id = $2
+      AND (e.festival_id = $2 OR EXISTS (SELECT 1 FROM event_festivals ef WHERE ef.event_id = e.id AND ef.festival_id = $2))
       AND e.status = 'published'
     ORDER BY 
       e.editorial_date ASC,

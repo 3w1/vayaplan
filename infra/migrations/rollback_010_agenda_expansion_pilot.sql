@@ -43,7 +43,8 @@ ALTER TABLE events
   DROP COLUMN IF EXISTS end_date,
   DROP COLUMN IF EXISTS time_status;
 
--- 5. Eliminar tabla festivals
+-- 5. Eliminar tablas de relación y festivales
+DROP TABLE IF EXISTS event_festivals;
 DROP TABLE IF EXISTS festivals;
 
 -- 6. Restaurar restricción NOT NULL en start_time si no hay nulos en toda la tabla

@@ -318,6 +318,7 @@ export interface PublicEventItem {
   verification: EventVerificationInfo;
   promotion: PromotionInfo | null;
   festival?: FestivalSummary | null;
+  festivals?: FestivalSummary[];
 }
 
 export interface PublicActivePromotionItem {

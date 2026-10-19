@@ -113,6 +113,37 @@ singleEventRoutes.get('/events/:id', async (c) => {
     row.venue_longitude
   );
 
+  let festivalsList: any[] = [];
+  try {
+    const festRes = await query(
+      `SELECT f.id, f.name, f.edition, f.slug, f.official_url
+       FROM event_festivals ef
+       INNER JOIN festivals f ON ef.festival_id = f.id
+       WHERE ef.event_id = $1
+       ORDER BY f.name ASC`,
+      [eventId]
+    );
+    festivalsList = festRes.rows.map((f: any) => ({
+      id: Number(f.id),
+      name: f.name,
+      edition: f.edition || null,
+      slug: f.slug,
+      official_url: f.official_url || null,
+    }));
+  } catch {
+    // Ignore if table event_festivals does not exist
+  }
+
+  if (row.festival_id && !festivalsList.some((f) => f.id === Number(row.festival_id))) {
+    festivalsList.unshift({
+      id: Number(row.festival_id),
+      name: row.festival_name,
+      edition: row.festival_edition || null,
+      slug: row.festival_slug,
+      official_url: row.festival_official_url || null,
+    });
+  }
+
   const event: PublicEventItem = {
     id: Number(row.id),
     title: row.title,
@@ -159,7 +190,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
           status: row.promotion_status,
         }
       : null,
-    festival: row.festival_id
+    festival: festivalsList[0] || (row.festival_id
       ? {
           id: Number(row.festival_id),
           name: row.festival_name,
@@ -167,7 +198,8 @@ singleEventRoutes.get('/events/:id', async (c) => {
           slug: row.festival_slug,
           official_url: row.festival_official_url || null,
         }
-      : null,
+      : null),
+    festivals: festivalsList.length > 0 ? festivalsList : undefined,
   };
 
   const response: SingleEventResponseContract = {

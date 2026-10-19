@@ -112,6 +112,17 @@ COMMENT ON COLUMN events.time_status IS 'Estado del señalamiento temporal: conf
 COMMENT ON COLUMN events.end_date IS 'Fecha de clausura para exposiciones o muestras temporales de varios días';
 COMMENT ON COLUMN events.schedule_text IS 'Horario textual publicado para exposiciones (ej. Mar a vie de 08:00 a 18:00 h)';
 COMMENT ON COLUMN events.approximate_schedule IS 'Nota informativa orientativa para borradores no fijados (ej. Fin de semana)';
-COMMENT ON COLUMN events.festival_id IS 'Referencia opcional al festival o ciclo al que pertenece la actividad';
+-- 7. Tabla de relación N:M para eventos pertenecientes a múltiples festivales o ciclos
+CREATE TABLE IF NOT EXISTS event_festivals (
+  event_id INT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  festival_id INT NOT NULL REFERENCES festivals(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (event_id, festival_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_festivals_festival 
+  ON event_festivals (festival_id);
+
+COMMENT ON TABLE event_festivals IS 'Asociación múltiple entre eventos y ciclos o festivales (soporte de pertenencia a varios programas)';
 
 COMMIT;

@@ -218,6 +218,45 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
     };
   });
 
+  if (events.length > 0) {
+    try {
+      const eventIds = events.map((e) => e.id);
+      const festRes = await query(
+        `SELECT ef.event_id, f.id, f.name, f.edition, f.slug, f.official_url
+         FROM event_festivals ef
+         INNER JOIN festivals f ON ef.festival_id = f.id
+         WHERE ef.event_id = ANY($1::int[])
+         ORDER BY f.name ASC`,
+        [eventIds]
+      );
+      const festMap = new Map<number, any[]>();
+      for (const f of festRes.rows) {
+        const eid = Number(f.event_id);
+        if (!festMap.has(eid)) festMap.set(eid, []);
+        festMap.get(eid)!.push({
+          id: Number(f.id),
+          name: f.name,
+          edition: f.edition || null,
+          slug: f.slug,
+          official_url: f.official_url || null,
+        });
+      }
+      for (const ev of events) {
+        const linked = festMap.get(ev.id) || [];
+        const combined = [...linked];
+        if (ev.festival && !combined.some((f) => f.id === ev.festival!.id)) {
+          combined.unshift(ev.festival);
+        }
+        if (combined.length > 0) {
+          ev.festivals = combined;
+          ev.festival = combined[0];
+        }
+      }
+    } catch {
+      // Ignore if event_festivals table does not exist
+    }
+  }
+
   // 4. Consultar recurrencias aplicables para el día de la semana
   const recurrencesSql = `
     SELECT 

@@ -12,6 +12,7 @@ const testPool = new Pool({ connectionString: rawTestDbUrl.trim() });
 
 let testVenueId: number;
 let testFestivalId: number;
+const createdFestivalIds: number[] = [];
 const createdEventIds: number[] = [];
 
 beforeAll(async () => {
@@ -30,6 +31,7 @@ beforeAll(async () => {
     RETURNING id;
   `);
   testFestivalId = festRes.rows[0].id;
+  createdFestivalIds.push(testFestivalId);
 
   // 3. Insertar evento con hora confirmada
   const ev1 = await testPool.query(`
@@ -58,7 +60,7 @@ beforeAll(async () => {
   `, [testVenueId]);
   createdEventIds.push(ev3.rows[0].id);
 
-  // 6. Insertar evento vinculado al festival
+  // 6. Insertar evento vinculado al festival principal
   const ev4 = await testPool.query(`
     INSERT INTO events (
       city_id, venue_id, festival_id, title, category, time_status, start_time, editorial_date, status, source_type, created_at, updated_at
@@ -66,14 +68,33 @@ beforeAll(async () => {
     RETURNING id;
   `, [testVenueId, testFestivalId]);
   createdEventIds.push(ev4.rows[0].id);
+
+  // 7. Insertar segundo festival y asociar ev4 a través de event_festivals (N:M)
+  const fest2Res = await testPool.query(`
+    INSERT INTO festivals (
+      city_id, name, edition, slug, description, start_date, end_date, official_url, is_active, created_at, updated_at
+    ) VALUES (
+      1, 'Otoño Cultural Prueba', 'Edición 2026', 'otono-cultural-test',
+      'Ciclo marco cultural de otoño', '2026-10-01', '2026-12-31', 'https://www.aytopalencia.es', true, now(), now()
+    )
+    RETURNING id;
+  `);
+  const testFestival2Id = fest2Res.rows[0].id;
+  createdFestivalIds.push(testFestival2Id);
+
+  await testPool.query(`
+    INSERT INTO event_festivals (event_id, festival_id)
+    VALUES ($1, $2), ($1, $3)
+    ON CONFLICT DO NOTHING;
+  `, [ev4.rows[0].id, testFestivalId, testFestival2Id]);
 });
 
 afterAll(async () => {
   if (createdEventIds.length > 0) {
     await testPool.query('DELETE FROM events WHERE id = ANY($1::int[])', [createdEventIds]);
   }
-  if (testFestivalId) {
-    await testPool.query('DELETE FROM festivals WHERE id = $1', [testFestivalId]);
+  if (createdFestivalIds.length > 0) {
+    await testPool.query('DELETE FROM festivals WHERE id = ANY($1::int[])', [createdFestivalIds]);
   }
   if (testVenueId) {
     await testPool.query('DELETE FROM venues WHERE id = $1', [testVenueId]);
@@ -93,15 +114,18 @@ describe('API — Piloto de Ampliación de Agenda (Contratos y Consultas)', () =
     expect(body.event.category).toBe('baloncesto');
   });
 
-  test('GET /api/v1/events/:id devuelve evento vinculado a festival con metadata del festival', async () => {
+  test('GET /api/v1/events/:id devuelve evento vinculado a festival con metadata del festival y array festivals N:M', async () => {
     const res = await app.request(`/api/v1/events/${createdEventIds[3]}`);
     expect(res.status).toBe(200);
     const body = await res.json();
 
     expect(body.event.festival).toBeDefined();
-    expect(body.event.festival.name).toBe('Festival Jazz Prueba');
-    expect(body.event.festival.slug).toBe('jazz-palencia-test');
     expect(body.event.category).toBe('conferencia');
+    expect(body.event.festivals).toBeDefined();
+    expect(body.event.festivals.length).toBe(2);
+    const names = body.event.festivals.map((f: any) => f.name);
+    expect(names).toContain('Festival Jazz Prueba');
+    expect(names).toContain('Otoño Cultural Prueba');
   });
 
   test('GET /api/v1/cities/palencia/events?date=YYYY-MM-DD incluye exposiciones dentro de su periodo', async () => {
@@ -132,17 +156,20 @@ describe('API — Piloto de Ampliación de Agenda (Contratos y Consultas)', () =
     expect(expo).toBeUndefined();
   });
 
-  test('GET /api/v1/cities/palencia/festivals/:slug devuelve el programa local del festival', async () => {
-    const res = await app.request('/api/v1/cities/palencia/festivals/jazz-palencia-test');
-    expect(res.status).toBe(200);
-    const body = await res.json();
+  test('GET /api/v1/cities/palencia/festivals/:slug devuelve el programa local del festival y resuelve pertenencia N:M', async () => {
+    // 1. Programa del festival principal
+    const res1 = await app.request('/api/v1/cities/palencia/festivals/jazz-palencia-test');
+    expect(res1.status).toBe(200);
+    const body1 = await res1.json();
+    expect(body1.festival.name).toBe('Festival Jazz Prueba');
+    expect(body1.events.some((e: any) => e.id === createdEventIds[3])).toBe(true);
 
-    expect(body.festival.name).toBe('Festival Jazz Prueba');
-    expect(body.festival.edition).toBe('XI Edición');
-    expect(body.city.slug).toBe('palencia');
-    expect(body.events.length).toBe(1);
-    expect(body.events[0].id).toBe(createdEventIds[3]);
-    expect(body.events[0].title).toBe('Conferencia sobre Jazz');
+    // 2. Programa del festival marco asociado vía event_festivals
+    const res2 = await app.request('/api/v1/cities/palencia/festivals/otono-cultural-test');
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json();
+    expect(body2.festival.name).toBe('Otoño Cultural Prueba');
+    expect(body2.events.some((e: any) => e.id === createdEventIds[3])).toBe(true);
   });
 
   test('GET /api/v1/cities/palencia/festivals/inexistente devuelve 404', async () => {

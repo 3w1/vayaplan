@@ -2995,14 +2995,19 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             </div>
           </div>
 
-          <!-- Festival / Ciclo si pertenece a uno -->
-          \${ev.festival ? \`
+          <!-- Festival / Ciclo si pertenece a uno o varios -->
+          \${(ev.festivals && ev.festivals.length > 0) ? \`
+            <div class="event-festival-banner">
+              <div class="festival-banner-tag">\${ev.festivals.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo'}</div>
+              <div class="festival-banner-name">Forma parte de \${ev.festivals.map((f: any) => \`<strong>\${escapeHtml(f.name)}</strong>\`).join(' · ')}</div>
+            </div>
+          \` : (ev.festival ? \`
             <div class="event-festival-banner">
               <div class="festival-banner-tag">Festival / Ciclo</div>
               <div class="festival-banner-name">Forma parte de <strong>\${escapeHtml(ev.festival.name)}</strong></div>
               \${ev.festival.description ? \`<div class="festival-banner-desc">\${escapeHtml(ev.festival.description)}</div>\` : ''}
             </div>
-          \` : ''}
+          \` : '')}
 
           <!-- Bloque de Entradas si tickets_url está disponible -->
           \${(!isCancelled && ev.actions.tickets_url) ? \`
