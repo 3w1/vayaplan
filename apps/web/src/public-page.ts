@@ -1,28 +1,87 @@
+import type { PublicEventItem } from '@vayaplan/types';
+
+export interface PublicPageMeta {
+  title?: string;
+  description?: string;
+  canonicalUrl?: string;
+  ogType?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogUrl?: string;
+  ogImage?: string;
+  ogImageAlt?: string;
+  twitterTitle?: string;
+  twitterDescription?: string;
+  twitterImage?: string;
+  initialEvent?: PublicEventItem | null;
+  initialError?: {
+    statusCode: number;
+    error: string;
+    message: string;
+  } | null;
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeJsonForScript(data: any): string {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
+
 /**
  * Renderizador de la interfaz pública PWA de VayaPlan
  * Zero-Form UI, responsive, mobile-first con agenda hiperlocal
  */
-export function renderPublicHtml(): string {
+export function renderPublicHtml(meta?: PublicPageMeta): string {
+  const title = escapeHtml(meta?.title || 'VayaPlan — ¿Qué hacer hoy en Palencia? Agenda Hiperlocal');
+  const description = escapeHtml(meta?.description || 'Agenda hiperlocal sin filtros ni registro. Conciertos, teatro, cine y tardeo en Palencia en menos de 30 segundos.');
+  const canonicalUrl = escapeHtml(meta?.canonicalUrl || 'https://vayaplan.com/');
+  const ogType = escapeHtml(meta?.ogType || 'website');
+  const ogTitle = escapeHtml(meta?.ogTitle || meta?.title || 'VayaPlan — ¿Qué hacer hoy en Palencia?');
+  const ogDescription = escapeHtml(meta?.ogDescription || meta?.description || 'Agenda hiperlocal sin filtros ni registro. Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.');
+  const ogImage = escapeHtml(meta?.ogImage || 'https://vayaplan.com/icons/icon-512x512.png');
+  const ogImageAlt = escapeHtml(meta?.ogImageAlt || 'VayaPlan — Agenda Palencia');
+  const ogUrl = escapeHtml(meta?.ogUrl || meta?.canonicalUrl || 'https://vayaplan.com/');
+  const twitterTitle = escapeHtml(meta?.twitterTitle || meta?.title || 'VayaPlan — Agenda Palencia');
+  const twitterDescription = escapeHtml(meta?.twitterDescription || meta?.description || 'Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.');
+  const twitterImage = escapeHtml(meta?.twitterImage || meta?.ogImage || 'https://vayaplan.com/icons/icon-512x512.png');
+
+  const bootstrapData = {
+    event: meta?.initialEvent || null,
+    error: meta?.initialError || null,
+  };
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>VayaPlan — ¿Qué hacer hoy en Palencia? Agenda Hiperlocal</title>
-  <meta name="description" content="Agenda hiperlocal sin filtros ni registro. Conciertos, teatro, cine y tardeo en Palencia en menos de 30 segundos.">
+  <title>${title}</title>
+  <meta name="description" content="${description}">
+  <link rel="canonical" href="${canonicalUrl}">
   
   <!-- Open Graph / WhatsApp Preview -->
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="VayaPlan — ¿Qué hacer hoy en Palencia?">
-  <meta property="og:description" content="Agenda hiperlocal sin filtros ni registro. Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.">
-  <meta property="og:image" content="https://vayaplan.com/icons/icon-512x512.png">
-  <meta property="og:url" content="https://vayaplan.com/">
+  <meta property="og:type" content="${ogType}">
+  <meta property="og:title" content="${ogTitle}">
+  <meta property="og:description" content="${ogDescription}">
+  <meta property="og:image" content="${ogImage}">
+  <meta property="og:image:alt" content="${ogImageAlt}">
+  <meta property="og:url" content="${ogUrl}">
   
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="VayaPlan — Agenda Palencia">
-  <meta name="twitter:description" content="Conciertos, teatro, cine y tardeo en Palencia en 30 segundos.">
-  <meta name="twitter:image" content="https://vayaplan.com/icons/icon-512x512.png">
+  <meta name="twitter:title" content="${twitterTitle}">
+  <meta name="twitter:description" content="${twitterDescription}">
+  <meta name="twitter:image" content="${twitterImage}">
 
   <!-- PWA & Mobile Meta -->
   <meta name="theme-color" content="#6C3BFF">
@@ -754,6 +813,60 @@ export function renderPublicHtml(): string {
       margin-bottom: 0.2rem;
     }
 
+    .badge-status-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: #FEF3C7;
+      color: #D97706;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.6875rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+
+    .badge-status-finished {
+      display: inline-flex;
+      align-items: center;
+      background: #E2E8F0;
+      color: #64748B;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.6875rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+
+    .cancelled-banner {
+      background: var(--color-red-bg);
+      color: var(--color-red);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      margin-bottom: 1rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .event-temporal-notice {
+      background: #F1F5F9;
+      color: #475569;
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
     .recurrence-badge {
       display: inline-flex;
       align-items: center;
@@ -1407,6 +1520,8 @@ export function renderPublicHtml(): string {
     </div>
   </div>
 
+  <script id="__VAYAPLAN_BOOTSTRAP__" type="application/json">${escapeJsonForScript(bootstrapData)}</script>
+
   <script type="module">
     // ==============================================================================
     // Estado y variables globales
@@ -1423,6 +1538,9 @@ export function renderPublicHtml(): string {
     let lastFocusedElement = null; // Guarda el elemento que abrió el modal
     let savedScrollY = 0; // Guarda la posición de scroll del fondo para restaurarla al cerrar modal
     let currentRequestId = 0; // Previene condiciones de carrera en respuestas asíncronas
+    let activeDetailRequestId = 0; // Previene condiciones de carrera en carga de fichas individuales
+    let activeDetailAbortController = null; // Controlador para abortar peticiones de ficha en curso
+    let isDirectEntry = false; // Identifica si la sesión inició directamente en /events/:id
     let activePromotions = []; // Campañas vigentes cargadas del servidor
     let activePromotionsCity = ''; // Ciudad de las campañas en memoria
     let promotionsSeq = 0; // Previene respuestas desordenadas al cambiar de ciudad
@@ -1811,6 +1929,7 @@ export function renderPublicHtml(): string {
       currentCity = newSlug;
       activePromotions = [];
       activePromotionsCity = newSlug;
+      updateListingUrl();
       loadData();
     }
     window.changeCity = changeCity;
@@ -1966,6 +2085,106 @@ export function renderPublicHtml(): string {
       switchView('today');
     }
     window.clearAllFilters = clearAllFilters;
+
+    // ==============================================================================
+    // Sincronización de Parámetros de URL y Filtros de Listado
+    // ==============================================================================
+    function applyFiltersFromUrl() {
+      if (window.location.pathname.startsWith('/events/')) return false;
+      const params = new URLSearchParams(window.location.search);
+      let changed = false;
+
+      const cityParam = params.get('city');
+      if (cityParam && cityParam.trim() && cityParam.trim().toLowerCase() !== currentCity) {
+        currentCity = cityParam.trim().toLowerCase();
+        changed = true;
+      }
+
+      const dateParam = params.get('date');
+      if (dateParam && new RegExp('^\\\\d{4}-\\\\d{2}-\\\\d{2}$').test(dateParam.trim())) {
+        const cleanDate = dateParam.trim();
+        if (cleanDate !== selectedDate) {
+          selectedDate = cleanDate;
+          changed = true;
+        }
+        if (selectedDate === getTodayDateString()) {
+          currentView = 'today';
+        } else if (selectedDate === getTomorrowDateString()) {
+          currentView = 'tomorrow';
+        } else {
+          currentView = 'calendar';
+        }
+      }
+
+      const viewParam = params.get('view');
+      if (viewParam && ['today', 'tomorrow', 'weekend', 'calendar'].includes(viewParam.trim().toLowerCase())) {
+        const cleanView = viewParam.trim().toLowerCase();
+        if (cleanView !== currentView) {
+          currentView = cleanView;
+          changed = true;
+        }
+      }
+
+      const catParam = (params.get('cat') || params.get('category'));
+      const validCategories = ['musica', 'tardeo', 'cine', 'cultura'];
+      const targetFilter = (catParam && validCategories.includes(catParam.trim().toLowerCase())) ? catParam.trim().toLowerCase() : 'all';
+      if (targetFilter !== currentFilter) {
+        currentFilter = targetFilter;
+        changed = true;
+      }
+
+      // Sincronizar botones y etiquetas en la interfaz
+      document.querySelectorAll('.time-tab').forEach((el) => {
+        el.classList.toggle('active', el.id === 'tab-' + currentView);
+      });
+      if (currentView === 'calendar') {
+        const calLabel = document.getElementById('calendar-label');
+        if (calLabel) calLabel.innerText = selectedDate;
+      }
+      document.querySelectorAll('.cat-btn').forEach((el) => {
+        el.classList.toggle('active', el.dataset.cat === currentFilter);
+      });
+
+      return changed;
+    }
+    window.applyFiltersFromUrl = applyFiltersFromUrl;
+
+    function updateListingUrl() {
+      if (window.location.pathname.startsWith('/events/')) return;
+      const params = new URLSearchParams(window.location.search);
+
+      if (params.has('city') || currentCity !== 'palencia') {
+        params.set('city', currentCity);
+      }
+
+      if (params.has('date') || selectedDate !== getTodayDateString()) {
+        params.set('date', selectedDate);
+      } else if (currentView !== 'calendar') {
+        params.delete('date');
+      }
+
+      if (currentFilter && currentFilter !== 'all') {
+        params.set('cat', currentFilter);
+        params.delete('category');
+      } else {
+        params.delete('cat');
+        params.delete('category');
+      }
+
+      if (currentView === 'weekend') {
+        params.set('view', 'weekend');
+      } else {
+        params.delete('view');
+      }
+
+      const qs = params.toString();
+      const targetUrl = qs ? ('/?' + qs) : '/';
+      const currentFull = window.location.pathname + window.location.search;
+      if (currentFull !== targetUrl && !window.location.pathname.startsWith('/events/')) {
+        history.replaceState(history.state, '', targetUrl);
+      }
+    }
+    window.updateListingUrl = updateListingUrl;
 
     // ==============================================================================
     // Helper de Portada / Fallback
@@ -2328,122 +2547,229 @@ export function renderPublicHtml(): string {
     }
 
     // ==============================================================================
-    // Ficha Modal de Evento Individual
+    // Ficha Modal de Evento Individual y Estados Temporales
     // ==============================================================================
-    async function openEventModal(eventId) {
-      savedScrollY = window.scrollY;
+    function computeTemporalState(startTimeIso, endTimeIso) {
+      const now = new Date();
+      const start = new Date(startTimeIso);
+      const end = endTimeIso ? new Date(endTimeIso) : null;
+
+      if (end) {
+        if (now < start) return { type: 'upcoming', label: null };
+        if (now >= start && now <= end) return { type: 'in_progress', label: 'En curso' };
+        return { type: 'finished', label: 'Finalizado' };
+      } else {
+        if (now < start) return { type: 'upcoming', label: null };
+        return { type: 'started_no_end', label: null };
+      }
+    }
+
+    function renderEventDetail(ev, sheet) {
+      const promoId = ev.promotion ? ev.promotion.id : null;
+      const isCancelled = ev.status === 'cancelled';
+      const realDateTime = formatEventRealDateTime(ev.start_time);
+      const temporal = computeTemporalState(ev.start_time, ev.end_time);
+
+      let priceLabel = ev.price.label;
+      if (ev.price.amount_cents === 0 || ev.price.is_free) {
+        priceLabel = 'Gratis';
+      }
+
+      sheet.innerHTML = \`
+        <div class="modal-sticky-header">
+          <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+            <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          </button>
+        </div>
+
+        <div class="modal-hero-cover" \${ev.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}" style="cursor:zoom-in;"\` : ''}>
+          \${ev.image_url ? \`
+            <img class="modal-hero-backdrop" src="\${escapeHtml(ev.image_thumb_url || ev.image_url)}" alt="" aria-hidden="true">
+            <img class="modal-hero-img" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" onerror="this.onerror=null;this.closest('.modal-hero-cover').replaceWith(createSvgFallbackNode(true));">
+            <span class="modal-hero-zoom-badge" aria-hidden="true">
+              <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+              Ver cartel completo
+            </span>
+          \` : \`
+            <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
+              <svg style="width:64px;height:64px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            </div>
+          \`}
+        </div>
+
+        <div class="modal-body">
+          <div style="margin-bottom:0.75rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
+            \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (
+              (ev.promotion ? '<span class="badge-destacado">Destacado</span>' : '') +
+              (temporal.type === 'in_progress' ? '<span class="badge-status-live"><span style="width:7px;height:7px;border-radius:50%;background:#D97706;display:inline-block;"></span>En curso</span>' : '') +
+              (temporal.type === 'finished' ? '<span class="badge-status-finished">Finalizado</span>' : '')
+            )}
+          </div>
+
+          <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
+
+          \${isCancelled ? \`
+            <div class="cancelled-banner">
+              <svg style="width:20px;height:20px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+              <span>Este evento ha sido cancelado por la organización.</span>
+            </div>
+          \` : (
+            temporal.type === 'finished' ? \`
+              <div class="event-temporal-notice">
+                <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                <span>Este evento ya ha finalizado.</span>
+              </div>
+            \` : (
+              temporal.type === 'started_no_end' ? \`
+                <div class="event-temporal-notice">
+                  <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                  <span>Este evento comenzó el \${escapeHtml(realDateTime.dateText)} a las \${formatTime(ev.start_time)} h.</span>
+                </div>
+              \` : ''
+            )
+          )}
+
+          <div class="modal-meta-row">
+            <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+            <span>\${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}</span>
+          </div>
+          <div class="modal-meta-row">
+            <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+            <span>\${formatTime(ev.start_time)} h\${ev.end_time ? ' - ' + formatTime(ev.end_time) + ' h' : ''}</span>
+          </div>
+          <div class="modal-meta-row">
+            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            <span><strong>\${escapeHtml(ev.venue.name)}</strong> \${ev.actions.maps_url ? \`<a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" style="color:var(--color-primary);margin-left:0.5rem;font-weight:700;" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">Ver mapa ↗</a>\` : ''}</span>
+          </div>
+
+          \${ev.image_url ? \`
+            <button type="button" class="btn-poster-action" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}">
+              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
+              <span>Ver cartel completo</span>
+            </button>
+          \` : ''}
+
+          <!-- Bloque de Acción Principal y Precio -->
+          <div class="modal-action-box">
+            <div class="modal-action-main-row">
+              <span class="modal-price-display">\${escapeHtml(priceLabel)}</span>
+              \${isCancelled ? \`
+                <button type="button" class="btn-primary-action" disabled style="background:#94A3B8;cursor:not-allowed;">Evento cancelado</button>
+              \` : (ev.actions.tickets_url ? \`
+                <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="ticket_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                  \${(ev.price.amount_cents === 0 || ev.price.is_free) ? 'Reservar entrada ↗' : 'Comprar entradas ↗'}
+                </a>
+              \` : (ev.actions.maps_url ? \`
+                <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                  Cómo llegar ↗
+                </a>
+              \` : ''))}
+            </div>
+            \${(!isCancelled && ev.actions.tickets_url) ? '<div class="action-disclaimer">Compra en una web externa</div>' : ''}
+          </div>
+
+          \${ev.description ? \`
+            <div style="margin-top:1.5rem;">
+              <h3 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h3>
+              <p style="font-size:0.9375rem;color:var(--color-text-muted);line-height:1.6;white-space:pre-line;">\${escapeHtml(ev.description)}</p>
+              \${ev.verification && ev.verification.source === 'web' && ev.actions.tickets_url ? \`
+                <div style="margin-top:0.75rem;">
+                  <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" style="font-size:0.8125rem;color:var(--color-primary);font-weight:700;">Ver fuente original ↗</a>
+                </div>
+              \` : ''}
+            </div>
+          \` : ''}
+
+          <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--color-border);">
+            <h3 style="font-size:0.875rem;font-weight:800;color:var(--color-text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.04em;">Organizador</h3>
+            <div style="font-size:0.9375rem;font-weight:700;color:var(--color-night);">\${escapeHtml(ev.venue.name)}</div>
+          </div>
+        </div>
+      \`;
+
+      sheet.querySelector('.modal-close-btn')?.focus();
+    }
+
+    async function openEventModal(eventId, options = {}) {
       const modal = document.getElementById('detail-modal');
       const sheet = document.getElementById('modal-content');
 
+      // 1. Abortar y desacoplar cualquier petición de detalle previa en curso
+      if (activeDetailAbortController) {
+        activeDetailAbortController.abort();
+        activeDetailAbortController = null;
+      }
+      const reqId = ++activeDetailRequestId;
+      const abortCtrl = new AbortController();
+      activeDetailAbortController = abortCtrl;
+
+      if (!options.fromDirectEntry && !options.initialData) {
+        savedScrollY = window.scrollY;
+      }
+
       document.body.classList.add('modal-open');
-      sheet.innerHTML = '<div class="loader-spinner" style="margin:4rem auto;"></div>';
       modal.classList.add('active');
 
+      if (options.initialData) {
+        const ev = options.initialData;
+        if (options.fromDirectEntry) {
+          isDirectEntry = true;
+        }
+        if (activeModalEventId !== ev.id) {
+          trackMetric(ev.id, 'impression', ev.promotion ? ev.promotion.id : null);
+          activeModalEventId = ev.id;
+        }
+        renderEventDetail(ev, sheet);
+        document.title = (ev.status === 'cancelled' ? '[Cancelado] ' : '') + ev.title + ' — ' + ev.venue.name + ' | VayaPlan';
+        return;
+      }
+
+      sheet.innerHTML = '<div class="loader-spinner" style="margin:4rem auto;"></div>';
+
+      const returnUrl = (history.state && history.state.returnUrl) || (window.location.pathname + window.location.search);
+
+      if (options.pushHistory) {
+        const method = (history.state && history.state.modal === 'event') ? 'replaceState' : 'pushState';
+        history[method](
+          {
+            modal: 'event',
+            eventId: Number(eventId),
+            fromListing: true,
+            scrollY: savedScrollY,
+            returnUrl: returnUrl,
+          },
+          '',
+          '/events/' + eventId
+        );
+      }
+
       try {
-        const res = await fetch(\`/api/v1/events/\${eventId}\`);
+        const res = await fetch(\`/api/v1/events/\${eventId}\`, { signal: abortCtrl.signal });
+        if (reqId !== activeDetailRequestId) return;
+        if (!modal.classList.contains('active')) return;
+        if (!window.location.pathname.startsWith('/events/')) return;
+
         if (!res.ok) throw new Error('Evento no encontrado');
         const data = await res.json();
         const ev = data.event;
-        const promoId = ev.promotion ? ev.promotion.id : null;
-        const isCancelled = ev.status === 'cancelled';
-        const realDateTime = formatEventRealDateTime(ev.start_time);
 
-        // Registrar métrica de impresión de ficha (evita duplicados si es el mismo evento activo)
+        if (reqId !== activeDetailRequestId) return;
+        if (!modal.classList.contains('active')) return;
+        if (!window.location.pathname.startsWith('/events/')) return;
+
         if (activeModalEventId !== ev.id) {
-          trackMetric(ev.id, 'impression', promoId);
+          trackMetric(ev.id, 'impression', ev.promotion ? ev.promotion.id : null);
           activeModalEventId = ev.id;
         }
 
-        sheet.innerHTML = \`
-          <div class="modal-sticky-header">
-            <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
-              <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-            </button>
-          </div>
-
-          <div class="modal-hero-cover" \${ev.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}" style="cursor:zoom-in;"\` : ''}>
-            \${ev.image_url ? \`
-              <img class="modal-hero-backdrop" src="\${escapeHtml(ev.image_thumb_url || ev.image_url)}" alt="" aria-hidden="true">
-              <img class="modal-hero-img" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" onerror="this.onerror=null;this.closest('.modal-hero-cover').replaceWith(createSvgFallbackNode(true));">
-              <span class="modal-hero-zoom-badge" aria-hidden="true">
-                <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
-                Ver cartel completo
-              </span>
-            \` : \`
-              <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
-                <svg style="width:64px;height:64px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-              </div>
-            \`}
-          </div>
-
-          <div class="modal-body">
-            <div style="margin-bottom:0.75rem;">
-              \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (ev.promotion ? '<span class="badge-destacado">Destacado</span>' : '')}
-            </div>
-
-            <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
-
-            <div class="modal-meta-row">
-              <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
-              <span>\${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}</span>
-            </div>
-            <div class="modal-meta-row">
-              <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-              <span>\${formatTime(ev.start_time)} h</span>
-            </div>
-            <div class="modal-meta-row">
-              <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-              <span><strong>\${escapeHtml(ev.venue.name)}</strong> \${ev.actions.maps_url ? \`<a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" style="color:var(--color-primary);margin-left:0.5rem;font-weight:700;" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">Ver mapa ↗</a>\` : ''}</span>
-            </div>
-
-            \${ev.image_url ? \`
-              <button type="button" class="btn-poster-action" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}">
-                <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
-                <span>Ver cartel completo</span>
-              </button>
-            \` : ''}
-
-            <!-- Bloque de Acción Principal y Precio -->
-            <div class="modal-action-box">
-              <div class="modal-action-main-row">
-                <span class="modal-price-display">\${escapeHtml(ev.price.label)}</span>
-                \${isCancelled ? \`
-                  <button type="button" class="btn-primary-action" disabled style="background:#94A3B8;cursor:not-allowed;">Evento cancelado</button>
-                \` : (ev.actions.tickets_url ? \`
-                  <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="ticket_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
-                    Comprar entradas ↗
-                  </a>
-                \` : (ev.actions.maps_url ? \`
-                  <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
-                    Cómo llegar ↗
-                  </a>
-                \` : ''))}
-              </div>
-              \${(!isCancelled && ev.actions.tickets_url) ? '<div class="action-disclaimer">Compra en una web externa</div>' : ''}
-            </div>
-
-            \${ev.description ? \`
-              <div style="margin-top:1.5rem;">
-                <h3 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h3>
-                <p style="font-size:0.9375rem;color:var(--color-text-muted);line-height:1.6;white-space:pre-line;">\${escapeHtml(ev.description)}</p>
-                \${ev.verification && ev.verification.source === 'web' && ev.actions.tickets_url ? \`
-                  <div style="margin-top:0.75rem;">
-                    <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" style="font-size:0.8125rem;color:var(--color-primary);font-weight:700;">Ver fuente original ↗</a>
-                  </div>
-                \` : ''}
-              </div>
-            \` : ''}
-
-            <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--color-border);">
-              <h3 style="font-size:0.875rem;font-weight:800;color:var(--color-text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.04em;">Organizador</h3>
-              <div style="font-size:0.9375rem;font-weight:700;color:var(--color-night);">\${escapeHtml(ev.venue.name)}</div>
-            </div>
-          </div>
-        \`;
-
-        // Poner foco inicial en el botón de cierre para accesibilidad
-        sheet.querySelector('.modal-close-btn')?.focus();
+        renderEventDetail(ev, sheet);
+        document.title = (ev.status === 'cancelled' ? '[Cancelado] ' : '') + ev.title + ' — ' + ev.venue.name + ' | VayaPlan';
       } catch (err) {
+        if (reqId !== activeDetailRequestId) return;
+        if (abortCtrl.signal.aborted) return;
+        if (!modal.classList.contains('active')) return;
+        if (!window.location.pathname.startsWith('/events/')) return;
+
         sheet.innerHTML = \`
           <div class="modal-body" style="text-align:center;padding:3rem 1rem;">
             <h3 style="font-size:1.15rem;margin-bottom:0.5rem;color:var(--color-night);">No se pudo cargar la información</h3>
@@ -2454,6 +2780,30 @@ export function renderPublicHtml(): string {
         sheet.querySelector('.btn-primary-action')?.focus();
       }
     }
+    window.openEventModal = openEventModal;
+
+    function showInitialError(error) {
+      const modal = document.getElementById('detail-modal');
+      const sheet = document.getElementById('modal-content');
+      savedScrollY = 0;
+      isDirectEntry = true;
+
+      document.body.classList.add('modal-open');
+      modal.classList.add('active');
+
+      sheet.innerHTML = \`
+        <div class="modal-body" style="text-align:center;padding:3.5rem 1.5rem;">
+          <div style="width:56px;height:56px;border-radius:50%;background:#FEE2E2;color:#EF4444;display:flex;align-items:center;justify-content:center;margin:0 auto 1.25rem;">
+            <svg style="width:28px;height:28px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          </div>
+          <h1 class="modal-title-main" style="font-size:1.25rem;margin-bottom:0.75rem;">\${escapeHtml(error.statusCode === 404 ? 'Plan no encontrado' : 'Aviso')}</h1>
+          <p style="font-size:0.9375rem;color:var(--color-text-muted);margin-bottom:2rem;line-height:1.5;">\${escapeHtml(error.message)}</p>
+          <button type="button" class="btn-primary-action" data-action="navigate-home" style="width:100%;max-width:240px;margin:0 auto;display:inline-block;">Ver planes de hoy</button>
+        </div>
+      \`;
+      sheet.querySelector('.btn-primary-action')?.focus();
+    }
+
     window.openEventModal = openEventModal;
 
     // ==============================================================================
@@ -2574,14 +2924,37 @@ export function renderPublicHtml(): string {
     // Cierre de Modal y Gestión de Foco
     // ==============================================================================
     function closeModal() {
+      const isPopState = arguments[0] === true;
       const modal = document.getElementById('detail-modal');
+
+      // Invalida y aborta inmediatamente peticiones de detalle en curso
+      activeDetailRequestId++;
+      if (activeDetailAbortController) {
+        activeDetailAbortController.abort();
+        activeDetailAbortController = null;
+      }
+
+      if (!modal || !modal.classList.contains('active')) return;
+
       modal.classList.remove('active');
       document.body.classList.remove('modal-open');
-      window.scrollTo(0, savedScrollY);
       activeModalEventId = null;
+      window.scrollTo(0, savedScrollY);
+      document.title = 'VayaPlan — ¿Qué hacer hoy en Palencia? Agenda Hiperlocal';
+
       if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
         lastFocusedElement.focus();
         lastFocusedElement = null;
+      }
+
+      if (!isPopState) {
+        if (history.state && history.state.fromListing) {
+          history.back();
+        } else {
+          const fallbackUrl = (history.state && history.state.returnUrl) || '/';
+          history.replaceState(null, '', fallbackUrl);
+          isDirectEntry = false;
+        }
       }
     }
     window.closeModal = closeModal;
@@ -2698,6 +3071,7 @@ export function renderPublicHtml(): string {
       }
 
       loadData();
+      updateListingUrl();
     }
     window.switchView = switchView;
 
@@ -2706,6 +3080,8 @@ export function renderPublicHtml(): string {
       document.querySelectorAll('.cat-btn').forEach((el) => {
         el.classList.toggle('active', el.dataset.cat === filter);
       });
+
+      updateListingUrl();
 
       if (currentView === 'weekend') {
         renderWeekendAgenda();
@@ -2743,14 +3119,14 @@ export function renderPublicHtml(): string {
 
       if (action === 'open-event') {
         lastFocusedElement = trigger;
-        openEventModal(Number(trigger.dataset.id));
+        openEventModal(Number(trigger.dataset.id), { pushHistory: true });
       } else if (action === 'open-place') {
         lastFocusedElement = trigger;
         openPlaceModal(Number(trigger.dataset.id));
       } else if (action === 'open-recurrence') {
         lastFocusedElement = trigger;
         openRecurrenceModal(Number(trigger.dataset.id));
-      } else if (action === 'close-modal') {
+      } else if (action === 'close-modal' || action === 'navigate-home') {
         closeModal();
       } else if (action === 'open-full-poster') {
         openPosterLightbox(trigger.dataset.posterUrl, trigger.dataset.posterTitle, trigger);
@@ -2921,6 +3297,44 @@ export function renderPublicHtml(): string {
     });
 
     // ==============================================================================
+    // Sincronización de Historial del Navegador (Atrás / Adelante)
+    // ==============================================================================
+    window.addEventListener('popstate', (e) => {
+      // Invalida y aborta peticiones de detalle en curso al viajar por el historial
+      activeDetailRequestId++;
+      if (activeDetailAbortController) {
+        activeDetailAbortController.abort();
+        activeDetailAbortController = null;
+      }
+
+      const lightbox = document.getElementById('poster-lightbox');
+      if (lightbox && lightbox.style.display !== 'none') {
+        closePosterLightbox();
+      }
+
+      const state = e.state;
+      if (state && state.modal === 'event' && state.eventId) {
+        openEventModal(state.eventId, { pushHistory: false });
+      } else {
+        const currentPath = window.location.pathname;
+        const match = currentPath.match(new RegExp('^/events/(\\\\d+)$'));
+        if (match) {
+          openEventModal(Number(match[1]), { pushHistory: false });
+        } else {
+          closeModal(true);
+          const filtersChanged = applyFiltersFromUrl();
+          if (filtersChanged && currentData) {
+            if (currentView === 'weekend') {
+              renderWeekendAgenda();
+            } else {
+              renderDayAgenda();
+            }
+          }
+        }
+      }
+    });
+
+    // ==============================================================================
     // Registro de Service Worker PWA
     // ==============================================================================
     if ('serviceWorker' in navigator) {
@@ -2932,6 +3346,29 @@ export function renderPublicHtml(): string {
     // Inicialización al cargar la página
     document.addEventListener('DOMContentLoaded', () => {
       getSessionHash();
+
+      // Sincronizar estado inicial de listado según parámetros en la URL (p.ej. ?city=palencia&date=...&cat=...)
+      applyFiltersFromUrl();
+
+      // Bootstrap inicial si venimos de SSR (/events/:id)
+      const bootstrapEl = document.getElementById('__VAYAPLAN_BOOTSTRAP__');
+      let bootstrapData = {};
+      try {
+        bootstrapData = bootstrapEl ? JSON.parse(bootstrapEl.textContent || '{}') : {};
+      } catch (e) {
+        bootstrapData = {};
+      }
+
+      if (bootstrapData.event) {
+        openEventModal(bootstrapData.event.id, {
+          initialData: bootstrapData.event,
+          fromDirectEntry: true,
+        });
+      } else if (bootstrapData.error) {
+        showInitialError(bootstrapData.error);
+      }
+
+      // Cargar agenda de fondo
       loadData();
     });
   </script>
