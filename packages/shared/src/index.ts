@@ -11,6 +11,10 @@ export const VALID_EVENT_CATEGORIES: readonly EventCategory[] = [
   'teatro',
   'exposicion',
   'cultura',
+  'baloncesto',
+  'futbol',
+  'rugby',
+  'conferencia',
 ] as const;
 
 /**
@@ -52,14 +56,21 @@ export function formatPriceLabel(priceCents: number, isFree: boolean): string {
  * Calcula la etiqueta editorial para una fecha y hora dadas
  * Ejemplos: "Viernes", "Viernes noche", "Sábado", "Domingo tarde"
  */
-export function computeEditorialLabel(editorialDateStr: string, startTimeIso: string): string {
+export function computeEditorialLabel(editorialDateStr: string, startTimeIso?: string | null): string {
   const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   
   const [year, month, day] = editorialDateStr.split('-').map(Number);
   const dateObj = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
   const dayName = daysOfWeek[dateObj.getUTCDay()] ?? 'Fecha';
 
+  if (!startTimeIso || startTimeIso.trim().length === 0) {
+    return dayName;
+  }
+
   const startDate = new Date(startTimeIso);
+  if (Number.isNaN(startDate.getTime())) {
+    return dayName;
+  }
   const hour = startDate.getHours();
 
   if (hour >= 20 || hour < 6) {

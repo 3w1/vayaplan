@@ -88,3 +88,27 @@ describe('computeEditorialDate', () => {
     });
   });
 });
+
+describe('Piloto de Ampliación de Agenda — Categorías y Etiquetas', () => {
+  test('VALID_EVENT_CATEGORIES incluye deporte y conferencias manteniendo las existentes', () => {
+    const { VALID_EVENT_CATEGORIES } = require('./index');
+    expect(VALID_EVENT_CATEGORIES).toContain('musica_directo');
+    expect(VALID_EVENT_CATEGORIES).toContain('cine');
+    expect(VALID_EVENT_CATEGORIES).toContain('teatro');
+    expect(VALID_EVENT_CATEGORIES).toContain('exposicion');
+    expect(VALID_EVENT_CATEGORIES).toContain('baloncesto');
+    expect(VALID_EVENT_CATEGORIES).toContain('futbol');
+    expect(VALID_EVENT_CATEGORIES).toContain('rugby');
+    expect(VALID_EVENT_CATEGORIES).toContain('conferencia');
+  });
+
+  test('computeEditorialLabel devuelve el nombre del día sin errores cuando startTimeIso es null o indefinido', () => {
+    const { computeEditorialLabel } = require('./index');
+    // 2026-11-08 es Domingo
+    expect(computeEditorialLabel('2026-11-08', null)).toBe('Domingo');
+    expect(computeEditorialLabel('2026-11-08', undefined)).toBe('Domingo');
+    expect(computeEditorialLabel('2026-11-08', '')).toBe('Domingo');
+    // 2026-10-24 es Sábado
+    expect(computeEditorialLabel('2026-10-24', null)).toBe('Sábado');
+  });
+});
