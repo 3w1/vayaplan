@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { renderAdminHtml } from './admin';
 import { renderPublicHtml } from './public-page';
+import type { PublicEventItem } from '@vayaplan/types';
 
 const app = new Hono();
 
@@ -171,13 +172,27 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
+        // Solo cachear respuestas 200 OK para evitar enmascarar errores (404, 5xx)
         if (response && response.status === 200) {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
+      .catch(() => {
+        return caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          // No disfrazar rutas de eventos /events/ como la página principal '/'
+          if (event.request.mode === 'navigate' && !url.pathname.startsWith('/events/')) {
+            return caches.match('/');
+          }
+          return new Response('Sin conexión a internet', {
+            status: 503,
+            statusText: 'Service Unavailable',
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          });
+        });
+      })
   );
 });
 `;
@@ -238,6 +253,194 @@ app.get('/icons/:filename', (c) => {
 // ==============================================================================
 app.get('/', (c) => {
   return c.html(renderPublicHtml());
+});
+
+// ==============================================================================
+// Ficha Pública de Evento Individual: GET /events/:id
+// ==============================================================================
+app.get('/events/:id', async (c) => {
+  const rawId = c.req.param('id')?.trim();
+  const eventId = Number(rawId);
+
+  // Origen público seguro y validado (evita host header injection)
+  const publicOrigin = (process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '');
+
+  // 1. Validación de ID: debe ser número entero positivo
+  if (!rawId || Number.isNaN(eventId) || !Number.isInteger(eventId) || eventId <= 0) {
+    return c.html(
+      renderPublicHtml({
+        title: 'Solicitud no válida | VayaPlan',
+        description: 'El identificador del evento debe ser un número entero positivo.',
+        canonicalUrl: `${publicOrigin}/`,
+        initialError: {
+          statusCode: 400,
+          error: 'invalid_parameter',
+          message: 'El identificador del evento debe ser un número entero positivo.',
+        },
+      }),
+      400,
+      {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
+    );
+  }
+
+  // 2. Consulta a la API interna con timeout explícito
+  const internalApi = (process.env.INTERNAL_API_URL || 'http://api:4000').replace(/\/$/, '');
+  const apiUrl = `${internalApi}/api/v1/events/${eventId}`;
+
+  let apiRes: Response;
+  try {
+    apiRes = await fetch(apiUrl, {
+      signal: AbortSignal.timeout(3000),
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+  } catch (err: any) {
+    // Si la API falla o agota el tiempo, responde error controlado 502/504 (nunca un falso 404)
+    const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+    const statusCode = isTimeout ? 504 : 502;
+    return c.html(
+      renderPublicHtml({
+        title: 'Servicio no disponible | VayaPlan',
+        description: 'No se pudo conectar con el servicio de eventos. Inténtalo de nuevo en unos instantes.',
+        canonicalUrl: `${publicOrigin}/events/${eventId}`,
+        initialError: {
+          statusCode,
+          error: isTimeout ? 'gateway_timeout' : 'upstream_unavailable',
+          message: 'El servicio no está disponible en este momento. Inténtalo de nuevo en unos instantes.',
+        },
+      }),
+      statusCode,
+      {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
+    );
+  }
+
+  // 3. Si la API devuelve 404 (inexistente, borrador tentative, archivado, etc.)
+  if (apiRes.status === 404) {
+    return c.html(
+      renderPublicHtml({
+        title: 'Plan no encontrado | VayaPlan',
+        description: 'El plan que buscas no está disponible o ha expirado. Descubre los mejores planes de hoy en Palencia con VayaPlan.',
+        canonicalUrl: `${publicOrigin}/`,
+        initialError: {
+          statusCode: 404,
+          error: 'event_not_found',
+          message: 'El plan que buscas no está disponible o ha expirado.',
+        },
+      }),
+      404,
+      {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
+    );
+  }
+
+  // 4. Si la API devuelve otro código de error (500, etc.)
+  if (!apiRes.ok) {
+    return c.html(
+      renderPublicHtml({
+        title: 'Error al consultar evento | VayaPlan',
+        description: 'Ocurrió un error al cargar la información del evento.',
+        canonicalUrl: `${publicOrigin}/events/${eventId}`,
+        initialError: {
+          statusCode: 502,
+          error: 'upstream_error',
+          message: 'Error al consultar el servicio interno de eventos.',
+        },
+      }),
+      502,
+      {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
+    );
+  }
+
+  // 5. API respondió 200 con evento publicado o cancelado
+  let data: { event: PublicEventItem };
+  try {
+    data = (await apiRes.json()) as { event: PublicEventItem };
+  } catch {
+    return c.html(
+      renderPublicHtml({
+        title: 'Error al consultar evento | VayaPlan',
+        description: 'Respuesta inválida del servicio interno de eventos.',
+        canonicalUrl: `${publicOrigin}/events/${eventId}`,
+        initialError: {
+          statusCode: 502,
+          error: 'invalid_upstream_response',
+          message: 'Respuesta inválida del servicio interno de eventos.',
+        },
+      }),
+      502,
+      {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      }
+    );
+  }
+
+  const ev = data.event;
+  const isCancelled = ev.status === 'cancelled';
+
+  // Metadatos específicos
+  const pageTitle = isCancelled
+    ? `[Cancelado] ${ev.title} — ${ev.venue.name} | VayaPlan`
+    : `${ev.title} — ${ev.venue.name} | VayaPlan`;
+
+  const dt = new Date(ev.start_time);
+  const timeFormatted = dt.toLocaleTimeString('es-ES', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Europe/Madrid',
+  });
+  const dateFormatted = dt.toLocaleDateString('es-ES', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Europe/Madrid',
+  });
+
+  const pageDescription = isCancelled
+    ? `CANCELADO: ${ev.title} en ${ev.venue.name} (${dateFormatted}, ${timeFormatted} h). Consulta detalles y estado en VayaPlan.`
+    : `${ev.title} en ${ev.venue.name}. ${dateFormatted} a las ${timeFormatted} h en Palencia. ${ev.description ? ev.description.slice(0, 130) + '...' : 'Agenda hiperlocal de Palencia sin registro ni fricción.'}`;
+
+  const canonicalUrl = `${publicOrigin}/events/${ev.id}`;
+
+  // Imagen: Usar image_url (detalle pública). Preponderar URL absoluta si es relativa
+  let ogImage = `${publicOrigin}/icons/icon-512x512.png`;
+  if (ev.image_url) {
+    ogImage = ev.image_url.startsWith('http')
+      ? ev.image_url
+      : `${publicOrigin}${ev.image_url.startsWith('/') ? '' : '/'}${ev.image_url}`;
+  }
+
+  const ogImageAlt = `Cartel de ${ev.title} en ${ev.venue.name}`;
+
+  return c.html(
+    renderPublicHtml({
+      title: pageTitle,
+      description: pageDescription,
+      canonicalUrl,
+      ogTitle: pageTitle,
+      ogDescription: pageDescription,
+      ogUrl: canonicalUrl,
+      ogImage,
+      ogImageAlt,
+      ogType: 'article',
+      twitterTitle: pageTitle,
+      twitterDescription: pageDescription,
+      twitterImage: ogImage,
+      initialEvent: ev,
+    }),
+    200,
+    {
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+    }
+  );
 });
 
 // ==============================================================================

@@ -153,9 +153,9 @@ async function runBrowserVerification() {
       `Console errors: ${consoleErrors.length}, Exceptions: ${jsExceptions.length}`);
 
     // -------------------------------------------------------------------------
-    // 2. Ficha de Detalle y Visor de Cartel (Lightbox)
+    // 2. Ficha de Detalle, Actualización de URL y Visor de Cartel (Lightbox)
     // -------------------------------------------------------------------------
-    console.log('\n--- PRUEBA 2: Ficha de Detalle y Visor de Cartel ---');
+    console.log('\n--- PRUEBA 2: Ficha de Detalle, URL e Historial ---');
     consoleErrors.length = 0;
     jsExceptions.length = 0;
 
@@ -164,6 +164,18 @@ async function runBrowserVerification() {
 
     const isDetailModalOpen = await evaluate("document.getElementById('detail-modal')?.classList.contains('active')");
     record('Apertura Modal Detalle', !!isDetailModalOpen, `Modal detail activo: ${isDetailModalOpen}`);
+
+    const urlAfterCardClick = await evaluate('window.location.pathname');
+    record('Actualización de URL a /events/:id via pushState', urlAfterCardClick.startsWith('/events/'), `URL actual: ${urlAfterCardClick}`);
+
+    const eventTitleInModal = await evaluate("document.getElementById('modal-title-main')?.textContent?.trim()");
+    record('Título de Evento en Modal', !!eventTitleInModal, `Título en modal: "${eventTitleInModal}"`);
+
+    const titleAfterOpen = await evaluate('document.title');
+    record('Actualización de document.title con datos del evento', titleAfterOpen.includes(eventTitleInModal || 'VayaPlan'), `Título recibido: "${titleAfterOpen}"`);
+
+    const priceText = await evaluate("document.querySelector('.modal-price-display')?.textContent?.trim()");
+    record('Visualización Factual de Precio', !!priceText, `Etiqueta de precio: "${priceText}"`);
 
     const hasPosterButton = await evaluate("!!document.querySelector('[data-action=\"open-full-poster\"]')");
     record('Disparador de Cartel Presente', hasPosterButton, `Botón open-full-poster detectado: ${hasPosterButton}`);
@@ -175,33 +187,110 @@ async function runBrowserVerification() {
       const lightboxVisible = await evaluate("document.getElementById('poster-lightbox')?.style.display !== 'none'");
       record('Apertura Visor de Cartel', !!lightboxVisible, `Lightbox display visible: ${lightboxVisible}`);
 
-      // Presionar Escape para cerrar Lightbox
+      // Presionar Escape para cerrar Lightbox (Primer Escape)
       await sendCDP('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', windowsVirtualKeyCode: 27 });
       await sendCDP('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', windowsVirtualKeyCode: 27 });
       await new Promise((r) => setTimeout(r, 400));
 
       const lightboxClosed = await evaluate("document.getElementById('poster-lightbox')?.style.display === 'none'");
-      record('Cierre Visor de Cartel con Escape', !!lightboxClosed, `Lightbox cerrado: ${lightboxClosed}`);
+      const modalStillOpen = await evaluate("document.getElementById('detail-modal')?.classList.contains('active')");
+      record('Prioridad Escape en Lightbox: Cierra solo visor, modal permanece abierto', !!(lightboxClosed && modalStillOpen), `Lightbox cerrado: ${lightboxClosed}, Modal sigue activo: ${modalStillOpen}`);
 
       const focusedTag = await evaluate("document.activeElement?.getAttribute('data-action') || document.activeElement?.tagName");
       record('Restauración de Foco al Disparador', focusedTag === 'open-full-poster', `Elemento enfocado: ${focusedTag}`);
     }
 
-    // Presionar Escape para cerrar Modal Detalle
+    // Presionar Escape para cerrar Modal Detalle (Segundo Escape)
     await sendCDP('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', windowsVirtualKeyCode: 27 });
     await sendCDP('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', windowsVirtualKeyCode: 27 });
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 400));
 
     const isDetailModalClosed = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
-    record('Cierre Modal Detalle con Escape', !!isDetailModalClosed, `Modal cerrado: ${isDetailModalClosed}`);
+    const urlAfterModalClose = await evaluate('window.location.pathname');
+    record('Cierre Modal Detalle con Escape y Retorno de URL a /', !!(isDetailModalClosed && urlAfterModalClose === '/'), `Modal cerrado: ${isDetailModalClosed}, URL: ${urlAfterModalClose}`);
 
-    record('Ausencia de Errores JS en Detalle/Cartel', consoleErrors.length === 0 && jsExceptions.length === 0,
+    // Probar navegación adelante/atrás en historial del navegador
+    await evaluate('window.history.forward()');
+    await new Promise((r) => setTimeout(r, 500));
+    const modalReopenedOnForward = await evaluate("document.getElementById('detail-modal')?.classList.contains('active')");
+    record('Navegación Adelante (forward) reabre modal', !!modalReopenedOnForward, `Modal activo en forward: ${modalReopenedOnForward}`);
+
+    await evaluate('window.history.back()');
+    await new Promise((r) => setTimeout(r, 500));
+    const modalClosedOnBack = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
+    record('Navegación Atrás (back) cierra modal y sincroniza', !!modalClosedOnBack, `Modal cerrado en back: ${modalClosedOnBack}`);
+
+    record('Ausencia de Errores JS en Detalle e Historial', consoleErrors.length === 0 && jsExceptions.length === 0,
       `Console errors: ${consoleErrors.length}, Exceptions: ${jsExceptions.length}`);
 
     // -------------------------------------------------------------------------
-    // 3. Panel de Curación (/admin)
+    // 3. Entrada Directa por URL (/events/:id) y Cierre Seguro
     // -------------------------------------------------------------------------
-    console.log('\n--- PRUEBA 3: Panel de Curación (/admin) ---');
+    console.log('\n--- PRUEBA 3: Entrada Directa por URL (/events/8) ---');
+    consoleErrors.length = 0;
+    jsExceptions.length = 0;
+
+    await sendCDP('Page.navigate', { url: `http://127.0.0.1:${testPort}/events/8` });
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const directTitle = await evaluate('document.title');
+    record('Metadatos SSR en Entrada Directa', directTitle.includes('Festival Jazz'), `Título recibido: "${directTitle}"`);
+
+    const directCanonical = await evaluate("document.querySelector('link[rel=\"canonical\"]')?.getAttribute('href')");
+    record('Canonical link en Entrada Directa', directCanonical === 'https://vayaplan.com/events/8', `Canonical recibido: "${directCanonical}"`);
+
+    const directModalOpen = await evaluate("document.getElementById('detail-modal')?.classList.contains('active')");
+    record('Modal desplegado inmediatamente en Entrada Directa', !!directModalOpen, `Modal activo: ${directModalOpen}`);
+
+    // Cerrar modal en entrada directa: no debe hacer history.back() ciego ni salir del sitio
+    await evaluate("document.querySelector('.modal-close-btn')?.click()");
+    await new Promise((r) => setTimeout(r, 500));
+
+    const directClosed = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
+    const directUrlAfterClose = await evaluate('window.location.pathname');
+    record('Cierre Seguro tras Entrada Directa navega a / sin abandonar el sitio', !!(directClosed && directUrlAfterClose === '/'), `Modal cerrado: ${directClosed}, URL: ${directUrlAfterClose}`);
+
+    record('Ausencia de Errores JS en Entrada Directa', consoleErrors.length === 0 && jsExceptions.length === 0,
+      `Console errors: ${consoleErrors.length}, Exceptions: ${jsExceptions.length}`);
+
+    // -------------------------------------------------------------------------
+    // 4. Entrada Directa a Evento Inexistente (404) y Malformado (400)
+    // -------------------------------------------------------------------------
+    console.log('\n--- PRUEBA 4: Control de Errores 404 y 400 ---');
+    consoleErrors.length = 0;
+    jsExceptions.length = 0;
+
+    await sendCDP('Page.navigate', { url: `http://127.0.0.1:${testPort}/events/99999` });
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const notFoundTitle = await evaluate('document.title');
+    record('Título Neutro en 404', notFoundTitle.includes('Plan no encontrado'), `Título recibido: "${notFoundTitle}"`);
+
+    const notFoundBtn = await evaluate("!!document.querySelector('[data-action=\"navigate-home\"]')");
+    record('Botón para explorar agenda presente en 404', notFoundBtn, `Botón navigate-home: ${notFoundBtn}`);
+
+    if (notFoundBtn) {
+      await evaluate("document.querySelector('[data-action=\"navigate-home\"]').click()");
+      await new Promise((r) => setTimeout(r, 500));
+      const notFoundUrlAfterNav = await evaluate('window.location.pathname');
+      record('Botón de 404 navega a /', notFoundUrlAfterNav === '/', `URL tras click: ${notFoundUrlAfterNav}`);
+    }
+
+    // Comprobación de status 400 en ID malformado
+    const malformedRes = await fetch(`http://127.0.0.1:${testPort}/events/abc`);
+    record('Respuesta 400 en ID malformado', malformedRes.status === 400, `Status HTTP recibido: ${malformedRes.status}`);
+
+    // Comprobación de status 404 en ID no publicado
+    const notFoundRes = await fetch(`http://127.0.0.1:${testPort}/events/99999`);
+    record('Respuesta 404 en ID inexistente', notFoundRes.status === 404, `Status HTTP recibido: ${notFoundRes.status}`);
+
+    record('Ausencia de Errores JS en Flujo 404', consoleErrors.length === 0 && jsExceptions.length === 0,
+      `Console errors: ${consoleErrors.length}, Exceptions: ${jsExceptions.length}`);
+
+    // -------------------------------------------------------------------------
+    // 5. Panel de Curación (/admin)
+    // -------------------------------------------------------------------------
+    console.log('\n--- PRUEBA 5: Panel de Curación (/admin) ---');
     consoleErrors.length = 0;
     jsExceptions.length = 0;
 
