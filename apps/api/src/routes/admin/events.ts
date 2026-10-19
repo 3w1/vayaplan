@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { query } from '@vayaplan/db';
+import { query, getClient } from '@vayaplan/db';
 import { requireAdminAuth } from '../../middleware/auth';
 import { ingestCulturalAgenda } from '../../services/ingestion';
 import {
@@ -11,6 +11,13 @@ import {
 } from '@vayaplan/shared';
 import type { AdminEventItem, AdminUser, EventCategory, EventSourceType, EventStatus, EventTimeStatus, FestivalSummary } from '@vayaplan/types';
 import { hasImageVariantsColumns } from '../../services/image-storage';
+
+export const VALID_EVENT_TIME_STATUSES: readonly EventTimeStatus[] = [
+  'confirmed',
+  'pending_time',
+  'tentative_date',
+  'continuous',
+];
 
 export const adminEventsRoutes = new Hono<{
   Variables: {
@@ -62,14 +69,35 @@ adminEventsRoutes.post('/festivals', async (c) => {
     return c.json({ error: 'invalid_parameter', message: 'La fecha de fin no puede ser anterior a la de inicio.' }, 400);
   }
   const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `festival-${Date.now()}`;
-  const res = await query(
-    `INSERT INTO festivals (city_id, name, edition, slug, description, start_date, end_date, official_url, is_active)
-     VALUES (1, $1, $2, $3, $4, $5, $6, $7, true)
-     ON CONFLICT (city_id, slug) DO UPDATE SET name = EXCLUDED.name, edition = EXCLUDED.edition, updated_at = now()
-     RETURNING id, name, edition, slug, start_date, end_date, official_url, is_active;`,
-    [name, edition, slug, description, startDate, endDate, officialUrl]
+
+  const existing = await query(
+    `SELECT id FROM festivals WHERE city_id = 1 AND slug = $1 LIMIT 1;`,
+    [slug]
   );
-  return c.json({ status: 'ok', festival: res.rows[0] }, 201);
+  if (existing.rows.length > 0) {
+    return c.json({
+      error: 'festival_already_exists',
+      message: `Ya existe un festival o programa marco con el identificador (slug) '${slug}' en esta ciudad.`,
+    }, 409);
+  }
+
+  try {
+    const res = await query(
+      `INSERT INTO festivals (city_id, name, edition, slug, description, start_date, end_date, official_url, is_active)
+       VALUES (1, $1, $2, $3, $4, $5, $6, $7, true)
+       RETURNING id, name, edition, slug, start_date, end_date, official_url, is_active;`,
+      [name, edition, slug, description, startDate, endDate, officialUrl]
+    );
+    return c.json({ status: 'ok', festival: res.rows[0] }, 201);
+  } catch (err: any) {
+    if (err?.code === '23505') {
+      return c.json({
+        error: 'festival_already_exists',
+        message: `Ya existe un festival o programa marco con el identificador (slug) '${slug}' en esta ciudad.`,
+      }, 409);
+    }
+    throw err;
+  }
 });
 
 /**
@@ -378,6 +406,12 @@ adminEventsRoutes.post('/events', async (c) => {
     : [];
 
   // Validaciones
+  if (body.time_status !== undefined && !VALID_EVENT_TIME_STATUSES.includes(body.time_status)) {
+    return c.json({
+      error: 'invalid_parameter',
+      message: `Estado temporal (time_status) inválido: '${body.time_status}'. Valores permitidos: ${VALID_EVENT_TIME_STATUSES.join(', ')}`,
+    }, 400);
+  }
   if (!title || title.length < 3) {
     return c.json({ error: 'invalid_parameter', message: 'El título es obligatorio (mínimo 3 caracteres).' }, 400);
   }
@@ -482,6 +516,13 @@ adminEventsRoutes.post('/events/draft', async (c) => {
     body = await c.req.json();
   } catch {
     return c.json({ error: 'invalid_json', message: 'Cuerpo de petición inválido.' }, 400);
+  }
+
+  if (body.time_status !== undefined && !VALID_EVENT_TIME_STATUSES.includes(body.time_status)) {
+    return c.json({
+      error: 'invalid_parameter',
+      message: `Estado temporal (time_status) inválido: '${body.time_status}'. Valores permitidos: ${VALID_EVENT_TIME_STATUSES.join(', ')}`,
+    }, 400);
   }
 
   const cityId = Number(body.city_id || 1);
@@ -602,6 +643,13 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
   }
 
   // Validaciones del contrato temporal
+  if (body.time_status !== undefined && !VALID_EVENT_TIME_STATUSES.includes(body.time_status)) {
+    return c.json({
+      error: 'invalid_parameter',
+      message: `Estado temporal (time_status) inválido: '${body.time_status}'. Valores permitidos: ${VALID_EVENT_TIME_STATUSES.join(', ')}`,
+    }, 400);
+  }
+
   const effectiveTimeStatus = (body.time_status !== undefined ? body.time_status : existing.time_status) as EventTimeStatus || 'confirmed';
 
   if (effectiveTimeStatus === 'pending_time' || effectiveTimeStatus === 'continuous' || effectiveTimeStatus === 'tentative_date') {
@@ -650,39 +698,81 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
     }
   }
 
-  // Si se envió festival_ids, actualizar event_festivals
-  if (body.festival_ids !== undefined && Array.isArray(body.festival_ids)) {
-    await query(`DELETE FROM event_festivals WHERE event_id = $1;`, [id]);
+  // Validación y parseo de festival_ids si se proporcionó
+  let parsedFestivalIds: number[] | null = null;
+  if (body.festival_ids !== undefined) {
+    if (!Array.isArray(body.festival_ids)) {
+      return c.json({ error: 'invalid_parameter', message: 'festival_ids debe ser un arreglo de identificadores.' }, 400);
+    }
+    parsedFestivalIds = [];
     for (const fId of body.festival_ids) {
       const numFid = Number(fId);
-      if (!Number.isNaN(numFid) && numFid > 0) {
-        await query(
-          `INSERT INTO event_festivals (event_id, festival_id)
-           VALUES ($1, $2)
-           ON CONFLICT (event_id, festival_id) DO NOTHING;`,
-          [id, numFid]
-        );
+      if (Number.isNaN(numFid) || numFid <= 0) {
+        return c.json({ error: 'invalid_parameter', message: `Identificador de festival inválido: ${fId}` }, 400);
       }
+      parsedFestivalIds.push(numFid);
     }
   }
 
-  if (updates.length === 0 && body.festival_ids === undefined) {
+  if (updates.length === 0 && parsedFestivalIds === null) {
     return c.json({ error: 'no_fields_to_update', message: 'No se enviaron campos válidos para actualizar.' }, 400);
   }
 
-  if (updates.length > 0) {
-    values.push(id);
-    const sql = `
-      UPDATE events
-      SET ${updates.join(', ')}, updated_at = now()
-      WHERE id = $${values.length}
-      RETURNING id, status;
-    `;
-    const result = await query(sql, values);
-    return c.json({ status: 'ok', event: result.rows[0] });
-  }
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
 
-  return c.json({ status: 'ok', event: { id, status: existing.status } });
+    if (parsedFestivalIds !== null) {
+      if (parsedFestivalIds.length > 0) {
+        const checkFestivalsRes = await client.query(
+          `SELECT id FROM festivals WHERE id = ANY($1::int[])`,
+          [parsedFestivalIds]
+        );
+        const existingIds = new Set(checkFestivalsRes.rows.map((r: { id: number }) => Number(r.id)));
+        for (const reqId of parsedFestivalIds) {
+          if (!existingIds.has(reqId)) {
+            await client.query('ROLLBACK');
+            return c.json({
+              error: 'festival_not_found',
+              message: `El festival con ID ${reqId} no existe. No se modificaron las relaciones del evento.`,
+            }, 400);
+          }
+        }
+      }
+
+      await client.query(`DELETE FROM event_festivals WHERE event_id = $1;`, [id]);
+      for (const fId of parsedFestivalIds) {
+        await client.query(
+          `INSERT INTO event_festivals (event_id, festival_id)
+           VALUES ($1, $2)
+           ON CONFLICT (event_id, festival_id) DO NOTHING;`,
+          [id, fId]
+        );
+      }
+    }
+
+    let updatedEvent = { id, status: existing.status };
+    if (updates.length > 0) {
+      values.push(id);
+      const sql = `
+        UPDATE events
+        SET ${updates.join(', ')}, updated_at = now()
+        WHERE id = $${values.length}
+        RETURNING id, status;
+      `;
+      const result = await client.query(sql, values);
+      updatedEvent = result.rows[0];
+    }
+
+    await client.query('COMMIT');
+    return c.json({ status: 'ok', event: updatedEvent });
+  } catch (err: any) {
+    await client.query('ROLLBACK');
+    console.error(`[PATCH /events/${id}] Error en la transacción de actualización:`, err);
+    return c.json({ error: 'internal_error', message: 'Error interno al actualizar el evento.' }, 500);
+  } finally {
+    client.release();
+  }
 });
 
 /**

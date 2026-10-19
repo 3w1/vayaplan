@@ -1,9 +1,10 @@
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test';
 import { Pool } from 'pg';
 
-const rawTestDbUrl =
-  process.env.TEST_DATABASE_URL ||
-  'postgres://vayaplan_user:vayaplan_dev_secret_2026@172.20.0.3:5432/vayaplan_test';
+const rawTestDbUrl = process.env.TEST_DATABASE_URL;
+if (!rawTestDbUrl) {
+  throw new Error('TEST_DATABASE_URL es obligatoria para ejecutar estas pruebas.');
+}
 
 process.env.DATABASE_URL = rawTestDbUrl.trim();
 

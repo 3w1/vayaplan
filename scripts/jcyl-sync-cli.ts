@@ -9,8 +9,9 @@
  *   where=nombre_localidad='Palencia'&order_by=fecha_inicio asc&limit=50
  * 
  * Comportamiento Dry-Run:
- *   El modo dry-run retorna antes de cualquier acceso a base de datos.
- *   No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
+ *   El modo dry-run retorna antes de cualquier acceso a base de datos:
+ *   cero escrituras y cero acceso a base de datos.
+ *   No ejecuta SELECT, INSERT, UPDATE, BEGIN ni ROLLBACK.
  */
 import { syncJcylLibraryActivities } from '../apps/api/src/services/jcyl-import/jcyl-connector';
 import { normalizeJcylRecord } from '../apps/api/src/services/jcyl-import/jcyl-normalizer';
@@ -21,24 +22,28 @@ async function main() {
   const isDryRun = !process.argv.includes('--execute-writes');
   console.log(`=== EJECUCIÓN DRY-RUN DEL CONECTOR JCYL (VAYAPLAN) ===`);
   console.log(`Fecha de ejecución: ${new Date().toISOString()}`);
-  console.log(`Modo: ${isDryRun ? 'DRY-RUN (Sólo Lectura - Sin Escrituras)' : 'ESCRITURA REAL'}`);
+  console.log(`Modo: ${isDryRun ? 'DRY-RUN (cero escrituras y cero acceso a base de datos)' : 'ESCRITURA REAL'}`);
   console.log(`Endpoint Base: https://analisis.datosabiertos.jcyl.es/api/explore/v2.1/catalog/datasets/eventos-de-la-agenda-cultural-categorizados-y-geolocalizados/records`);
   console.log(`Parámetros OData: where=nombre_localidad='Palencia'&order_by=fecha_inicio asc&limit=50\n`);
 
-  // 1. Contar eventos antes de la ejecución para auditar ausencia de escrituras
-  const beforeCountRes = await query<{ count: string }>('SELECT COUNT(*) FROM events;');
-  const eventsCountBefore = Number(beforeCountRes.rows[0].count);
+  let eventsCountBefore = 0;
+  if (!isDryRun) {
+    const beforeCountRes = await query<{ count: string }>('SELECT COUNT(*) FROM events;');
+    eventsCountBefore = Number(beforeCountRes.rows[0].count);
+  }
 
-  // 2. Ejecución real del conector
+  // Ejecución del conector
   const result = await syncJcylLibraryActivities({
     dryRun: isDryRun,
     cityId: 1,
     limit: 50,
   });
 
-  // 3. Contar eventos después de la ejecución
-  const afterCountRes = await query<{ count: string }>('SELECT COUNT(*) FROM events;');
-  const eventsCountAfter = Number(afterCountRes.rows[0].count);
+  let eventsCountAfter = 0;
+  if (!isDryRun) {
+    const afterCountRes = await query<{ count: string }>('SELECT COUNT(*) FROM events;');
+    eventsCountAfter = Number(afterCountRes.rows[0].count);
+  }
 
   console.log('--- RESULTADO DEL DRY-RUN DEL IMPORTADOR ---');
   console.log(`Total registros devueltos por la API para Palencia: ${result.totalApiRecords}`);
@@ -46,7 +51,11 @@ async function main() {
   console.log(`Inserciones realizadas: ${result.inserted}`);
   console.log(`Actualizaciones realizadas: ${result.updated}`);
   console.log(`Registros preservados por edición editorial: ${result.preservedEditorial}`);
-  console.log(`Diferencia de registros en BD events: ${eventsCountAfter - eventsCountBefore} (Escrituras: 0)\n`);
+  if (isDryRun) {
+    console.log(`Diferencia de registros en BD events: 0 (dry-run: cero escrituras y cero acceso a base de datos)\n`);
+  } else {
+    console.log(`Diferencia de registros en BD events: ${eventsCountAfter - eventsCountBefore}\n`);
+  }
 
   // 4. Mostrar registro aceptado de la Biblioteca
   const accepted = result.events[0];

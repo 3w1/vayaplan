@@ -234,8 +234,12 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
           ev.festival = linked[0];
         }
       }
-    } catch {
-      // Ignore if event_festivals table does not exist
+    } catch (err: any) {
+      console.error('[GET /events] Error al consultar relaciones event_festivals:', {
+        message: err?.message,
+        code: err?.code,
+        eventCount: events.length,
+      });
     }
   }
 

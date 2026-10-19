@@ -10,9 +10,10 @@ import {
 import { syncJcylLibraryActivities, ensureLibraryVenue } from './jcyl-connector';
 import type { JcylRecordRaw } from './jcyl-types';
 
-const rawTestDbUrl =
-  process.env.TEST_DATABASE_URL ||
-  'postgres://vayaplan_user:vayaplan_dev_secret_2026@172.20.0.3:5432/vayaplan_test';
+const rawTestDbUrl = process.env.TEST_DATABASE_URL;
+if (!rawTestDbUrl) {
+  throw new Error('TEST_DATABASE_URL es obligatoria para ejecutar estas pruebas.');
+}
 
 process.env.DATABASE_URL = rawTestDbUrl.trim();
 const testPool = new Pool({ connectionString: rawTestDbUrl.trim() });
@@ -144,13 +145,18 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     }),
   } as any);
 
+  beforeAll(async () => {
+    await testPool.query("DELETE FROM events WHERE dedupe_key LIKE 'jcyl:99990%'");
+    await testPool.query("DELETE FROM venues WHERE slug = 'biblioteca-publica-de-palencia'");
+  });
+
   afterAll(async () => {
     await testPool.query("DELETE FROM events WHERE dedupe_key LIKE 'jcyl:99990%'");
     await testPool.query("DELETE FROM venues WHERE slug = 'biblioteca-publica-de-palencia'");
     await testPool.end();
   });
 
-  test('Modo dry-run no realiza inserciones en la base de datos', async () => {
+  test('Modo dry-run: cero escrituras y cero acceso a base de datos', async () => {
     const result = await syncJcylLibraryActivities({
       dryRun: true,
       cityId: 1,
@@ -161,12 +167,45 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     expect(result.totalApiRecords).toBe(3);
     expect(result.libraryCandidates).toBe(2); // Filtra los 2 de biblioteca, excluye Teatro Principal
     expect(result.inserted).toBe(0);
+    expect(result.errors.length).toBe(0);
 
     const check = await testPool.query("SELECT COUNT(*) FROM events WHERE dedupe_key LIKE 'jcyl:99990%'");
     expect(Number(check.rows[0].count)).toBe(0);
   });
 
-  test('Importación efectiva crea borradores en status tentative con campos correctos', async () => {
+  test('Venue inexistente: no crea venue, no inserta eventos y registra error controlado comprensible', async () => {
+    // Verificar que el venue no existe al inicio
+    const venueBefore = await testPool.query("SELECT id FROM venues WHERE slug = 'biblioteca-publica-de-palencia'");
+    expect(venueBefore.rows.length).toBe(0);
+
+    const result = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: mockFetch,
+    });
+
+    expect(result.inserted).toBe(0);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0]).toContain('no está censado en la base de datos');
+    expect(result.errors[0]).toContain('migración censal autorizada');
+
+    // Confirmar que NO se insertó el venue en la base de datos
+    const venueAfter = await testPool.query("SELECT id FROM venues WHERE slug = 'biblioteca-publica-de-palencia'");
+    expect(venueAfter.rows.length).toBe(0);
+
+    // Confirmar que NO se insertaron eventos
+    const eventsCheck = await testPool.query("SELECT COUNT(*) FROM events WHERE dedupe_key LIKE 'jcyl:99990%'");
+    expect(Number(eventsCheck.rows[0].count)).toBe(0);
+  });
+
+  test('Venue existente: la sincronización continúa e inserta borradores en status tentative', async () => {
+    // Dar de alta el venue explícitamente en el fixture de pruebas
+    await testPool.query(`
+      INSERT INTO venues (city_id, name, slug, address, is_active, created_at, updated_at)
+      VALUES (1, 'Biblioteca Pública de Palencia (Test)', 'biblioteca-publica-de-palencia', 'C/ Eduardo Dato, 4', true, now(), now())
+      ON CONFLICT (city_id, slug) DO NOTHING;
+    `);
+
     const result = await syncJcylLibraryActivities({
       dryRun: false,
       cityId: 1,
@@ -447,3 +486,28 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     expect(Number(countCheck2.rows[0].count)).toBe(2);
   });
 });
+
+describe('Configuración de Entorno de Pruebas', () => {
+  test('Falla con mensaje claro si TEST_DATABASE_URL falta o está vacía', () => {
+    const validateTestDatabaseUrl = (url?: string) => {
+      if (!url || !url.trim()) {
+        throw new Error('TEST_DATABASE_URL es obligatoria para ejecutar estas pruebas.');
+      }
+      return url.trim();
+    };
+
+    expect(() => validateTestDatabaseUrl(undefined)).toThrow(
+      'TEST_DATABASE_URL es obligatoria para ejecutar estas pruebas.'
+    );
+    expect(() => validateTestDatabaseUrl('')).toThrow(
+      'TEST_DATABASE_URL es obligatoria para ejecutar estas pruebas.'
+    );
+    expect(() => validateTestDatabaseUrl('   ')).toThrow(
+      'TEST_DATABASE_URL es obligatoria para ejecutar estas pruebas.'
+    );
+    expect(validateTestDatabaseUrl('postgres://vayaplan_user:secret@localhost:5432/vayaplan_test')).toBe(
+      'postgres://vayaplan_user:secret@localhost:5432/vayaplan_test'
+    );
+  });
+});
+

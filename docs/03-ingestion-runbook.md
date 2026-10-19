@@ -373,8 +373,8 @@ En la Fase 2 de Ingesta se introduce la separación de migraciones:
   - `limit=50`
 
 ### 15.3 Comportamiento del Modo Dry-Run
-- **Descripción exacta:** El modo dry-run retorna antes de cualquier acceso a base de datos. No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
-- **Sin transacciones revertidas:** No debe describirse el dry-run como una transacción revertida. El conector evalúa la opción `dryRun` y retorna inmediatamente los resultados calculados en memoria (`if (dryRun) return result;`) antes de invocar cualquier llamada SQL.
+- **Descripción exacta:** El modo dry-run retorna antes de cualquier acceso a base de datos: **cero escrituras y cero acceso a base de datos**. No ejecuta SELECT, INSERT, UPDATE, BEGIN ni ROLLBACK.
+- **Sin transacciones revertidas ni lecturas a BD:** El conector y la herramienta CLI en dry-run evalúan la opción `dryRun` y procesan los resultados estrictamente en memoria (`if (dryRun) return result;`) sin ejecutar consultas contra el motor relacional.
 
 ### 15.4 Estado y Origen del Evento 8 en Producción
 - **Origen fáctico:** El evento 8 en la base de datos de producción (`vayaplan`, título `Festival Jazz`, `venue_id = 2`, `status = 'outdated'`) es una prueba del usuario para cargar y visualizar un cartel, con título relacionado con jazz.

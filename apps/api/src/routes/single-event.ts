@@ -124,8 +124,12 @@ singleEventRoutes.get('/events/:id', async (c) => {
       slug: f.slug,
       official_url: f.official_url || null,
     }));
-  } catch {
-    // Ignore if table event_festivals does not exist
+  } catch (err: any) {
+    console.error(`[GET /events/${eventId}] Error al consultar relaciones event_festivals:`, {
+      message: err?.message,
+      code: err?.code,
+      eventId,
+    });
   }
 
   const event: PublicEventItem = {

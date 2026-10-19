@@ -220,7 +220,7 @@ git push -u origin main
 - **CLI Oficial:** `scripts/jcyl-sync-cli.ts` (es la **única CLI vigente documentada**).
 - **Endpoint consumido:** `https://analisis.datosabiertos.jcyl.es/api/explore/v2.1/catalog/datasets/eventos-de-la-agenda-cultural-categorizados-y-geolocalizados/records`.
 - **Filtro OData:** `where=nombre_localidad='Palencia'&order_by=fecha_inicio asc&limit=50`.
-- **Comportamiento Dry-Run:** El modo dry-run retorna antes de cualquier acceso a base de datos. No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
+- **Comportamiento Dry-Run:** El modo dry-run retorna antes de cualquier acceso a base de datos: **cero escrituras y cero acceso a base de datos**. No ejecuta SELECT, INSERT, UPDATE, BEGIN ni ROLLBACK.
 - **Ejecución local en dry-run:**
   ```bash
   bun run scripts/jcyl-sync-cli.ts

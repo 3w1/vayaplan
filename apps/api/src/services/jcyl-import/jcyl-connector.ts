@@ -90,11 +90,12 @@ export async function fetchJcylPalenciaRecords(
 }
 
 /**
- * Obtiene o crea de forma idempotente el venue de la Biblioteca Pública de Palencia
+ * Busca el venue censado de la Biblioteca Pública de Palencia por su slug canónico.
+ * Por política de seguridad censal, NO crea registros de locales automáticamente bajo ninguna circunstancia.
  */
-export async function ensureLibraryVenue(cityId: number): Promise<number> {
+export async function findLibraryVenue(cityId: number): Promise<number | null> {
   const findRes = await query<{ id: number }>(
-    `SELECT id FROM venues WHERE city_id = $1 AND (slug = 'biblioteca-publica-de-palencia' OR name ILIKE '%biblioteca p%blica%') LIMIT 1;`,
+    `SELECT id FROM venues WHERE city_id = $1 AND slug = 'biblioteca-publica-de-palencia' LIMIT 1;`,
     [cityId]
   );
 
@@ -102,14 +103,14 @@ export async function ensureLibraryVenue(cityId: number): Promise<number> {
     return findRes.rows[0].id;
   }
 
-  const insertRes = await query<{ id: number }>(
-    `INSERT INTO venues (city_id, name, slug, address, latitude, longitude, is_active, created_at, updated_at)
-     VALUES ($1, 'Biblioteca Pública de Palencia', 'biblioteca-publica-de-palencia', 'C/ Eduardo Dato, 4, 34005 Palencia', 42.01339959, -4.53478396, true, now(), now())
-     RETURNING id;`,
-    [cityId]
-  );
+  return null;
+}
 
-  return insertRes.rows[0].id;
+/**
+ * Alias de compatibilidad hacia findLibraryVenue. No inserta locales.
+ */
+export async function ensureLibraryVenue(cityId: number): Promise<number | null> {
+  return findLibraryVenue(cityId);
 }
 
 /**
@@ -150,14 +151,20 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
   result.libraryCandidates = normalizedList.length;
   result.events = normalizedList;
 
-  // El modo dry-run retorna antes de cualquier acceso a base de datos.
-  // No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
+  // El modo dry-run retorna antes de cualquier acceso a base de datos:
+  // cero escrituras y cero acceso a base de datos. No ejecuta SELECT, INSERT, UPDATE, BEGIN ni ROLLBACK.
   if (dryRun) {
     return result;
   }
 
-  // Si no es dry-run, ejecutar inserción/actualización en la base de datos local
-  const libraryVenueId = await ensureLibraryVenue(cityId);
+  // Si no es dry-run, buscar el venue censado de la Biblioteca Pública
+  const libraryVenueId = await findLibraryVenue(cityId);
+  if (!libraryVenueId) {
+    result.errors.push(
+      'El recinto Biblioteca Pública de Palencia no está censado en la base de datos. Debe ser dado de alta mediante migración censal autorizada antes de sincronizar eventos.'
+    );
+    return result;
+  }
 
   for (const item of normalizedList) {
     try {

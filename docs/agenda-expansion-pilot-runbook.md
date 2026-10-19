@@ -32,8 +32,8 @@
   - `limit=50`
 
 ### 1.3 Mecanismo Dry-Run
-- **Descripción exacta:** El modo dry-run retorna antes de cualquier acceso a base de datos. No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
-- **Sin transacciones revertidas:** El dry-run no interactúa con el motor relacional de base de datos ni ejecuta transacciones revertidas. El código retorna inmediatamente en memoria tras recuperar y normalizar los candidatos (`if (dryRun) return result;` en `apps/api/src/services/jcyl-import/jcyl-connector.ts`).
+- **Descripción exacta:** El modo dry-run retorna antes de cualquier acceso a base de datos: **cero escrituras y cero acceso a base de datos**. No ejecuta SELECT, INSERT, UPDATE, BEGIN ni ROLLBACK.
+- **Sin transacciones revertidas ni lecturas a BD:** El conector y la herramienta CLI en dry-run operan estrictamente en memoria (`if (dryRun) return result;`) sin interactuar con PostgreSQL.
 
 ---
 

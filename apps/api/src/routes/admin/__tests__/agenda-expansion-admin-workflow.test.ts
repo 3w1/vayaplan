@@ -5,9 +5,10 @@ import { JWT_SECRET } from '../../../middleware/auth';
 import { ingestCulturalAgenda } from '../../../services/ingestion';
 import { syncJcylLibraryActivities } from '../../../services/jcyl-import/jcyl-connector';
 
-const rawTestDbUrl =
-  process.env.TEST_DATABASE_URL ||
-  'postgres://vayaplan_user:vayaplan_dev_secret_2026@172.20.0.3:5432/vayaplan_test';
+const rawTestDbUrl = process.env.TEST_DATABASE_URL;
+if (!rawTestDbUrl) {
+  throw new Error('TEST_DATABASE_URL es obligatoria para ejecutar estas pruebas.');
+}
 
 process.env.DATABASE_URL = rawTestDbUrl.trim();
 
@@ -19,6 +20,7 @@ let testVenueId: number;
 let festAId: number;
 let festBId: number;
 const createdEventIds: number[] = [];
+const createdFestivalIds: number[] = [];
 
 beforeAll(async () => {
   // 1. Generar token JWT de administrador
@@ -35,6 +37,13 @@ beforeAll(async () => {
     RETURNING id;
   `);
   testVenueId = venueRes.rows[0].id;
+
+  // Local para pruebas del conector JCyL Biblioteca
+  await testPool.query(`
+    INSERT INTO venues (city_id, name, slug, address, is_active, created_at, updated_at)
+    VALUES (1, 'Biblioteca Pública de Palencia (Test)', 'biblioteca-publica-de-palencia', 'C/ Eduardo Dato, 4', true, now(), now())
+    ON CONFLICT (city_id, slug) DO NOTHING;
+  `);
 
   // 3. Crear 2 programas / festivales de prueba
   const fA = await testPool.query(`
@@ -58,12 +67,15 @@ afterAll(async () => {
     await testPool.query(`DELETE FROM event_festivals WHERE event_id = ANY($1::int[]);`, [createdEventIds]);
     await testPool.query(`DELETE FROM events WHERE id = ANY($1::int[]);`, [createdEventIds]);
   }
-  if (festAId && festBId) {
-    await testPool.query(`DELETE FROM festivals WHERE id IN ($1, $2);`, [festAId, festBId]);
+  const allFestIds = [festAId, festBId, ...createdFestivalIds].filter(Boolean);
+  if (allFestIds.length > 0) {
+    await testPool.query(`DELETE FROM event_festivals WHERE festival_id = ANY($1::int[]);`, [allFestIds]);
+    await testPool.query(`DELETE FROM festivals WHERE id = ANY($1::int[]);`, [allFestIds]);
   }
   if (testVenueId) {
     await testPool.query(`DELETE FROM venues WHERE id = $1;`, [testVenueId]);
   }
+  await testPool.query(`DELETE FROM venues WHERE slug = 'biblioteca-publica-de-palencia';`);
   await testPool.end();
 });
 
@@ -606,4 +618,188 @@ describe('Flujo Editorial Local — Piloto de Ampliación de Agenda (11 Escenari
     expect(adminViewData.event.image_url).toBeNull();
   });
 
+  // Escenario 12: Validación estricta de time_status (rechazo con 400 ante valores inválidos)
+  test('Escenario 12: Validación de time_status — rechaza valores no reconocidos con código 400', async () => {
+    // A) En POST /api/v1/admin/events
+    const resPost = await app.request('/api/v1/admin/events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        title: 'Evento Con Time Status Inválido',
+        venue_id: testVenueId,
+        category: 'cultura',
+        time_status: 'status_inexistente_erroneo',
+        editorial_date: '2026-11-20',
+      }),
+    });
+    expect(resPost.status).toBe(400);
+    const postData = await resPost.json();
+    expect(postData.error).toBe('invalid_parameter');
+    expect(postData.message).toContain('time_status');
+
+    // B) En POST /api/v1/admin/events/draft
+    const resDraft = await app.request('/api/v1/admin/events/draft', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        title: 'Borrador Con Time Status Inválido',
+        venue_id: testVenueId,
+        category: 'cultura',
+        time_status: 'otra_cosa_invalida',
+      }),
+    });
+    expect(resDraft.status).toBe(400);
+    const draftData = await resDraft.json();
+    expect(draftData.error).toBe('invalid_parameter');
+
+    // C) En PATCH /api/v1/admin/events/:id
+    const validDraftRes = await app.request('/api/v1/admin/events/draft', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        title: 'Borrador Base Para Probar Patch Time Status',
+        venue_id: testVenueId,
+        category: 'cultura',
+        time_status: 'confirmed',
+        start_time: '2026-11-25T18:00:00Z',
+      }),
+    });
+    expect(validDraftRes.status).toBe(201);
+    const draftId = (await validDraftRes.json()).event_id;
+    createdEventIds.push(draftId);
+
+    const resPatch = await app.request(`/api/v1/admin/events/${draftId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        time_status: 'valor_falso_tiempo',
+      }),
+    });
+    expect(resPatch.status).toBe(400);
+    const patchData = await resPatch.json();
+    expect(patchData.error).toBe('invalid_parameter');
+  });
+
+  // Escenario 13: Creación de festival sin UPSERT — rechazo de slug duplicado con 409
+  test('Escenario 13: Creación de festival — rechaza slugs duplicados con código 409 (sin sobreescritura upsert)', async () => {
+    const festPayload = {
+      name: 'Festival Muestra Slug Duplicado',
+      edition: '1ª Edición',
+      start_date: '2026-12-01',
+      end_date: '2026-12-05',
+      official_url: 'https://festival-duplicado.test',
+      description: 'Festival creado para verificar unicidad de slug.',
+    };
+
+    const firstRes = await app.request('/api/v1/admin/festivals', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify(festPayload),
+    });
+    expect(firstRes.status).toBe(201);
+    const firstData = await firstRes.json();
+    const createdFestId = firstData.festival.id;
+    createdFestivalIds.push(createdFestId);
+
+    // Segundo intento con mismo nombre (produce mismo slug)
+    const secondRes = await app.request('/api/v1/admin/festivals', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        ...festPayload,
+        edition: 'Edición Sobrescritura Intentada',
+      }),
+    });
+    expect(secondRes.status).toBe(409);
+    const secondData = await secondRes.json();
+    expect(secondData.error).toBe('festival_already_exists');
+    expect(secondData.message).toContain('festival-muestra-slug-duplicado');
+
+    // Confirmar en BD que la edición NO fue sobrescrita
+    const checkDb = await testPool.query('SELECT edition FROM festivals WHERE id = $1', [createdFestId]);
+    expect(checkDb.rows[0].edition).toBe('1ª Edición');
+  });
+
+  // Escenario 14: Transacción única para festival_ids — rollback y preservación ante ID inexistente
+  test('Escenario 14: Actualización transaccional de festival_ids — rollback total si un ID no existe preservando relaciones previas', async () => {
+    // 1. Crear un evento borrador
+    const evRes = await app.request('/api/v1/admin/events/draft', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        title: 'Evento Con Transacción de Festivales',
+        venue_id: testVenueId,
+        category: 'cultura',
+      }),
+    });
+    expect(evRes.status).toBe(201);
+    const eventId = (await evRes.json()).event_id;
+    createdEventIds.push(eventId);
+
+    // 2. Asociar el evento a festAId inicialmente
+    const initPatch = await app.request(`/api/v1/admin/events/${eventId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        festival_ids: [festAId],
+      }),
+    });
+    expect(initPatch.status).toBe(200);
+
+    // Verificar en BD que la relación existe
+    const initRelCheck = await testPool.query('SELECT festival_id FROM event_festivals WHERE event_id = $1', [eventId]);
+    expect(initRelCheck.rows.length).toBe(1);
+    expect(initRelCheck.rows[0].festival_id).toBe(festAId);
+
+    // 3. Intentar actualizar con un array que incluye un festival válido (festBId) y uno INEXISTENTE (99999999)
+    const badPatch = await app.request(`/api/v1/admin/events/${eventId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        festival_ids: [festBId, 99999999],
+      }),
+    });
+    expect(badPatch.status).toBe(400);
+    const badPatchData = await badPatch.json();
+    expect(badPatchData.error).toBe('festival_not_found');
+    expect(badPatchData.message).toContain('99999999');
+
+    // 4. VERIFICAR QUE SE PRODUJO ROLLBACK: La relación previa con festAId debe permanecer intacta
+    const postRollbackCheck = await testPool.query('SELECT festival_id FROM event_festivals WHERE event_id = $1', [eventId]);
+    expect(postRollbackCheck.rows.length).toBe(1);
+    expect(postRollbackCheck.rows[0].festival_id).toBe(festAId);
+
+    // festBId NO debe haber sido asociado tampoco
+    const bCheck = postRollbackCheck.rows.find((r: { festival_id: number }) => r.festival_id === festBId);
+    expect(bCheck).toBeUndefined();
+  });
+
 });
+
