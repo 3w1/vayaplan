@@ -946,7 +946,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     .modal-sheet {
       background: #FFFFFF;
       width: 100%;
-      max-width: 480px;
+      max-width: 500px;
       max-height: 90dvh;
       border-radius: 24px 24px 0 0;
       overflow-y: auto;
@@ -960,14 +960,15 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     @media (min-width: 480px) {
       .modal-sheet {
         border-radius: 24px;
-        max-height: 85dvh;
+        max-width: 520px;
+        max-height: min(85dvh, 760px);
       }
     }
 
     .modal-hero-cover {
       position: relative;
       width: 100%;
-      height: clamp(170px, 28vh, 250px);
+      height: clamp(170px, 26vh, 230px);
       background-color: var(--color-night);
       overflow: hidden;
       flex-shrink: 0;
@@ -1188,24 +1189,27 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       left: 0;
       right: 0;
       width: 100%;
-      height: 48px;
+      height: 52px;
       background: #FFFFFF;
       border-bottom: 1px solid rgba(11, 15, 59, 0.08);
       border-radius: 24px 24px 0 0;
       display: flex;
       align-items: center;
+      justify-content: space-between;
       padding: 0 0.875rem;
       z-index: 50;
       flex-shrink: 0;
     }
 
     .modal-close-btn {
-      width: 36px;
-      height: 36px;
+      width: 44px;
+      height: 44px;
+      min-width: 44px;
+      min-height: 44px;
       border-radius: 50%;
       background: #F1F5F9;
       border: 1px solid rgba(11, 15, 59, 0.08);
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
@@ -1220,16 +1224,187 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       outline: 2px solid var(--color-primary);
       outline-offset: 1px;
     }
+    .modal-back-btn {
+      width: auto;
+      height: 40px;
+      min-height: 40px;
+      padding: 0 0.875rem 0 0.6rem;
+      border-radius: var(--radius-pill);
+      gap: 0.35rem;
+      font-size: 0.8125rem;
+      font-weight: 700;
+    }
+    .modal-back-text {
+      color: var(--color-night);
+    }
 
     .modal-body {
       padding: 1.25rem;
+    }
+    .modal-header-section {
+      margin-bottom: 0.85rem;
+    }
+    .modal-status-badges {
+      margin-bottom: 0.5rem;
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .modal-title-price-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
     }
     .modal-title-main {
       font-size: 1.35rem;
       font-weight: 800;
       color: var(--color-night);
       line-height: 1.25;
-      margin-bottom: 1rem;
+      margin: 0;
+      flex: 1;
+    }
+    .modal-price-pill {
+      flex-shrink: 0;
+      padding: 0.35rem 0.75rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.875rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+    }
+    .modal-price-pill.is-free {
+      background: var(--color-free-green-bg, #ECFDF5);
+      color: var(--color-free-green, #059669);
+      border: 1px solid rgba(5, 150, 105, 0.2);
+    }
+    .modal-price-pill.is-paid {
+      background: var(--color-primary-soft, #F0EBFF);
+      color: var(--color-primary, #6C3BFF);
+      border: 1px solid rgba(108, 59, 255, 0.2);
+    }
+
+    .event-when-where-box {
+      margin: 1rem 0;
+      padding: 0.875rem 1rem;
+      background: #FFFFFF;
+      border: 1px solid var(--color-border, #E2E8F0);
+      border-radius: var(--radius-md, 14px);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .when-where-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+    .when-where-icon {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+      color: var(--color-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+    .when-where-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+    .when-where-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .when-date-text {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--color-night);
+      line-height: 1.35;
+    }
+    .when-time-text {
+      font-size: 0.875rem;
+      color: var(--color-text-muted);
+      margin-top: 0.15rem;
+    }
+    .where-venue-row {
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--color-border-subtle, #F1F5F9);
+    }
+    .venue-title-text {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--color-night);
+      line-height: 1.35;
+    }
+    .venue-address-text {
+      font-size: 0.8125rem;
+      color: var(--color-text-muted);
+      margin-top: 0.15rem;
+    }
+    .btn-directions-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+      padding: 0.45rem 0.85rem;
+      background: var(--color-bg-subtle, #F8FAFC);
+      border: 1px solid var(--color-border, #E2E8F0);
+      border-radius: var(--radius-pill);
+      color: var(--color-primary);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      touch-action: manipulation;
+      min-height: 38px;
+    }
+    .btn-directions-link:hover {
+      background: var(--color-primary-soft, #F0EBFF);
+      border-color: var(--color-primary-light, #9D7BFF);
+      color: var(--color-primary);
+    }
+    .btn-directions-link:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+    .btn-directions-link svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+
+    .modal-tickets-box {
+      margin: 1rem 0;
+    }
+    .btn-tickets {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.85rem 1.25rem;
+      background: var(--color-primary);
+      color: #FFFFFF;
+      font-size: 1rem;
+      font-weight: 800;
+      border-radius: var(--radius-md, 14px);
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(108, 59, 255, 0.25);
+      transition: background 0.15s ease, transform 0.1s ease;
+      min-height: 48px;
+    }
+    .btn-tickets:hover {
+      background: #5925ED;
+    }
+    .btn-tickets:active {
+      transform: scale(0.99);
     }
 
     .modal-meta-row {
@@ -2585,9 +2760,16 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
       sheet.innerHTML = \`
         <div class="modal-sticky-header">
-          <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
-            <svg style="width:18px;height:18px;fill:var(--color-night)" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-          </button>
+          \${isDirectEntry ? \`
+            <button type="button" class="modal-close-btn modal-back-btn" data-action="close-modal" aria-label="Volver a la agenda">
+              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+              <span class="modal-back-text">Volver</span>
+            </button>
+          \` : \`
+            <button type="button" class="modal-close-btn" data-action="close-modal" aria-label="Cerrar ficha">
+              <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          \`}
         </div>
 
         <div class="modal-hero-cover" \${ev.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}" style="cursor:zoom-in;"\` : ''}>
@@ -2599,22 +2781,27 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
               Ver cartel completo
             </span>
           \` : \`
-            <div class="modal-hero-cover" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;">
+            <div class="modal-hero-placeholder" style="display:flex;align-items:center;justify-content:center;background:#0B0F3B;width:100%;height:100%;">
               <svg style="width:64px;height:64px;fill:#9D7BFF" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
             </div>
           \`}
         </div>
 
         <div class="modal-body">
-          <div style="margin-bottom:0.75rem;display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;">
-            \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (
-              (ev.promotion ? '<span class="badge-destacado">Destacado</span>' : '') +
-              (temporal.type === 'in_progress' ? '<span class="badge-status-live"><span style="width:7px;height:7px;border-radius:50%;background:#D97706;display:inline-block;"></span>En curso</span>' : '') +
-              (temporal.type === 'finished' ? '<span class="badge-status-finished">Finalizado</span>' : '')
-            )}
-          </div>
+          <div class="modal-header-section">
+            <div class="modal-status-badges">
+              \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (
+                (ev.promotion ? '<span class="badge-destacado">Destacado</span>' : '') +
+                (temporal.type === 'in_progress' ? '<span class="badge-status-live"><span style="width:7px;height:7px;border-radius:50%;background:#D97706;display:inline-block;"></span>En curso</span>' : '') +
+                (temporal.type === 'finished' ? '<span class="badge-status-finished">Finalizado</span>' : '')
+              )}
+            </div>
 
-          <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
+            <div class="modal-title-price-row">
+              <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
+              <span class="modal-price-pill \${(ev.price.amount_cents === 0 || ev.price.is_free) ? 'is-free' : 'is-paid'}">\${escapeHtml(priceLabel)}</span>
+            </div>
+          </div>
 
           \${isCancelled ? \`
             <div class="cancelled-banner">
@@ -2624,64 +2811,64 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           \` : (
             temporal.type === 'finished' ? \`
               <div class="event-temporal-notice">
-                <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
                 <span>Este evento ya ha finalizado.</span>
               </div>
             \` : (
               temporal.type === 'started_no_end' ? \`
                 <div class="event-temporal-notice">
-                  <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                  <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
                   <span>Este evento comenzó el \${escapeHtml(realDateTime.dateText)} a las \${formatTime(ev.start_time)} h.</span>
                 </div>
               \` : ''
             )
           )}
 
-          <div class="modal-meta-row">
-            <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
-            <span>\${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}</span>
-          </div>
-          <div class="modal-meta-row">
-            <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-            <span>\${formatTime(ev.start_time)} h\${ev.end_time ? ' - ' + formatTime(ev.end_time) + ' h' : ''}</span>
-          </div>
-          <div class="modal-meta-row">
-            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-            <span><strong>\${escapeHtml(ev.venue.name)}</strong> \${ev.actions.maps_url ? \`<a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" style="color:var(--color-primary);margin-left:0.5rem;font-weight:700;" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">Ver mapa ↗</a>\` : ''}</span>
+          <!-- Bloque de Cuándo y Dónde (con único botón de Cómo llegar) -->
+          <div class="event-when-where-box">
+            <div class="when-where-row">
+              <div class="when-where-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+              </div>
+              <div class="when-where-content">
+                <div class="when-date-text">
+                  \${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}
+                </div>
+                <div class="when-time-text">
+                  \${formatTime(ev.start_time)} h\${ev.end_time ? ' - ' + formatTime(ev.end_time) + ' h' : ''}
+                </div>
+              </div>
+            </div>
+
+            <div class="when-where-row where-venue-row">
+              <div class="when-where-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+              </div>
+              <div class="when-where-content where-venue-content">
+                <div class="venue-title-text">\${escapeHtml(ev.venue.name)}</div>
+                \${ev.venue.address ? \`<div class="venue-address-text">\${escapeHtml(ev.venue.address)}\${ev.venue.city ? ', ' + escapeHtml(ev.venue.city) : ''}</div>\` : ''}
+                \${renderVenueDirectionsHtml(extractEventActionSource(ev))}
+              </div>
+            </div>
           </div>
 
-          \${ev.image_url ? \`
-            <button type="button" class="btn-poster-action" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}">
-              <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
-              <span>Ver cartel completo</span>
-            </button>
+          <!-- Bloque de Entradas si tickets_url está disponible -->
+          \${(!isCancelled && ev.actions.tickets_url) ? \`
+            <div class="modal-tickets-box">
+              <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" class="btn-tickets" data-metric="ticket_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
+                \${(ev.price.amount_cents === 0 || ev.price.is_free) ? 'Reservar entrada ↗' : 'Comprar entradas ↗'}
+              </a>
+              <div class="action-disclaimer" style="text-align:center;margin-top:0.35rem;font-size:0.75rem;color:var(--color-text-subtle);">Compra en una web externa</div>
+            </div>
           \` : ''}
 
-          <!-- Bloque de Acción Principal y Precio -->
-          <div class="modal-action-box">
-            <div class="modal-action-main-row">
-              <span class="modal-price-display">\${escapeHtml(priceLabel)}</span>
-              \${isCancelled ? \`
-                <button type="button" class="btn-primary-action" disabled style="background:#94A3B8;cursor:not-allowed;">Evento cancelado</button>
-              \` : (ev.actions.tickets_url ? \`
-                <a href="\${escapeHtml(ev.actions.tickets_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="ticket_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
-                  \${(ev.price.amount_cents === 0 || ev.price.is_free) ? 'Reservar entrada ↗' : 'Comprar entradas ↗'}
-                </a>
-              \` : (ev.actions.maps_url ? \`
-                <a href="\${escapeHtml(ev.actions.maps_url)}" target="_blank" rel="noopener" class="btn-primary-action" data-metric="map_click" data-event-id="\${ev.id}" data-promo-id="\${promoId || ''}">
-                  Cómo llegar ↗
-                </a>
-              \` : ''))}
-            </div>
-            \${(!isCancelled && ev.actions.tickets_url) ? '<div class="action-disclaimer">Compra en una web externa</div>' : ''}
-          </div>
-
-          <!-- Acciones de Evento: WhatsApp, Compartir, Copiar enlace, Cómo llegar y Calendario -->
+          <!-- Acciones de Compartir y Guardar (2x2: WhatsApp, Compartir, Copiar enlace, Calendario) -->
           \${renderEventActionsHtml(extractEventActionSource(ev))}
 
+          <!-- Descripción / Sobre el evento -->
           \${ev.description ? \`
             <div style="margin-top:1.5rem;">
-              <h3 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h3>
+              <h2 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h2>
               <p style="font-size:0.9375rem;color:var(--color-text-muted);line-height:1.6;white-space:pre-line;">\${escapeHtml(ev.description)}</p>
               \${ev.verification && ev.verification.source === 'web' && ev.actions.tickets_url ? \`
                 <div style="margin-top:0.75rem;">
@@ -2691,10 +2878,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             </div>
           \` : ''}
 
-          <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--color-border);">
-            <h3 style="font-size:0.875rem;font-weight:800;color:var(--color-text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.04em;">Organizador</h3>
-            <div style="font-size:0.9375rem;font-weight:700;color:var(--color-night);">\${escapeHtml(ev.venue.name)}</div>
-          </div>
+          <!-- Organizador (sólo si no es duplicado del nombre del local) -->
+          \${(ev.organizer && ev.organizer.trim().length > 0 && ev.organizer.trim().toLowerCase() !== ev.venue.name.trim().toLowerCase()) ? \`
+            <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--color-border);">
+              <h3 style="font-size:0.875rem;font-weight:800;color:var(--color-text-muted);margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.04em;">Organizador</h3>
+              <div style="font-size:0.9375rem;font-weight:700;color:var(--color-night);">\${escapeHtml(ev.organizer)}</div>
+            </div>
+          \` : ''}
         </div>
       \`;
 
@@ -2800,6 +2990,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
     }
     window.openEventModal = openEventModal;
+    window.renderEventDetail = renderEventDetail;
 
     function showInitialError(error) {
       const modal = document.getElementById('detail-modal');

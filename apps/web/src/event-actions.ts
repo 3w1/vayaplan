@@ -558,17 +558,31 @@ function escapeHtml(str: string): string {
 }
 
 /**
- * Genera el marcado HTML accesible de la barra de acciones para el detalle del evento
+ * Renderiza el botón único "Cómo llegar ↗" asociado visualmente al bloque del local
+ */
+export function renderVenueDirectionsHtml(source: EventActionSource): string {
+  const directionsUrl = buildDirectionsUrl(source);
+  if (!directionsUrl) return '';
+
+  return `
+    <a href="${escapeHtml(directionsUrl)}" target="_blank" rel="noopener noreferrer" class="btn-directions-link" data-action="directions-click" data-metric="map_click" data-event-id="${source.id}" aria-label="Cómo llegar a ${escapeHtml(source.venue_name || 'destino')}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>
+      <span>Cómo llegar ↗</span>
+    </a>
+  `.trim();
+}
+
+/**
+ * Genera el marcado HTML accesible de la cuadrícula 2x2 para Compartir y Guardar
  */
 export function renderEventActionsHtml(source: EventActionSource, now: Date = new Date()): string {
   const isCancelled = source.status === 'cancelled';
   const waUrl = buildWhatsAppShareUrl(source);
-  const directionsUrl = buildDirectionsUrl(source);
   const calState = computeCalendarState(source, now);
   const shareTitle = isCancelled ? `[CANCELADO] ${source.title}` : source.title;
 
   return `
-    <div class="event-actions-section" aria-label="Acciones del evento">
+    <div class="event-actions-section" aria-label="Compartir y guardar evento">
       <div class="event-actions-header">
         <span class="event-actions-title">Compartir y guardar</span>
       </div>
@@ -592,15 +606,7 @@ export function renderEventActionsHtml(source: EventActionSource, now: Date = ne
           <span class="action-btn-text">Copiar enlace</span>
         </button>
 
-        <!-- 4. Direcciones (Sólo si hay información suficiente de destino) -->
-        ${directionsUrl ? `
-          <a href="${escapeHtml(directionsUrl)}" target="_blank" rel="noopener noreferrer" class="event-action-btn btn-directions" data-action="directions-click" data-event-id="${source.id}" aria-label="Cómo llegar a ${escapeHtml(source.venue_name)}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>
-            <span class="action-btn-text">Cómo llegar</span>
-          </a>
-        ` : ''}
-
-        <!-- 5. Añadir al calendario (.ics) -->
+        <!-- 4. Añadir al calendario (.ics) -->
         ${calState.allowed ? `
           <a href="/events/${source.id}/calendar.ics" download="evento-${source.id}.ics" class="event-action-btn btn-calendar" data-action="calendar-download" data-event-id="${source.id}" aria-label="Añadir evento al calendario">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
@@ -663,22 +669,16 @@ export function getEventActionsStyles(): string {
 
     .event-actions-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 0.5rem;
-    }
-
-    @media (max-width: 480px) {
-      .event-actions-grid {
-        grid-template-columns: 1fr 1fr;
-      }
     }
 
     .event-action-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.4rem;
-      padding: 0.55rem 0.65rem;
+      gap: 0.45rem;
+      padding: 0.6rem 0.75rem;
       font-size: 0.8125rem;
       font-weight: 700;
       color: var(--color-night, #0B0F3B);
@@ -688,10 +688,11 @@ export function getEventActionsStyles(): string {
       text-decoration: none;
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-      min-height: 42px;
+      min-height: 44px;
       box-sizing: border-box;
       text-align: center;
       user-select: none;
+      touch-action: manipulation;
     }
 
     .event-action-btn:hover:not([disabled]):not(.is-disabled) {
@@ -1044,20 +1045,20 @@ export function getEventActionsClientScript(): string {
       };
     }
 
+    function renderVenueDirectionsHtml(source) {
+      const directionsUrl = buildDirectionsUrl(source);
+      if (!directionsUrl) return '';
+      return '<a href="' + escapeHtml(directionsUrl) + '" target="_blank" rel="noopener noreferrer" class="btn-directions-link" data-action="directions-click" data-metric="map_click" data-event-id="' + source.id + '" aria-label="Cómo llegar a ' + escapeHtml(source.venue_name || 'destino') + '">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>' +
+        '<span>Cómo llegar ↗</span>' +
+        '</a>';
+    }
+
     function renderEventActionsHtml(source, now) {
       const isCancelled = source.status === 'cancelled';
       const waUrl = buildWhatsAppShareUrl(source);
-      const directionsUrl = buildDirectionsUrl(source);
       const calState = computeCalendarState(source, now);
       const shareTitle = isCancelled ? ('[CANCELADO] ' + source.title) : source.title;
-
-      let directionsHtml = '';
-      if (directionsUrl) {
-        directionsHtml = '<a href="' + escapeHtml(directionsUrl) + '" target="_blank" rel="noopener noreferrer" class="event-action-btn btn-directions" data-action="directions-click" data-metric="map_click" data-event-id="' + source.id + '" aria-label="Cómo llegar a ' + escapeHtml(source.venue_name) + '">' +
-          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>' +
-          '<span class="action-btn-text">Cómo llegar</span>' +
-          '</a>';
-      }
 
       let calHtml = '';
       if (calState.allowed) {
@@ -1080,7 +1081,7 @@ export function getEventActionsClientScript(): string {
           '</div>';
       }
 
-      return '<div class="event-actions-section" aria-label="Acciones del evento">' +
+      return '<div class="event-actions-section" aria-label="Compartir y guardar evento">' +
         '<div class="event-actions-header">' +
           '<span class="event-actions-title">Compartir y guardar</span>' +
         '</div>' +
@@ -1097,7 +1098,6 @@ export function getEventActionsClientScript(): string {
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>' +
             '<span class="action-btn-text">Copiar enlace</span>' +
           '</button>' +
-          directionsHtml +
           calHtml +
         '</div>' +
         noticeHtml +
@@ -1201,6 +1201,7 @@ export function getEventActionsClientScript(): string {
 
     window.extractEventActionSource = extractEventActionSource;
     window.renderEventActionsHtml = renderEventActionsHtml;
+    window.renderVenueDirectionsHtml = renderVenueDirectionsHtml;
     window.executeEventLinkCopy = executeEventLinkCopy;
     window.executeEventShare = executeEventShare;
   `;
