@@ -84,9 +84,13 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       e.id,
       e.title,
       e.category,
+      COALESCE(e.time_status, 'confirmed') AS time_status,
       e.start_time,
       e.end_time,
       e.editorial_date,
+      e.end_date,
+      e.schedule_text,
+      e.approximate_schedule,
       e.price_cents,
       e.is_free,
       e.image_url,
@@ -104,17 +108,26 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       v.whatsapp_contact AS venue_whatsapp_contact,
       p.id AS promotion_id,
       p.price_cents AS promotion_price_cents,
-      p.status AS promotion_status
+      p.status AS promotion_status,
+      fest.id AS festival_id,
+      fest.name AS festival_name,
+      fest.edition AS festival_edition,
+      fest.slug AS festival_slug,
+      fest.official_url AS festival_official_url
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
+    LEFT JOIN festivals fest ON e.festival_id = fest.id
     LEFT JOIN promotions p ON p.event_id = e.id 
       AND p.city_id = e.city_id
       AND p.status IN ('active', 'scheduled')
       AND p.starts_at <= now()
       AND p.ends_at > now()
     WHERE e.city_id = $1 
-      AND e.editorial_date = $2 
       AND e.status = 'published'
+      AND (
+        (e.end_date IS NULL AND e.editorial_date = $2) OR
+        (e.end_date IS NOT NULL AND e.editorial_date <= $2 AND e.end_date >= $2)
+      )
   `;
 
   if (categoryFilter) {
@@ -122,16 +135,25 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
     eventsSql += ` AND e.category = $3`;
   }
 
-  eventsSql += ` ORDER BY (CASE WHEN p.id IS NOT NULL THEN 0 ELSE 1 END) ASC, e.start_time ASC;`;
+  eventsSql += ` ORDER BY 
+    (CASE WHEN p.id IS NOT NULL THEN 0 ELSE 1 END) ASC, 
+    (CASE WHEN COALESCE(e.time_status, 'confirmed') = 'confirmed' THEN 0 ELSE 1 END) ASC, 
+    e.start_time ASC;`;
 
   const eventsResult = await query(eventsSql, eventQueryParams);
 
   const events: PublicEventItem[] = eventsResult.rows.map((row) => {
-    const startTimeIso = new Date(row.start_time).toISOString();
+    const timeStatus = (row.time_status || 'confirmed') as any;
+    const startTimeIso = (row.start_time && timeStatus === 'confirmed')
+      ? new Date(row.start_time).toISOString()
+      : null;
     const endTimeIso = row.end_time ? new Date(row.end_time).toISOString() : null;
     const editorialDateStr = typeof row.editorial_date === 'string'
       ? row.editorial_date
       : new Date(row.editorial_date).toISOString().split('T')[0];
+    const endDateStr = row.end_date
+      ? (typeof row.end_date === 'string' ? row.end_date : new Date(row.end_date).toISOString().split('T')[0])
+      : null;
 
     const mapsUrl = resolveGoogleMapsUrl(
       row.venue_google_maps_url,
@@ -143,10 +165,14 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       id: Number(row.id),
       title: row.title,
       category: row.category,
+      time_status: timeStatus,
       start_time: startTimeIso,
       end_time: endTimeIso,
       editorial_date: editorialDateStr,
       editorial_label: computeEditorialLabel(editorialDateStr, startTimeIso),
+      end_date: endDateStr,
+      schedule_text: row.schedule_text || null,
+      approximate_schedule: row.approximate_schedule || null,
       price: {
         amount_cents: Number(row.price_cents),
         is_free: Boolean(row.is_free),
@@ -178,6 +204,15 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
             id: Number(row.promotion_id),
             price_cents: Number(row.promotion_price_cents),
             status: row.promotion_status,
+          }
+        : null,
+      festival: row.festival_id
+        ? {
+            id: Number(row.festival_id),
+            name: row.festival_name,
+            edition: row.festival_edition || null,
+            slug: row.festival_slug,
+            official_url: row.festival_official_url || null,
           }
         : null,
     };
