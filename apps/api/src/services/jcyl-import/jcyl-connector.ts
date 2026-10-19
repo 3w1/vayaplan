@@ -150,6 +150,8 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
   result.libraryCandidates = normalizedList.length;
   result.events = normalizedList;
 
+  // El modo dry-run retorna antes de cualquier acceso a base de datos.
+  // No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
   if (dryRun) {
     return result;
   }

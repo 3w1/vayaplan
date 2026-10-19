@@ -1,3 +1,17 @@
+/**
+ * CLI Oficial de Sincronización e Ingesta JCyL — VayaPlan
+ * 
+ * ÚNICA CLI VIGENTE DOCUMENTADA.
+ * 
+ * Endpoint JCyL:
+ *   https://analisis.datosabiertos.jcyl.es/api/explore/v2.1/catalog/datasets/eventos-de-la-agenda-cultural-categorizados-y-geolocalizados/records
+ * Filtro OData:
+ *   where=nombre_localidad='Palencia'&order_by=fecha_inicio asc&limit=50
+ * 
+ * Comportamiento Dry-Run:
+ *   El modo dry-run retorna antes de cualquier acceso a base de datos.
+ *   No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
+ */
 import { syncJcylLibraryActivities } from '../apps/api/src/services/jcyl-import/jcyl-connector';
 import { normalizeJcylRecord } from '../apps/api/src/services/jcyl-import/jcyl-normalizer';
 import type { JcylRecordRaw } from '../apps/api/src/services/jcyl-import/jcyl-types';

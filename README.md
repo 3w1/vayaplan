@@ -212,3 +212,36 @@ git push -u origin main
   - Redirige mediante código 302 a `https://vayaplan.com/?origin=qr_hotel`.
   - La interfaz administrativa en `/admin` permite descargar directamente la tarjeta vectorial SVG (`/api/v1/admin/qr-sources/:id/svg?format=card`) lista para imprimir y colocar en recepción.
 
+---
+
+## 8. Piloto de Ampliación de Agenda y Conector JCyL (`feat/agenda-expansion-pilot`)
+
+### 8.1 Sincronización e Ingesta JCyL
+- **CLI Oficial:** `scripts/jcyl-sync-cli.ts` (es la **única CLI vigente documentada**).
+- **Endpoint consumido:** `https://analisis.datosabiertos.jcyl.es/api/explore/v2.1/catalog/datasets/eventos-de-la-agenda-cultural-categorizados-y-geolocalizados/records`.
+- **Filtro OData:** `where=nombre_localidad='Palencia'&order_by=fecha_inicio asc&limit=50`.
+- **Comportamiento Dry-Run:** El modo dry-run retorna antes de cualquier acceso a base de datos. No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
+- **Ejecución local en dry-run:**
+  ```bash
+  bun run scripts/jcyl-sync-cli.ts
+  ```
+
+### 8.2 Censo de Recintos y Separación de Entornos
+- **Recintos censados en producción (`vayaplan`):**
+  - `ID 1`: Bar Universonoro
+  - `ID 2`: Teatro Principal de Palencia
+- **Recintos no censados en producción:**
+  - *Biblioteca Pública de Palencia*, *Centro Cultural Lecrác*, *Pabellón Municipal de Deportes «Marta Domínguez»* y *Estadio Municipal Nueva Balastera* **no están censados en producción** (pendientes de alta autorizada). No se deben asumir ni proponer IDs productivos para ellos.
+- **IDs de fixtures de pruebas visuales:**
+  - Los identificadores `1` (Teatro), `2` (Biblioteca), `3` (Lecrác) y `10` (Pabellón) corresponden exclusivamente al mock estático de captura en `scratch/capture_admin_flow.ts`.
+
+### 8.3 Evento 8 en Producción
+- **Origen:** El evento 8 (`Festival Jazz`, `venue_id = 2`, `status = 'outdated'`) en la base de datos `vayaplan` de producción es una prueba del usuario para cargar y visualizar un cartel, con título relacionado con jazz.
+- **Tratamiento:** Permanece inalterado y pendiente de decisión editorial sobre su retirada, sin reconciliarse con funciones reales de festival ni desdoblarse en conciertos.
+
+### 8.4 Identificadores de Registro JCyL
+- **Villamuriel de Cerrato (Rechazado por municipio):** `1285645015428`.
+- **Biblioteca Pública (Aceptado):** `1285184301373`.
+- **`1285645015421`:** Fixture sintética y errata de redacción en informes previos (no usar en ejemplos reales).
+
+

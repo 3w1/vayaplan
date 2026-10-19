@@ -347,3 +347,52 @@ En la Fase 2 de Ingesta se introduce la separación de migraciones:
 ### 14.3 Pendiente de Autorización para Producción
 - **Autorización explícita requerida**: No se ejecutan cambios en producción (`vayaplan`) ni reconstrucción de contenedores de producción hasta contar con autorización.
 - **Estado Actual**: Producción permanece intacta al 100%.
+
+---
+
+## 15. Piloto de Ampliación de Agenda y Conector JCyL (Rama `feat/agenda-expansion-pilot`)
+
+### 15.1 CLI Oficial Vigente
+- **Ruta del script CLI:** `scripts/jcyl-sync-cli.ts`.
+- **Aviso de vigencia:** Es la **única CLI vigente documentada** para la sincronización e ingesta cultural de JCyL.
+- **Invocación operativa:**
+  ```bash
+  # Modo Dry-Run por defecto (consulta API, normaliza y retorna en memoria sin tocar BD):
+  bun run scripts/jcyl-sync-cli.ts
+
+  # Modo Escritura (únicamente con bandera explícita en entornos autorizados):
+  bun run scripts/jcyl-sync-cli.ts --execute-writes
+  ```
+
+### 15.2 Endpoint Oficial JCyL y Filtros
+- **Endpoint real usado por HEAD:**
+  `https://analisis.datosabiertos.jcyl.es/api/explore/v2.1/catalog/datasets/eventos-de-la-agenda-cultural-categorizados-y-geolocalizados/records`
+- **Filtro y ordenación OData documentados:**
+  - `where=nombre_localidad='Palencia'`
+  - `order_by=fecha_inicio asc`
+  - `limit=50`
+
+### 15.3 Comportamiento del Modo Dry-Run
+- **Descripción exacta:** El modo dry-run retorna antes de cualquier acceso a base de datos. No ejecuta INSERT, UPDATE, BEGIN ni ROLLBACK.
+- **Sin transacciones revertidas:** No debe describirse el dry-run como una transacción revertida. El conector evalúa la opción `dryRun` y retorna inmediatamente los resultados calculados en memoria (`if (dryRun) return result;`) antes de invocar cualquier llamada SQL.
+
+### 15.4 Estado y Origen del Evento 8 en Producción
+- **Origen fáctico:** El evento 8 en la base de datos de producción (`vayaplan`, título `Festival Jazz`, `venue_id = 2`, `status = 'outdated'`) es una prueba del usuario para cargar y visualizar un cartel, con título relacionado con jazz.
+- **Sin reconciliación forzada:** No debe reconciliarse su fecha ni contenido con funciones o conciertos reales del *XIII Jazz Palencia Festival*, ni desdoblarse o mutarse.
+- **Estado operativo:** Permanece inalterado en producción y pendiente de decisión editorial sobre su eventual retirada o archivo.
+
+### 15.5 Separación Estricta del Censo de Recintos: Producción vs. Fixtures
+- **IDs reales de producción (`vayaplan`):**
+  - `ID 1`: Bar Universonoro
+  - `ID 2`: Teatro Principal de Palencia
+- **Recintos NO censados en producción:**
+  - *Biblioteca Pública de Palencia*, *Centro Cultural Lecrác*, *Pabellón Municipal de Deportes «Marta Domínguez»* y *Estadio Municipal Nueva Balastera* **no están censados en producción**.
+  - **Prohibición de asignación ficticia:** No se deben proponer ni asumir IDs productivos para ellos hasta que se autorice formalmente su alta en el censo de producción.
+- **IDs de fixtures de captura:**
+  - Los identificadores `1` (Teatro Principal), `2` (Biblioteca Pública), `3` (Lecrác) y `10` (Pabellón Marta Domínguez) proceden estrictamente del mock local de captura `scratch/capture_admin_flow.ts` para capturas visuales en Chromium headless y no guardan relación con el censo real de la base de datos.
+
+### 15.6 Identificadores de Registro JCyL y Distinción Fáctica
+- **Villamuriel de Cerrato (Rechazado por municipio):** ID oficial `1285645015428` (*'La cocina'*, Teloncillo Teatro en Teatro Jesús Meneses). Descartado por localidad ajena a Palencia capital.
+- **Biblioteca Pública de Palencia (Aceptado):** ID oficial `1285184301373` (*Exposición de fotografía 'Una mirada sincera' de Agustín Hernández*).
+- **ID 1285645015421:** Fixture sintética local creada en `scratch/capture_admin_flow.ts` y errata de redacción en informes previos. No debe utilizarse ni mezclarse en ejemplos de datos reales.
+
