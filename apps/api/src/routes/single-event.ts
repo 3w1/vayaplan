@@ -67,7 +67,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
       AND p.status IN ('active', 'scheduled')
       AND p.starts_at <= now()
       AND p.ends_at > now()
-    WHERE e.id = $1
+    WHERE e.id = $1 AND e.status IN ('published', 'cancelled')
     LIMIT 1;
   `;
 
