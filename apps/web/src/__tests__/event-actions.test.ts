@@ -27,6 +27,7 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
     end_time: '2026-10-19T20:30:00.000Z',   // 22:30 CEST en Europe/Madrid
     venue_name: 'Teatro Principal de Palencia',
     venue_address: 'Calle Mayor, 5',
+    city: 'Palencia',
     latitude: 42.0094,
     longitude: -4.5298,
     maps_url: 'https://maps.google.com/?cid=9876543210',
@@ -146,6 +147,7 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
         longitude: -4.5298,
         maps_url: 'https://maps.google.com/?cid=123',
         venue_address: 'Calle Mayor, 1',
+        city: 'Palencia',
       });
       expect(url).toBe('https://www.google.com/maps/dir/?api=1&destination=42.0094,-4.5298');
     });
@@ -156,11 +158,12 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
         longitude: null,
         maps_url: 'https://maps.google.com/?cid=9876543210',
         venue_address: 'Calle Mayor, 1',
+        city: 'Palencia',
       });
       expect(url).toBe('https://maps.google.com/?cid=9876543210');
     });
 
-    test('utiliza dirección y ciudad si no hay coordenadas ni maps_url', () => {
+    test('utiliza dirección y ciudad únicamente si ambos existen', () => {
       const url = buildDirectionsUrl({
         latitude: null,
         longitude: null,
@@ -171,14 +174,54 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
       expect(url).toBe('https://www.google.com/maps/dir/?api=1&destination=Plaza%20Mayor%2C%201%2C%20Palencia');
     });
 
-    test('descarta coordenadas inválidas (0,0 o fuera de rango) o protocolos peligrosos', () => {
-      expect(isValidCoordinate(0, 0)).toBe(false);
-      expect(isValidCoordinate(100, 200)).toBe(false);
-      expect(isValidCoordinate(null, null)).toBe(false);
+    test('dirección sin ciudad devuelve null y no asume silenciosamente Palencia', () => {
+      const urlNullCity = buildDirectionsUrl({
+        latitude: null,
+        longitude: null,
+        maps_url: null,
+        venue_address: 'Calle Mayor, 1',
+        city: null,
+      });
+      expect(urlNullCity).toBeNull();
 
+      const urlEmptyCity = buildDirectionsUrl({
+        latitude: null,
+        longitude: null,
+        maps_url: null,
+        venue_address: 'Calle Mayor, 1',
+        city: '   ',
+      });
+      expect(urlEmptyCity).toBeNull();
+    });
+
+    test('valida estrictamente dominios de mapas permitidos (Google Maps y OpenStreetMap)', () => {
+      // Dominios autorizados
+      expect(isValidExternalMapUrl('https://maps.google.com/?cid=123')).toBe(true);
+      expect(isValidExternalMapUrl('https://maps.app.goo.gl/xyz123')).toBe(true);
+      expect(isValidExternalMapUrl('https://www.google.com/maps/dir/?api=1')).toBe(true);
+      expect(isValidExternalMapUrl('https://google.com/maps?q=Palencia')).toBe(true);
+      expect(isValidExternalMapUrl('https://www.openstreetmap.org/directions')).toBe(true);
+      expect(isValidExternalMapUrl('https://openstreetmap.org/node/12345')).toBe(true);
+
+      // Dominios no permitidos, spoofing o subdominios manipulados
+      expect(isValidExternalMapUrl('https://google.com.ejemplo.test/maps')).toBe(false);
+      expect(isValidExternalMapUrl('https://maps.google.com.attacker.com')).toBe(false);
+      expect(isValidExternalMapUrl('https://www.google.com/search?q=maps')).toBe(false);
+      expect(isValidExternalMapUrl('https://sitio-malicioso.com')).toBe(false);
+      expect(isValidExternalMapUrl('https://malicious.com/?https://maps.google.com')).toBe(false);
       expect(isValidExternalMapUrl('javascript:alert(1)')).toBe(false);
       expect(isValidExternalMapUrl('data:text/html,evil')).toBe(false);
-      expect(isValidExternalMapUrl('https://sitio-malicioso.com')).toBe(false);
+    });
+
+    test('buildDirectionsUrl rechaza maps_url de dominios no permitidos', () => {
+      const url = buildDirectionsUrl({
+        latitude: null,
+        longitude: null,
+        maps_url: 'https://google.com.ejemplo.test/maps',
+        venue_address: null,
+        city: null,
+      });
+      expect(url).toBeNull();
     });
 
     test('devuelve null si no hay información de destino suficiente (no engañosa)', () => {
@@ -187,6 +230,7 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
         longitude: null,
         maps_url: null,
         venue_address: null,
+        city: null,
       });
       expect(url).toBeNull();
     });
@@ -249,6 +293,50 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
       expect(state.notice).toContain('comenzado');
       expect(state.notice).not.toContain('finalizado');
     });
+
+    test('start_time inválido o no disponible: deshabilitado con aviso controlado', () => {
+      const state = computeCalendarState({
+        status: 'published',
+        start_time: 'formato-invalido',
+        end_time: '2026-10-19T20:00:00.000Z',
+      }, fixedNow);
+      expect(state.allowed).toBe(false);
+      expect(state.status).toBe('invalid_dates');
+      expect(state.notice).toContain('no válido');
+    });
+
+    test('end_time con formato inválido: deshabilitado con error controlado (no se oculta como ausente)', () => {
+      const state = computeCalendarState({
+        status: 'published',
+        start_time: '2026-10-19T18:00:00.000Z',
+        end_time: 'fecha-corrupta',
+      }, fixedNow);
+      expect(state.allowed).toBe(false);
+      expect(state.status).toBe('invalid_dates');
+      expect(state.notice).toContain('Horario de finalización no válido');
+    });
+
+    test('end_time no posterior a start_time: deshabilitado con error controlado', () => {
+      // end_time anterior a start_time
+      const statePrior = computeCalendarState({
+        status: 'published',
+        start_time: '2026-10-19T18:00:00.000Z',
+        end_time: '2026-10-19T17:00:00.000Z',
+      }, fixedNow);
+      expect(statePrior.allowed).toBe(false);
+      expect(statePrior.status).toBe('invalid_dates');
+      expect(statePrior.notice).toContain('Horario de finalización no válido');
+
+      // end_time igual a start_time
+      const stateEqual = computeCalendarState({
+        status: 'published',
+        start_time: '2026-10-19T18:00:00.000Z',
+        end_time: '2026-10-19T18:00:00.000Z',
+      }, fixedNow);
+      expect(stateEqual.allowed).toBe(false);
+      expect(stateEqual.status).toBe('invalid_dates');
+      expect(stateEqual.notice).toContain('Horario de finalización no válido');
+    });
   });
 
   describe('6. Generación de iCalendar RFC 5545', () => {
@@ -270,7 +358,7 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
       expect(ics).toContain('END:VCALENDAR\r\n');
     });
 
-    test('sin end_time: NO añade DTEND ni duración inventada', () => {
+    test('end_time ausente: exporta sin DTEND ni duración inventada', () => {
       const ics = generateIcsCalendar({
         ...baseSyntheticEvent,
         end_time: null,
@@ -280,12 +368,38 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
       expect(ics).not.toContain('DURATION');
     });
 
-    test('con end_time anterior o igual a start_time: NO añade DTEND', () => {
-      const ics = generateIcsCalendar({
-        ...baseSyntheticEvent,
-        end_time: '2026-10-19T17:00:00.000Z', // anterior a start_time (18:00)
-      });
-      expect(ics).not.toContain('DTEND');
+    test('end_time no posterior a start_time: lanza error controlado y no genera .ics aparentemente válido', () => {
+      expect(() => {
+        generateIcsCalendar({
+          ...baseSyntheticEvent,
+          end_time: '2026-10-19T17:00:00.000Z', // anterior a start_time (18:00)
+        });
+      }).toThrow(/inconsistente/i);
+
+      expect(() => {
+        generateIcsCalendar({
+          ...baseSyntheticEvent,
+          end_time: '2026-10-19T18:00:00.000Z', // igual a start_time
+        });
+      }).toThrow(/inconsistente/i);
+    });
+
+    test('end_time con formato inválido: lanza error controlado', () => {
+      expect(() => {
+        generateIcsCalendar({
+          ...baseSyntheticEvent,
+          end_time: 'fecha-invalida',
+        });
+      }).toThrow(/inválida/i);
+    });
+
+    test('start_time inválido: lanza error controlado', () => {
+      expect(() => {
+        generateIcsCalendar({
+          ...baseSyntheticEvent,
+          start_time: 'invalido',
+        });
+      }).toThrow(/inválida/i);
     });
 
     test('protege contra inyección de propiedades iCalendar escapando saltos de línea', () => {

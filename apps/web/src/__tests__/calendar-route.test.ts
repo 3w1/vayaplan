@@ -144,6 +144,100 @@ describe('apps/web — Ruta de Descarga de Calendario GET /events/:id/calendar.i
     expect(body).toContain('finalizado');
   });
 
+  test('end_time ausente: descarga válida sin DTEND ni duración inventada', async () => {
+    const mockNoEnd = createMockPublicEvent({
+      start_time: '2026-11-15T19:00:00.000Z',
+      end_time: null,
+    });
+
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/v1/events/200')) {
+        return new Response(JSON.stringify({ event: mockNoEnd }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    }) as any;
+
+    const res = await requestApp('/events/200/calendar.ics');
+    expect(res.status).toBe(200);
+    const icsText = await res.text();
+    expect(icsText).toContain('DTSTART:20261115T190000Z');
+    expect(icsText).not.toContain('DTEND');
+    expect(icsText).not.toContain('DURATION');
+  });
+
+  test('end_time inconsistente o no posterior a start_time responde 400 Bad Request', async () => {
+    const mockBadEnd = createMockPublicEvent({
+      start_time: '2026-11-15T19:00:00.000Z',
+      end_time: '2026-11-15T18:00:00.000Z',
+    });
+
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/v1/events/200')) {
+        return new Response(JSON.stringify({ event: mockBadEnd }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    }) as any;
+
+    const res = await requestApp('/events/200/calendar.ics');
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain('Horario de finalización no válido');
+  });
+
+  test('end_time con formato inválido responde 400 Bad Request', async () => {
+    const mockCorruptEnd = createMockPublicEvent({
+      start_time: '2026-11-15T19:00:00.000Z',
+      end_time: 'fecha-no-valida',
+    });
+
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/v1/events/200')) {
+        return new Response(JSON.stringify({ event: mockCorruptEnd }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    }) as any;
+
+    const res = await requestApp('/events/200/calendar.ics');
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain('Horario de finalización no válido');
+  });
+
+  test('start_time inválido responde 400 Bad Request', async () => {
+    const mockCorruptStart = createMockPublicEvent({
+      start_time: 'fecha-invalida',
+      end_time: '2026-11-15T21:00:00.000Z',
+    });
+
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('/api/v1/events/200')) {
+        return new Response(JSON.stringify({ event: mockCorruptStart }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    }) as any;
+
+    const res = await requestApp('/events/200/calendar.ics');
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain('Horario del evento no válido');
+  });
+
   test('Visibilidad: evento no publicado, borrador tentative o inexistente responde 404', async () => {
     globalThis.fetch = (async (url: string | URL | Request) => {
       const urlStr = url.toString();

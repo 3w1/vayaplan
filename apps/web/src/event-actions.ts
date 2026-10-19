@@ -12,6 +12,7 @@ export interface EventActionSource {
   end_time: string | null; // ISO 8601
   venue_name: string;
   venue_address?: string | null;
+  city?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   maps_url?: string | null;
@@ -25,6 +26,7 @@ export interface EventActionSource {
  * Extrae la fuente común de datos a partir del item público de evento
  */
 export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: string): EventActionSource {
+  const venue = ev.venue as any;
   return {
     id: ev.id,
     title: ev.title,
@@ -32,6 +34,8 @@ export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: str
     start_time: ev.start_time,
     end_time: ev.end_time || null,
     venue_name: ev.venue?.name || '',
+    venue_address: venue?.address || null,
+    city: venue?.city || null,
     latitude: ev.venue?.latitude !== null && ev.venue?.latitude !== undefined ? Number(ev.venue.latitude) : null,
     longitude: ev.venue?.longitude !== null && ev.venue?.longitude !== undefined ? Number(ev.venue.longitude) : null,
     maps_url: ev.actions?.maps_url || ev.venue?.google_maps_url || null,
@@ -170,13 +174,22 @@ export function isValidExternalMapUrl(url: string | null | undefined): boolean {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
     const host = parsed.hostname.toLowerCase();
-    const isGoogle = host === 'maps.google.com' ||
-                     host === 'www.google.com' ||
-                     host === 'google.com' ||
-                     host === 'goo.gl' ||
-                     host === 'maps.app.goo.gl';
-    const isOsm = host === 'www.openstreetmap.org' || host === 'openstreetmap.org';
-    return isGoogle || isOsm;
+
+    // Lista estricta de dominios permitidos para Google Maps y OpenStreetMap
+    const strictGoogleHosts = ['maps.google.com', 'maps.app.goo.gl'];
+    const pathGoogleHosts = ['www.google.com', 'google.com', 'goo.gl'];
+    const osmHosts = ['www.openstreetmap.org', 'openstreetmap.org'];
+
+    if (strictGoogleHosts.includes(host)) {
+      return true;
+    }
+    if (pathGoogleHosts.includes(host)) {
+      return parsed.pathname === '/maps' || parsed.pathname.startsWith('/maps/');
+    }
+    if (osmHosts.includes(host)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -186,8 +199,8 @@ export function isValidExternalMapUrl(url: string | null | undefined): boolean {
  * Resuelve la URL de "Cómo llegar" conforme a reglas de prioridad:
  * 1. Prioriza coordenadas válidas del local.
  * 2. URL de mapas externa válida existente.
- * 3. Dirección completa y ciudad si está disponible.
- * 4. Si la información es insuficiente, devuelve null (no muestra acción engañosa).
+ * 3. Fallback por dirección: usa únicamente venue_address y ciudad si ambos existen.
+ * 4. Si la información es insuficiente, devuelve null (no asume ciudad por defecto ni muestra acción engañosa).
  */
 export function buildDirectionsUrl(source: {
   latitude?: number | null;
@@ -207,10 +220,10 @@ export function buildDirectionsUrl(source: {
     return source.maps_url!.trim();
   }
 
-  // 3. Dirección suficiente
+  // 3. Fallback por dirección: usa únicamente venue_address y ciudad si ambos existen
   const address = source.venue_address?.trim();
-  const city = source.city?.trim() || 'Palencia';
-  if (address && address.length > 3) {
+  const city = source.city?.trim();
+  if (address && address.length > 0 && city && city.length > 0) {
     const query = `${address}, ${city}`;
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`;
   }
@@ -223,13 +236,15 @@ export function buildDirectionsUrl(source: {
  */
 export type CalendarState =
   | { status: 'cancelled'; allowed: false; notice: string }
+  | { status: 'invalid_dates'; allowed: false; notice: string }
   | { status: 'finished'; allowed: false; notice: string }
   | { status: 'in_progress'; allowed: true; notice: string }
   | { status: 'started_no_end'; allowed: true; notice: string }
   | { status: 'upcoming'; allowed: true; notice?: null };
 
 /**
- * Determina el estado del evento para la acción de calendario
+ * Determina el estado del evento para la acción de calendario.
+ * Diferencia entre end_time ausente (exportable sin DTEND) y fechas inconsistentes o inválidas (error controlado).
  */
 export function computeCalendarState(
   source: {
@@ -247,13 +262,40 @@ export function computeCalendarState(
     };
   }
 
+  // 1. Validación de start_time
+  if (!source.start_time || typeof source.start_time !== 'string') {
+    return {
+      status: 'invalid_dates',
+      allowed: false,
+      notice: 'Horario del evento no disponible para calendario.',
+    };
+  }
   const start = new Date(source.start_time);
-  const end = source.end_time ? new Date(source.end_time) : null;
-  const nowMs = now.getTime();
   const startMs = start.getTime();
+  if (Number.isNaN(startMs)) {
+    return {
+      status: 'invalid_dates',
+      allowed: false,
+      notice: 'Horario del evento no válido para calendario.',
+    };
+  }
 
-  if (end && !Number.isNaN(end.getTime()) && end.getTime() > startMs) {
+  const nowMs = now.getTime();
+  const rawEnd = source.end_time;
+  const hasEndTime = rawEnd !== null && rawEnd !== undefined && String(rawEnd).trim().length > 0;
+
+  // 2. Si end_time está presente, validar consistencia (formato válido y estrictamente posterior a start_time)
+  if (hasEndTime) {
+    const end = new Date(rawEnd!);
     const endMs = end.getTime();
+    if (Number.isNaN(endMs) || endMs <= startMs) {
+      return {
+        status: 'invalid_dates',
+        allowed: false,
+        notice: 'Horario de finalización no válido para calendario.',
+      };
+    }
+
     if (nowMs >= endMs) {
       return {
         status: 'finished',
@@ -275,6 +317,7 @@ export function computeCalendarState(
       };
     }
   } else {
+    // 3. end_time ausente: sin DTEND ni duración inventada
     if (nowMs >= startMs) {
       const timeFormatter = new Intl.DateTimeFormat('es-ES', {
         timeZone: 'Europe/Madrid',
@@ -377,9 +420,30 @@ export function generateIcsCalendar(
   options?: { now?: Date }
 ): string {
   const now = options?.now || new Date();
+
+  // Validación estricta de start_time
+  if (!source.start_time || typeof source.start_time !== 'string') {
+    throw new Error('Fecha de inicio no disponible para iCalendar');
+  }
   const startDate = new Date(source.start_time);
-  if (Number.isNaN(startDate.getTime())) {
+  const startMs = startDate.getTime();
+  if (Number.isNaN(startMs)) {
     throw new Error(`Fecha de inicio inválida para iCalendar: ${source.start_time}`);
+  }
+
+  // Validación estricta de end_time si está presente (no enmascara inconsistencias)
+  const rawEnd = source.end_time;
+  const hasEndTime = rawEnd !== null && rawEnd !== undefined && String(rawEnd).trim().length > 0;
+  let endDate: Date | null = null;
+  if (hasEndTime) {
+    endDate = new Date(rawEnd!);
+    const endMs = endDate.getTime();
+    if (Number.isNaN(endMs)) {
+      throw new Error(`Fecha de finalización inválida para iCalendar: ${rawEnd}`);
+    }
+    if (endMs <= startMs) {
+      throw new Error(`Fecha de finalización inconsistente (no posterior a inicio): ${rawEnd} <= ${source.start_time}`);
+    }
   }
 
   const lines: string[] = [
@@ -394,12 +458,9 @@ export function generateIcsCalendar(
     `DTSTART:${formatUtcIcs(startDate)}`,
   ];
 
-  // DTEND: Sólo si end_time existe y es estrictamente posterior a start_time
-  if (source.end_time) {
-    const endDate = new Date(source.end_time);
-    if (!Number.isNaN(endDate.getTime()) && endDate.getTime() > startDate.getTime()) {
-      lines.push(`DTEND:${formatUtcIcs(endDate)}`);
-    }
+  // DTEND: Sólo si end_time existe y es estrictamente posterior a start_time (ya verificado arriba)
+  if (endDate) {
+    lines.push(`DTEND:${formatUtcIcs(endDate)}`);
   }
 
   const titlePrefix = source.status === 'cancelled' ? '[CANCELADO] ' : '';
@@ -408,7 +469,7 @@ export function generateIcsCalendar(
   const locationParts: string[] = [];
   if (source.venue_name) locationParts.push(source.venue_name);
   if (source.venue_address) locationParts.push(source.venue_address);
-  locationParts.push('Palencia');
+  locationParts.push(source.city || 'Palencia');
   lines.push(`LOCATION:${escapeIcsText(locationParts.join(', '))}`);
 
   lines.push(`URL:${escapeIcsText(source.canonical_url)}`);
@@ -678,6 +739,7 @@ export function getEventActionsClientScript(): string {
         end_time: ev.end_time || null,
         venue_name: ev.venue ? ev.venue.name : '',
         venue_address: ev.venue ? ev.venue.address : null,
+        city: ev.venue ? ev.venue.city : null,
         latitude: ev.venue && ev.venue.latitude !== null && ev.venue.latitude !== undefined ? Number(ev.venue.latitude) : null,
         longitude: ev.venue && ev.venue.longitude !== null && ev.venue.longitude !== undefined ? Number(ev.venue.longitude) : null,
         maps_url: ev.actions ? ev.actions.maps_url : (ev.venue ? ev.venue.google_maps_url : null),
@@ -782,13 +844,20 @@ export function getEventActionsClientScript(): string {
         const parsed = new URL(trimmed);
         if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
         const host = parsed.hostname.toLowerCase();
-        const isGoogle = host === 'maps.google.com' ||
-                         host === 'www.google.com' ||
-                         host === 'google.com' ||
-                         host === 'goo.gl' ||
-                         host === 'maps.app.goo.gl';
-        const isOsm = host === 'www.openstreetmap.org' || host === 'openstreetmap.org';
-        return isGoogle || isOsm;
+        const strictGoogleHosts = ['maps.google.com', 'maps.app.goo.gl'];
+        const pathGoogleHosts = ['www.google.com', 'google.com', 'goo.gl'];
+        const osmHosts = ['www.openstreetmap.org', 'openstreetmap.org'];
+
+        if (strictGoogleHosts.indexOf(host) !== -1) {
+          return true;
+        }
+        if (pathGoogleHosts.indexOf(host) !== -1) {
+          return parsed.pathname === '/maps' || parsed.pathname.indexOf('/maps/') === 0;
+        }
+        if (osmHosts.indexOf(host) !== -1) {
+          return true;
+        }
+        return false;
       } catch (e) {
         return false;
       }
@@ -802,8 +871,8 @@ export function getEventActionsClientScript(): string {
         return source.maps_url.trim();
       }
       const address = source.venue_address ? source.venue_address.trim() : '';
-      const city = source.city ? source.city.trim() : 'Palencia';
-      if (address && address.length > 3) {
+      const city = source.city ? source.city.trim() : '';
+      if (address && address.length > 0 && city && city.length > 0) {
         return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(address + ', ' + city);
       }
       return null;
@@ -819,13 +888,38 @@ export function getEventActionsClientScript(): string {
         };
       }
 
+      if (!source.start_time || typeof source.start_time !== 'string') {
+        return {
+          status: 'invalid_dates',
+          allowed: false,
+          notice: 'Horario del evento no disponible para calendario.',
+        };
+      }
       const start = new Date(source.start_time);
-      const end = source.end_time ? new Date(source.end_time) : null;
-      const nowMs = nowDate.getTime();
       const startMs = start.getTime();
+      if (Number.isNaN(startMs)) {
+        return {
+          status: 'invalid_dates',
+          allowed: false,
+          notice: 'Horario del evento no válido para calendario.',
+        };
+      }
 
-      if (end && !Number.isNaN(end.getTime()) && end.getTime() > startMs) {
+      const nowMs = nowDate.getTime();
+      const rawEnd = source.end_time;
+      const hasEndTime = rawEnd !== null && rawEnd !== undefined && String(rawEnd).trim().length > 0;
+
+      if (hasEndTime) {
+        const end = new Date(rawEnd);
         const endMs = end.getTime();
+        if (Number.isNaN(endMs) || endMs <= startMs) {
+          return {
+            status: 'invalid_dates',
+            allowed: false,
+            notice: 'Horario de finalización no válido para calendario.',
+          };
+        }
+
         if (nowMs >= endMs) {
           return {
             status: 'finished',

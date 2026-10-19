@@ -321,7 +321,14 @@ app.get('/events/:id/calendar.ics', async (c) => {
   }
 
   // 4. Genera contenido iCalendar RFC 5545
-  const icsContent = generateIcsCalendar(actionSource);
+  let icsContent: string;
+  try {
+    icsContent = generateIcsCalendar(actionSource);
+  } catch (err: any) {
+    return c.text(err?.message || 'Error al generar el archivo de calendario.', 400, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
 
   return new Response(icsContent, {
     status: 200,
