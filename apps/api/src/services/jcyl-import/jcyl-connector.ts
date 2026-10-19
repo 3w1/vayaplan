@@ -123,8 +123,10 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
         id: number;
         status: string;
         verified_at: string | null;
+        created_at: string;
+        updated_at: string;
       }>(
-        `SELECT id, status, verified_at FROM events WHERE city_id = $1 AND dedupe_key = $2 LIMIT 1;`,
+        `SELECT id, status, verified_at, created_at, updated_at FROM events WHERE city_id = $1 AND dedupe_key = $2 LIMIT 1;`,
         [cityId, item.dedupeKey]
       );
 
@@ -163,9 +165,16 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
         result.inserted++;
       } else {
         const existing = existingRes.rows[0];
-        // Protección editorial: si el evento ya fue verificado o no está en borrador,
+        // Protección editorial: si el evento ya fue verificado, publicado o editado manualmente en borrador,
         // no sobrescribir el trabajo de curación humana
-        if (existing.verified_at !== null || existing.status !== 'tentative') {
+        const isManuallyTouched =
+          existing.verified_at !== null ||
+          existing.status !== 'tentative' ||
+          (existing.updated_at &&
+            existing.created_at &&
+            new Date(existing.updated_at).getTime() - new Date(existing.created_at).getTime() > 1000);
+
+        if (isManuallyTouched) {
           result.preservedEditorial++;
           continue;
         }

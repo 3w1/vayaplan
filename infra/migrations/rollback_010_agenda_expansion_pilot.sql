@@ -1,8 +1,9 @@
--- VayaPlan — Rollback de Migración 010: Reversión del Piloto de Ampliación de Agenda
+-- VayaPlan — Rollback de Migración 010: Reversión del Piloto de Ampliación de Agenda (v2.0)
 --
 -- ADVERTENCIA DE SEGURIDAD OPERATIVA:
 -- Este script revierte las columnas e índices añadidos por la migración 010.
--- Antes de reintroducir start_time NOT NULL, verifica que no existan eventos publicados sin hora.
+-- Antes de eliminar estructuras o reintroducir start_time NOT NULL, verifica que no se pierdan datos.
+-- Si existen festivales, relaciones o eventos con start_time NULL, ABORTA la operación.
 -- Ejecutar exclusivamente en el entorno local o de pruebas autorizado.
 
 SET statement_timeout = '15s';
@@ -10,27 +11,48 @@ SET lock_timeout = '5s';
 
 BEGIN;
 
--- 1. Precondición defensiva: verificar que no queden eventos publicados con start_time NULL
+-- 1. Precondiciones defensivas: verificar ausencia de datos que se perderían
 DO $$
 DECLARE
+  v_festivals_count INT;
+  v_associations_count INT;
   v_null_start_count INT;
+  v_continuous_count INT;
 BEGIN
-  SELECT COUNT(*) INTO v_null_start_count
-  FROM events
-  WHERE start_time IS NULL AND status = 'published';
+  -- Comprobar si existen festivales cargados
+  SELECT COUNT(*) INTO v_festivals_count FROM festivals;
+  IF v_festivals_count > 0 THEN
+    RAISE EXCEPTION 'Rollback 010 abortado: Existen % festivales registrados en festivals. La reversión causaría pérdida irreparable de datos.', v_festivals_count;
+  END IF;
 
+  -- Comprobar si existen relaciones cargadas
+  SELECT COUNT(*) INTO v_associations_count FROM event_festivals;
+  IF v_associations_count > 0 THEN
+    RAISE EXCEPTION 'Rollback 010 abortado: Existen % relaciones registradas en event_festivals. La reversión causaría pérdida irreparable de datos.', v_associations_count;
+  END IF;
+
+  -- Comprobar si existen eventos con start_time NULL (horario pendiente o exposiciones)
+  SELECT COUNT(*) INTO v_null_start_count FROM events WHERE start_time IS NULL;
   IF v_null_start_count > 0 THEN
-    RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos publicados con start_time NULL. Reasigna o despublica antes de restaurar NOT NULL.', v_null_start_count;
+    RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos con start_time NULL. Restaurar NOT NULL fallaría y causaría inconsistencia.', v_null_start_count;
+  END IF;
+
+  -- Comprobar si existen eventos con time_status no confirmed
+  SELECT COUNT(*) INTO v_continuous_count FROM events WHERE time_status != 'confirmed';
+  IF v_continuous_count > 0 THEN
+    RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos con time_status != ''confirmed''.', v_continuous_count;
   END IF;
 END $$;
 
 -- 2. Eliminar índices asociados
+DROP INDEX IF EXISTS idx_event_festivals_festival;
 DROP INDEX IF EXISTS idx_events_time_status;
 DROP INDEX IF EXISTS idx_events_festival;
 DROP INDEX IF EXISTS idx_events_date_range;
 
 -- 3. Eliminar restricciones de integridad
 ALTER TABLE events DROP CONSTRAINT IF EXISTS chk_events_end_date_consistency;
+ALTER TABLE events DROP CONSTRAINT IF EXISTS chk_events_tentative_date_publication;
 ALTER TABLE events DROP CONSTRAINT IF EXISTS chk_events_time_consistency;
 ALTER TABLE events DROP CONSTRAINT IF EXISTS chk_events_time_status_values;
 ALTER TABLE events DROP CONSTRAINT IF EXISTS fk_events_festival;
@@ -47,20 +69,7 @@ ALTER TABLE events
 DROP TABLE IF EXISTS event_festivals;
 DROP TABLE IF EXISTS festivals;
 
--- 6. Restaurar restricción NOT NULL en start_time si no hay nulos en toda la tabla
-DO $$
-DECLARE
-  v_any_null_count INT;
-BEGIN
-  SELECT COUNT(*) INTO v_any_null_count
-  FROM events
-  WHERE start_time IS NULL;
-
-  IF v_any_null_count = 0 THEN
-    ALTER TABLE events ALTER COLUMN start_time SET NOT NULL;
-  ELSE
-    RAISE NOTICE 'Advertencia: Se omitió ALTER COLUMN start_time SET NOT NULL porque existen % filas en borrador con start_time NULL.', v_any_null_count;
-  END IF;
-END $$;
+-- 6. Restaurar restricción NOT NULL en start_time
+ALTER TABLE events ALTER COLUMN start_time SET NOT NULL;
 
 COMMIT;

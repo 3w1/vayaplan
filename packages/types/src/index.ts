@@ -19,7 +19,8 @@ export type EventCategory =
 export type EventTimeStatus =
   | 'confirmed'
   | 'pending_time'
-  | 'tentative_date';
+  | 'tentative_date'
+  | 'continuous';
 
 export type EventStatus =
   | 'tentative'
@@ -144,6 +145,25 @@ export interface FestivalSummary {
   official_url: string | null;
 }
 
+export interface FestivalProgramResponseContract {
+  festival: {
+    id: number;
+    name: string;
+    edition: string | null;
+    slug: string;
+    description: string | null;
+    start_date: string;
+    end_date: string;
+    official_url: string | null;
+  };
+  city: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  events: PublicEventItem[];
+}
+
 export interface Event {
   id: number;
   city_id: number;
@@ -158,7 +178,6 @@ export interface Event {
   end_date?: string | null;
   schedule_text?: string | null;
   approximate_schedule?: string | null;
-  festival_id?: number | null;
   price_cents: number;
   is_free: boolean;
   image_url: string | null;

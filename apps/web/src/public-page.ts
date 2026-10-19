@@ -1979,11 +1979,11 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     }
 
     function renderCardTimeHtml(ev) {
-      if (ev.time_status === 'pending_time' || !ev.start_time) {
-        return '<span class="card-time card-time-pending">⏳ Horario por confirmar</span>';
-      }
-      if (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date) {
+      if (ev.time_status === 'continuous' || (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date)) {
         return '<span class="card-time card-time-exhibition">🏛️ Exposición en curso</span>';
+      }
+      if (ev.time_status === 'pending_time' || (!ev.start_time && ev.time_status !== 'continuous')) {
+        return '<span class="card-time card-time-pending">⏳ Horario por confirmar</span>';
       }
       const realDateTime = formatEventRealDateTime(ev.start_time);
       return \`<span class="card-time">⏰ \${formatTime(ev.start_time)}\${realDateTime.isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>\`;
@@ -2864,8 +2864,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     function renderEventDetail(ev, sheet) {
       const promoId = ev.promotion ? ev.promotion.id : null;
       const isCancelled = ev.status === 'cancelled';
-      const isPendingTime = ev.time_status === 'pending_time' || !ev.start_time;
-      const isExhibition = Boolean(ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date);
+      const isExhibition = ev.time_status === 'continuous' || Boolean(ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date);
+      const isPendingTime = !isExhibition && (ev.time_status === 'pending_time' || (!ev.start_time && ev.time_status !== 'continuous'));
       const realDateTime = formatEventRealDateTime(ev.start_time);
       const temporal = computeTemporalState(ev.start_time, ev.end_time, ev.time_status);
 
@@ -2930,7 +2930,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             isPendingTime ? \`
               <div class="event-pending-notice" role="status">
                 <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-                <span>Horario pendiente de confirmación. VayaPlan avisará cuando la organización o federación confirme la hora definitiva.</span>
+                <span>Horario pendiente de confirmación. Consulta esta ficha para comprobar si se ha publicado la hora definitiva.</span>
               </div>
             \` : (
               temporal.type === 'finished' ? \`
@@ -2999,12 +2999,12 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           \${(ev.festivals && ev.festivals.length > 0) ? \`
             <div class="event-festival-banner">
               <div class="festival-banner-tag">\${ev.festivals.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo'}</div>
-              <div class="festival-banner-name">Forma parte de \${ev.festivals.map((f: any) => \`<strong>\${escapeHtml(f.name)}</strong>\`).join(' · ')}</div>
+              <div class="festival-banner-name">Forma parte de \${ev.festivals.map((f: any) => \`<a href="/festivals/\${encodeURIComponent(f.slug)}" style="color:var(--color-primary);text-decoration:underline;"><strong>\${escapeHtml(f.name)}</strong></a>\`).join(' · ')}</div>
             </div>
           \` : (ev.festival ? \`
             <div class="event-festival-banner">
               <div class="festival-banner-tag">Festival / Ciclo</div>
-              <div class="festival-banner-name">Forma parte de <strong>\${escapeHtml(ev.festival.name)}</strong></div>
+              <div class="festival-banner-name">Forma parte de <a href="/festivals/\${encodeURIComponent(ev.festival.slug)}" style="color:var(--color-primary);text-decoration:underline;"><strong>\${escapeHtml(ev.festival.name)}</strong></a></div>
               \${ev.festival.description ? \`<div class="festival-banner-desc">\${escapeHtml(ev.festival.description)}</div>\` : ''}
             </div>
           \` : '')}

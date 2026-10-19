@@ -122,7 +122,7 @@ describe('apps/web — Pruebas Dirigidas de Ampliación de Agenda (agenda-expans
       const calState = computeCalendarState(basePendingEvent);
       expect(calState.allowed).toBe(false);
       expect(calState.status).toBe('pending_time');
-      expect(calState.notice).toContain('Horario pendiente de confirmación');
+      expect(calState.notice).toBe('Horario pendiente de confirmación. Consulta esta ficha para comprobar si se ha publicado la hora definitiva.');
     });
 
     test('generateIcsCalendar rechaza generar archivo para eventos con horario pendiente', () => {
@@ -135,7 +135,7 @@ describe('apps/web — Pruebas Dirigidas de Ampliación de Agenda (agenda-expans
       const calState = computeCalendarState(baseExhibitionEvent);
       expect(calState.allowed).toBe(false);
       expect(calState.status).toBe('exhibition_period');
-      expect(calState.notice).toContain('periodo de visita continuado');
+      expect(calState.notice).toBe('Período de exposición continuado. Consulta el horario de visita en el recinto.');
     });
 
     test('generateIcsCalendar rechaza generar archivo para exposiciones continuadas', () => {
@@ -150,7 +150,7 @@ describe('apps/web — Pruebas Dirigidas de Ampliación de Agenda (agenda-expans
       const html = renderEventActionsHtml(basePendingEvent);
       expect(html).toContain('is-disabled');
       expect(html).toContain('disabled');
-      expect(html).toContain('Horario pendiente de confirmación');
+      expect(html).toContain('Horario pendiente de confirmación. Consulta esta ficha para comprobar si se ha publicado la hora definitiva.');
       expect(html).toContain('action-temporal-note');
     });
 
@@ -158,7 +158,7 @@ describe('apps/web — Pruebas Dirigidas de Ampliación de Agenda (agenda-expans
       const html = renderEventActionsHtml(baseExhibitionEvent);
       expect(html).toContain('is-disabled');
       expect(html).toContain('disabled');
-      expect(html).toContain('periodo de visita continuado');
+      expect(html).toContain('Período de exposición continuado. Consulta el horario de visita en el recinto.');
       expect(html).toContain('action-temporal-note');
     });
   });
@@ -214,6 +214,89 @@ describe('apps/web — Pruebas Dirigidas de Ampliación de Agenda (agenda-expans
       expect(html).toContain('Horario por confirmar');
       expect(html).toContain('Exposición en curso');
       expect(html).toContain('Forma parte de');
+    });
+  });
+
+  describe('7. Ficha Web Navegable de Festival (festival-page.ts)', () => {
+    test('renderFestivalHtml renderiza cabecera, programa agrupado y enlaces a fichas individuales', () => {
+      const { renderFestivalHtml } = require('../festival-page');
+      const mockFestivalData = {
+        city: { id: 1, name: 'Palencia', slug: 'palencia' },
+        festival: {
+          id: 10,
+          name: 'XIII Jazz Palencia Festival',
+          edition: 'XIII Edición',
+          slug: 'jazz-palencia-2026',
+          description: 'Festival de Jazz en el Teatro Principal',
+          start_date: '2026-11-01',
+          end_date: '2026-11-20',
+          official_url: 'https://jazzpalencia.es',
+        },
+        events: [
+          {
+            id: 501,
+            title: 'Antonio Serrano & Kaele Jiménez (Jazz CaLó)',
+            category: 'musica_directo',
+            time_status: 'confirmed',
+            start_time: '2026-11-07T19:30:00.000Z',
+            editorial_date: '2026-11-07',
+            editorial_label: 'Sábado',
+            venue: {
+              id: 2,
+              name: 'Teatro Principal de Palencia',
+              slug: 'teatro-principal',
+            },
+            price: { amount_cents: 2800, is_free: false, label: '28,00 €' },
+            status: 'published',
+            actions: { maps_url: null, booking_url: null, tickets_url: null, whatsapp_url: null },
+            verification: { source: 'manual', verified_at: null },
+            promotion: null,
+          },
+        ],
+      };
+
+      const html = renderFestivalHtml(mockFestivalData, 'https://vayaplan.com/festivals/jazz-palencia-2026');
+      expect(html).toContain('XIII Jazz Palencia Festival');
+      expect(html).toContain('XIII Edición');
+      expect(html).toContain('Antonio Serrano &amp; Kaele Jiménez (Jazz CaLó)');
+      expect(html).toContain('Teatro Principal de Palencia');
+      expect(html).toContain('href="/events/501"');
+      expect(html).toContain('href="https://jazzpalencia.es"');
+    });
+
+    test('renderFestivalHtml muestra estado vacío accesible cuando no hay actividades publicadas', () => {
+      const { renderFestivalHtml } = require('../festival-page');
+      const emptyData = {
+        city: { id: 1, name: 'Palencia', slug: 'palencia' },
+        festival: {
+          id: 11,
+          name: 'Festival Vacío',
+          edition: null,
+          slug: 'festival-vacio',
+          description: null,
+          start_date: '2026-12-01',
+          end_date: '2026-12-05',
+          official_url: null,
+        },
+        events: [],
+      };
+
+      const html = renderFestivalHtml(emptyData, 'https://vayaplan.com/festivals/festival-vacio');
+      expect(html).toContain('Festival Vacío');
+      expect(html).toContain('No hay actividades publicadas para este ciclo en este momento.');
+    });
+  });
+
+  describe('8. Tratamiento Conservador de Fin Desconocido en Exposiciones', () => {
+    test('exposición sin end_date muestra "Desde el [Inicio]" sin inventar fecha de fin ni vigencia indefinida', () => {
+      const formatted = formatEventDateTimeInMadrid(null, null, {
+        time_status: 'continuous',
+        editorial_date: '2026-11-05',
+        end_date: null,
+      });
+      expect(formatted).toBe('Desde el 5 de noviembre');
+      expect(formatted).not.toContain('Del');
+      expect(formatted).not.toContain('al');
     });
   });
 });

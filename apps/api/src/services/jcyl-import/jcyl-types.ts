@@ -41,7 +41,7 @@ export interface NormalizedJcylEvent {
   title: string;
   description: string | null;
   category: 'musica_directo' | 'cine' | 'teatro' | 'exposicion' | 'cultura' | 'conferencia';
-  timeStatus: 'confirmed' | 'pending_time';
+  timeStatus: 'confirmed' | 'pending_time' | 'continuous';
   startTimeIso: string | null;
   endTimeIso: string | null;
   editorialDate: string;

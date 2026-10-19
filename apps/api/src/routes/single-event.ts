@@ -63,15 +63,9 @@ singleEventRoutes.get('/events/:id', async (c) => {
       v.whatsapp_contact AS venue_whatsapp_contact,
       p.id AS promotion_id,
       p.price_cents AS promotion_price_cents,
-      p.status AS promotion_status,
-      fest.id AS festival_id,
-      fest.name AS festival_name,
-      fest.edition AS festival_edition,
-      fest.slug AS festival_slug,
-      fest.official_url AS festival_official_url
+      p.status AS promotion_status
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
-    LEFT JOIN festivals fest ON e.festival_id = fest.id
     LEFT JOIN promotions p ON p.event_id = e.id 
       AND p.city_id = e.city_id
       AND p.status IN ('active', 'scheduled')
@@ -134,16 +128,6 @@ singleEventRoutes.get('/events/:id', async (c) => {
     // Ignore if table event_festivals does not exist
   }
 
-  if (row.festival_id && !festivalsList.some((f) => f.id === Number(row.festival_id))) {
-    festivalsList.unshift({
-      id: Number(row.festival_id),
-      name: row.festival_name,
-      edition: row.festival_edition || null,
-      slug: row.festival_slug,
-      official_url: row.festival_official_url || null,
-    });
-  }
-
   const event: PublicEventItem = {
     id: Number(row.id),
     title: row.title,
@@ -190,15 +174,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
           status: row.promotion_status,
         }
       : null,
-    festival: festivalsList[0] || (row.festival_id
-      ? {
-          id: Number(row.festival_id),
-          name: row.festival_name,
-          edition: row.festival_edition || null,
-          slug: row.festival_slug,
-          official_url: row.festival_official_url || null,
-        }
-      : null),
+    festival: festivalsList[0] || null,
     festivals: festivalsList.length > 0 ? festivalsList : undefined,
   };
 

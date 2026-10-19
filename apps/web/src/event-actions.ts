@@ -10,7 +10,7 @@ export interface EventActionSource {
   status: string;
   start_time: string | null; // ISO 8601 or null if pending
   end_time: string | null; // ISO 8601
-  time_status?: 'confirmed' | 'pending_time' | 'tentative_date';
+  time_status?: 'confirmed' | 'pending_time' | 'tentative_date' | 'continuous';
   editorial_date?: string;
   end_date?: string | null;
   schedule_text?: string | null;
@@ -69,28 +69,37 @@ export function formatEventDateTimeInMadrid(
   startTimeIso: string | null | undefined,
   endTimeIso?: string | null,
   options?: {
-    time_status?: 'confirmed' | 'pending_time' | 'tentative_date';
+    time_status?: 'confirmed' | 'pending_time' | 'tentative_date' | 'continuous';
     editorial_date?: string;
     end_date?: string | null;
   }
 ): string {
-  // 1. Si es una exposición continuada con periodo (end_date > editorial_date)
-  if (options?.end_date && options?.editorial_date && options.end_date > options.editorial_date) {
+  // 1. Si es una exposición continuada con periodo (time_status === 'continuous' o end_date > editorial_date)
+  if (options?.time_status === 'continuous' || (options?.end_date && options?.editorial_date && options.end_date > options.editorial_date)) {
     const parseYmd = (ymd: string) => {
       const [y, m, d] = ymd.split('-').map(Number);
       return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
     };
-    const sDate = parseYmd(options.editorial_date);
-    const eDate = parseYmd(options.end_date);
     const monthFormatter = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', month: 'long' });
     const dayFormatter = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
-    const sMonth = monthFormatter.format(sDate);
-    const eMonth = monthFormatter.format(eDate);
 
-    if (sDate.getUTCFullYear() === eDate.getUTCFullYear() && sMonth === eMonth) {
-      return `Del ${dayFormatter.format(sDate)} al ${dayFormatter.format(eDate)} de ${sMonth}`;
+    if (options.editorial_date && options.end_date && options.end_date >= options.editorial_date) {
+      const sDate = parseYmd(options.editorial_date);
+      const eDate = parseYmd(options.end_date);
+      const sMonth = monthFormatter.format(sDate);
+      const eMonth = monthFormatter.format(eDate);
+
+      if (sDate.getUTCFullYear() === eDate.getUTCFullYear() && sMonth === eMonth) {
+        return `Del ${dayFormatter.format(sDate)} al ${dayFormatter.format(eDate)} de ${sMonth}`;
+      }
+      return `Del ${dayFormatter.format(sDate)} de ${sMonth} al ${dayFormatter.format(eDate)} de ${eMonth}`;
     }
-    return `Del ${dayFormatter.format(sDate)} de ${sMonth} al ${dayFormatter.format(eDate)} de ${eMonth}`;
+
+    if (options.editorial_date) {
+      const sDate = parseYmd(options.editorial_date);
+      const sMonth = monthFormatter.format(sDate);
+      return `Desde el ${dayFormatter.format(sDate)} de ${sMonth}`;
+    }
   }
 
   // 2. Si el horario está pendiente de confirmación o start_time es nulo
@@ -387,16 +396,16 @@ export function computeCalendarState(
     return {
       status: 'pending_time',
       allowed: false,
-      notice: 'Horario pendiente de confirmación. VayaPlan avisará cuando se publique la hora definitiva.',
+      notice: 'Horario pendiente de confirmación. Consulta esta ficha para comprobar si se ha publicado la hora definitiva.',
     };
   }
 
-  // 2. Si es una exposición continuada (multi-día)
-  if (source.end_date && source.editorial_date && source.end_date > source.editorial_date) {
+  // 2. Si es una exposición continuada (multi-día o time_status continuous)
+  if (source.time_status === 'continuous' || (source.end_date && source.editorial_date && source.end_date > source.editorial_date)) {
     return {
       status: 'exhibition_period',
       allowed: false,
-      notice: 'Exposición con periodo de visita continuado. Consulta los horarios de sala.',
+      notice: 'Período de exposición continuado. Consulta el horario de visita en el recinto.',
     };
   }
 
@@ -1120,15 +1129,15 @@ export function getEventActionsClientScript(): string {
         return {
           status: 'pending_time',
           allowed: false,
-          notice: 'Horario pendiente de confirmación. VayaPlan avisará cuando se publique la hora definitiva.',
+          notice: 'Horario pendiente de confirmación. Consulta esta ficha para comprobar si se ha publicado la hora definitiva.',
         };
       }
 
-      if (source.end_date && source.editorial_date && source.end_date > source.editorial_date) {
+      if (source.time_status === 'continuous' || (source.end_date && source.editorial_date && source.end_date > source.editorial_date)) {
         return {
           status: 'exhibition_period',
           allowed: false,
-          notice: 'Exposición con periodo de visita continuado. Consulta los horarios de sala.',
+          notice: 'Período de exposición continuado. Consulta el horario de visita en el recinto.',
         };
       }
 

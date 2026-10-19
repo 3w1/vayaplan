@@ -108,15 +108,9 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       v.whatsapp_contact AS venue_whatsapp_contact,
       p.id AS promotion_id,
       p.price_cents AS promotion_price_cents,
-      p.status AS promotion_status,
-      fest.id AS festival_id,
-      fest.name AS festival_name,
-      fest.edition AS festival_edition,
-      fest.slug AS festival_slug,
-      fest.official_url AS festival_official_url
+      p.status AS promotion_status
     FROM events e
     INNER JOIN venues v ON e.venue_id = v.id
-    LEFT JOIN festivals fest ON e.festival_id = fest.id
     LEFT JOIN promotions p ON p.event_id = e.id 
       AND p.city_id = e.city_id
       AND p.status IN ('active', 'scheduled')
@@ -206,15 +200,7 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
             status: row.promotion_status,
           }
         : null,
-      festival: row.festival_id
-        ? {
-            id: Number(row.festival_id),
-            name: row.festival_name,
-            edition: row.festival_edition || null,
-            slug: row.festival_slug,
-            official_url: row.festival_official_url || null,
-          }
-        : null,
+      festival: null,
     };
   });
 
@@ -242,14 +228,10 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
         });
       }
       for (const ev of events) {
-        const linked = festMap.get(ev.id) || [];
-        const combined = [...linked];
-        if (ev.festival && !combined.some((f) => f.id === ev.festival!.id)) {
-          combined.unshift(ev.festival);
-        }
-        if (combined.length > 0) {
-          ev.festivals = combined;
-          ev.festival = combined[0];
+        const linked = festMap.get(ev.id);
+        if (linked && linked.length > 0) {
+          ev.festivals = linked;
+          ev.festival = linked[0];
         }
       }
     } catch {

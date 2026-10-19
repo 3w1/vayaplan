@@ -41,7 +41,7 @@ export function sanitizeHtml(htmlStr?: string | null): string | null {
   };
 
   for (const [entity, replacement] of Object.entries(entities)) {
-    text = text.replaceAll(entity, replacement);
+    text = text.split(entity).join(replacement);
   }
 
   // Decodificar entidades numéricas &#NNN;
@@ -205,8 +205,14 @@ export function normalizeJcylRecord(record: JcylRecordRaw): NormalizedJcylEvent 
   const isRange = Boolean(record.fecha_fin && record.fecha_fin !== record.fecha_inicio);
   const endDate = isRange ? record.fecha_fin! : null;
 
-  const { timeStatus, startTimeIso } = normalizeJcylTime(record.hora_inicio, editorialDate);
-  if (timeStatus === 'pending_time') {
+  const normalizedTime = normalizeJcylTime(record.hora_inicio, editorialDate);
+  let timeStatus: 'confirmed' | 'pending_time' | 'continuous' = normalizedTime.timeStatus;
+  let startTimeIso = normalizedTime.startTimeIso;
+
+  if (category === 'exposicion' && isRange) {
+    timeStatus = 'continuous';
+    startTimeIso = null;
+  } else if (timeStatus === 'pending_time') {
     warnings.push('Hora de inicio no confirmada o no parseable');
   }
 
@@ -215,11 +221,23 @@ export function normalizeJcylRecord(record: JcylRecordRaw): NormalizedJcylEvent 
     warnings.push('Precio no especificado en la fuente');
   }
 
-  const isLibrary = Boolean(
-    record.evento_biblioteca === 'SI' ||
+  // Filtrado geográfico y de recinto estricto: Palencia capital y Biblioteca Pública de Palencia
+  const isPalenciaLocalidad = (record.nombre_localidad || '').trim().toLowerCase() === 'palencia';
+  const isLibraryVenue = Boolean(
     record.codigo_biblioteca === 'BPPAL' ||
-    (record.lugar_celebracion && record.lugar_celebracion.toLowerCase().includes('biblioteca'))
+    record.evento_biblioteca === 'SI' ||
+    ((record.lugar_celebracion || '').toLowerCase().includes('biblioteca p') &&
+     !(record.lugar_celebracion || '').toLowerCase().includes('teatro'))
   );
+
+  const isLibrary = isPalenciaLocalidad && isLibraryVenue;
+
+  if (!isPalenciaLocalidad) {
+    warnings.push(`Localidad no admitida (${record.nombre_localidad || 'desconocida'}); conector acotado a Palencia capital`);
+  }
+  if (!isLibraryVenue) {
+    warnings.push(`Recinto no admitido (${record.lugar_celebracion || 'desconocido'}); conector acotado a Biblioteca Pública`);
+  }
 
   return {
     externalId: record.id_evento,

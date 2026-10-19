@@ -230,4 +230,104 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     expect(check.rows[0].title).toBe('Título Editado por Humano');
     expect(check.rows[0].status).toBe('published');
   });
+
+  test('Protección de borradores editados: conserva cambios manuales en eventos que siguen en status tentative', async () => {
+    // Simular que un editor corrigió el texto de un borrador tentativa tras su importación inicial
+    await testPool.query(`
+      UPDATE events 
+      SET title = 'Borrador Retocado por Editor',
+          created_at = now() - interval '1 hour'
+      WHERE dedupe_key = 'jcyl:999902'
+    `);
+
+    const result = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: mockFetch,
+    });
+
+    expect(result.preservedEditorial).toBeGreaterThanOrEqual(1);
+
+    const check = await testPool.query("SELECT title, status FROM events WHERE dedupe_key = 'jcyl:999902'");
+    expect(check.rows[0].title).toBe('Borrador Retocado por Editor');
+    expect(check.rows[0].status).toBe('tentative');
+  });
+
+  test('Exclusión estricta de otros municipios de la provincia y otros recintos', async () => {
+    const extraRecords: JcylRecordRaw[] = [
+      {
+        id_evento: 999910,
+        titulo: 'Taller en Biblioteca de Aguilar de Campoo',
+        fecha_inicio: '2026-11-10',
+        lugar_celebracion: 'Biblioteca Municipal de Aguilar',
+        nombre_localidad: 'Aguilar de Campoo', // Municipio ajeno
+        codigo_biblioteca: 'BPPAL', // Código incorrecto o heredado
+      },
+      {
+        id_evento: 999911,
+        titulo: 'Obra en Teatro Principal de Palencia',
+        fecha_inicio: '2026-11-11',
+        lugar_celebracion: 'Teatro Principal',
+        nombre_localidad: 'Palencia',
+        codigo_biblioteca: null,
+        evento_biblioteca: 'NO',
+      },
+    ];
+
+    const extraFetch = async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ total_count: extraRecords.length, results: extraRecords }),
+    } as any);
+
+    const result = await syncJcylLibraryActivities({
+      dryRun: true,
+      cityId: 1,
+      fetchFn: extraFetch,
+    });
+
+    expect(result.totalApiRecords).toBe(2);
+    expect(result.libraryCandidates).toBe(0); // Ambos rechazados
+  });
+
+  test('Fuente caída o vacía no borra ni cancela eventos existentes', async () => {
+    // 1. Simular respuesta vacía
+    const emptyFetch = async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ total_count: 0, results: [] }),
+    } as any);
+
+    const resultEmpty = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: emptyFetch,
+    });
+
+    expect(resultEmpty.totalApiRecords).toBe(0);
+    expect(resultEmpty.inserted).toBe(0);
+
+    // Verificar que los eventos existentes siguen intactos en la BD
+    const countCheck = await testPool.query("SELECT COUNT(*) FROM events WHERE dedupe_key LIKE 'jcyl:99990%'");
+    expect(Number(countCheck.rows[0].count)).toBe(2);
+
+    // 2. Simular fallo de red 503
+    const failFetch = async () => ({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+    } as any);
+
+    const resultFail = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: failFetch,
+    });
+
+    expect(resultFail.errors.length).toBeGreaterThan(0);
+    const countCheck2 = await testPool.query("SELECT COUNT(*) FROM events WHERE dedupe_key LIKE 'jcyl:99990%'");
+    expect(Number(countCheck2.rows[0].count)).toBe(2);
+  });
 });
