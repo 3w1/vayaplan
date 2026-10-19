@@ -12,6 +12,7 @@ Fecha: **14 de octubre de 2026**
 4. [Arquitectura técnica y despliegue](./04-architecture.md)
 5. [Roadmap técnico y sprint backlog](./05-sprint-backlog.md)
 6. [Playbook comercial y métricas de validación](./06-gtm-playbook.md)
+7. [Manual operativo del piloto de ampliación de agenda](./agenda-expansion-pilot-runbook.md)
 
 ## Recomendación de modelos para Antigravity
 

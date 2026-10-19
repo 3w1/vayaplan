@@ -559,7 +559,7 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
       expect((extracted as any).verification).toBeUndefined();
       expect((extracted as any).promotion).toBeUndefined();
       expect((extracted as any).editorial_label).toBeUndefined();
-      expect((extracted as any).editorial_date).toBeUndefined();
+      expect(extracted.editorial_date).toBe('2026-10-20');
     });
   });
 });

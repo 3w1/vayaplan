@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { renderAdminHtml } from './admin';
 import { renderPublicHtml } from './public-page';
+import { renderFestivalHtml } from './festival-page';
 import { extractEventActionSource, computeCalendarState, generateIcsCalendar } from './event-actions';
 import type { PublicEventItem } from '@vayaplan/types';
 
@@ -475,21 +476,62 @@ app.get('/events/:id', async (c) => {
     ? `[Cancelado] ${ev.title} — ${ev.venue.name} | VayaPlan`
     : `${ev.title} — ${ev.venue.name} | VayaPlan`;
 
-  const dt = new Date(ev.start_time);
-  const timeFormatted = dt.toLocaleTimeString('es-ES', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Europe/Madrid',
-  });
-  const dateFormatted = dt.toLocaleDateString('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'Europe/Madrid',
-  });
+  const isContinuous = ev.time_status === 'continuous' || Boolean(ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date);
+  const isPendingTime = !isContinuous && (ev.time_status === 'pending_time' || !ev.start_time);
 
-  const dateFormattedCap = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
+  let temporalDetail = '';
+  let timeForCancelled = '';
+
+  const formatIsoDate = (dStr?: string | null): string => {
+    if (!dStr) return '';
+    try {
+      const parts = dStr.split('-');
+      if (parts.length === 3) {
+        const year = Number(parts[0]);
+        const month = Number(parts[1]) - 1;
+        const day = Number(parts[2]);
+        const date = new Date(year, month, day);
+        const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        const months = [
+          'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+          'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+        ];
+        return `${days[date.getDay()]}, ${day} de ${months[month]} de ${year}`;
+      }
+    } catch {}
+    return dStr;
+  };
+
+  if (isContinuous) {
+    const startFormatted = formatIsoDate(ev.editorial_date);
+    const endFormatted = ev.end_date ? formatIsoDate(ev.end_date) : '';
+    const periodText = endFormatted ? `Del ${startFormatted} al ${endFormatted}` : `Desde el ${startFormatted}`;
+    temporalDetail = ev.schedule_text ? `${periodText} (${ev.schedule_text})` : periodText;
+    timeForCancelled = periodText;
+  } else if (isPendingTime) {
+    const dateFormatted = formatIsoDate(ev.editorial_date);
+    const dateFormattedCap = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
+    temporalDetail = `${dateFormattedCap} · Horario por confirmar`;
+    timeForCancelled = `${dateFormatted}, horario pendiente`;
+  } else {
+    const dt = new Date(ev.start_time!);
+    const timeFormatted = dt.toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Europe/Madrid',
+    });
+    const dateFormatted = dt.toLocaleDateString('es-ES', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      timeZone: 'Europe/Madrid',
+    });
+    const dateFormattedCap = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
+    temporalDetail = `${dateFormattedCap} · ${timeFormatted} h`;
+    timeForCancelled = `${dateFormatted}, ${timeFormatted} h`;
+  }
+
   let priceText = '';
   if (ev.price) {
     if (ev.price.is_free || ev.price.amount_cents === 0) {
@@ -505,10 +547,10 @@ app.get('/events/:id', async (c) => {
 
   let pageDescription: string;
   if (isCancelled) {
-    pageDescription = `CANCELADO: ${ev.title} en ${ev.venue.name} (${dateFormatted}, ${timeFormatted} h). Consulta detalles y estado en VayaPlan.`;
+    pageDescription = `CANCELADO: ${ev.title} en ${ev.venue.name} (${timeForCancelled}). Consulta detalles y estado en VayaPlan.`;
   } else {
     const details = [
-      `${dateFormattedCap} · ${timeFormatted} h`,
+      temporalDetail,
       ev.venue.name,
       priceText ? `Precio: ${priceText}` : '',
     ].filter(Boolean).join(' · ');
@@ -555,6 +597,63 @@ app.get('/events/:id', async (c) => {
     }
   );
 });
+
+// ==============================================================================
+// Ficha Pública de Festival / Ciclo: GET /festivals/:slug
+// ==============================================================================
+const handleFestivalRoute = async (c: any) => {
+  const slug = c.req.param('slug')?.trim();
+  const citySlug = c.req.param('citySlug')?.trim() || 'palencia';
+
+  if (!slug) {
+    return c.text('El identificador del festival es obligatorio.', 400);
+  }
+
+  const internalApi = (process.env.INTERNAL_API_URL || 'http://api:4000').replace(/\/$/, '');
+  const apiUrl = `${internalApi}/api/v1/cities/${encodeURIComponent(citySlug)}/festivals/${encodeURIComponent(slug)}`;
+
+  let apiRes: Response;
+  try {
+    apiRes = await fetch(apiUrl, {
+      signal: AbortSignal.timeout(3000),
+      headers: { Accept: 'application/json' },
+    });
+  } catch {
+    return c.text('El servicio no está disponible en este momento.', 502);
+  }
+
+  if (apiRes.status === 404) {
+    return c.html(
+      renderPublicHtml({
+        title: 'Festival no encontrado | VayaPlan',
+        description: 'El festival o ciclo solicitado no existe o no está publicado.',
+        canonicalUrl: `${(process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '')}/`,
+        initialError: {
+          statusCode: 404,
+          error: 'festival_not_found',
+          message: 'El festival o ciclo solicitado no existe o no está disponible.',
+        },
+      }),
+      404,
+      { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+    );
+  }
+
+  if (!apiRes.ok) {
+    return c.text('Error al consultar el festival.', 502);
+  }
+
+  const data = await apiRes.json();
+  const publicOrigin = (process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '');
+  const canonicalUrl = `${publicOrigin}/festivals/${encodeURIComponent(slug)}`;
+
+  return c.html(renderFestivalHtml(data, canonicalUrl), 200, {
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+  });
+};
+
+app.get('/festivals/:slug', handleFestivalRoute);
+app.get('/ciudades/:citySlug/festivals/:slug', handleFestivalRoute);
 
 // ==============================================================================
 // Puerto y arranque del servidor web

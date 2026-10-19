@@ -11,6 +11,10 @@ export const VALID_EVENT_CATEGORIES: readonly EventCategory[] = [
   'teatro',
   'exposicion',
   'cultura',
+  'baloncesto',
+  'futbol',
+  'rugby',
+  'conferencia',
 ] as const;
 
 /**
@@ -49,18 +53,139 @@ export function formatPriceLabel(priceCents: number, isFree: boolean): string {
 }
 
 /**
+ * Parsea una fecha (YYYY-MM-DD) y hora (HH:mm) en la zona horaria 'Europe/Madrid'
+ * y calcula su equivalente exacto en UTC.
+ * 
+ * Reglas de seguridad:
+ * - Aplica el desfase oficial exacto para esa fecha (CEST UTC+2 en verano, CET UTC+1 en invierno).
+ * - Detecta horas inexistentes (adelanto de primavera) o ambiguas (retraso de otoño),
+ *   devolviendo valid=false y la causa específica para revisión editorial.
+ * - No depende de la zona horaria del servidor o del navegador.
+ */
+export function parseMadridWallClockToUtc(
+  dateStr: string,
+  timeStr: string
+): {
+  valid: boolean;
+  utcIso?: string;
+  offsetHours?: number;
+  reason?: 'invalid_format' | 'invalid_range' | 'nonexistent_dst_time' | 'ambiguous_dst_time';
+  message?: string;
+} {
+  if (!dateStr || !timeStr) {
+    return { valid: false, reason: 'invalid_format', message: 'Fecha u hora vacía' };
+  }
+
+  const dateParts = dateStr.trim().split('-');
+  const timeParts = timeStr.trim().split(':');
+
+  if (dateParts.length !== 3 || timeParts.length < 2) {
+    return { valid: false, reason: 'invalid_format', message: 'Formato inválido (esperado YYYY-MM-DD y HH:mm)' };
+  }
+
+  const y = Number(dateParts[0]);
+  const m = Number(dateParts[1]);
+  const d = Number(dateParts[2]);
+  const h = Number(timeParts[0]);
+  const min = Number(timeParts[1]);
+
+  if (isNaN(y) || isNaN(m) || isNaN(d) || isNaN(h) || isNaN(min)) {
+    return { valid: false, reason: 'invalid_format', message: 'Valores numéricos inválidos' };
+  }
+
+  if (m < 1 || m > 12 || d < 1 || d > 31 || h < 0 || h > 23 || min < 0 || min > 59) {
+    return { valid: false, reason: 'invalid_range', message: 'Rango de fecha u hora fuera de límites' };
+  }
+
+  // Candidatos de offset en España peninsular: +01:00 (CET) y +02:00 (CEST)
+  const candidateOffsets = [1, 2];
+  const matchingCandidates: { utcIso: string; offsetHours: number }[] = [];
+
+  for (const offset of candidateOffsets) {
+    const utcMs = Date.UTC(y, m - 1, d, h - offset, min, 0);
+    const dateObj = new Date(utcMs);
+
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Europe/Madrid',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    });
+
+    const parts = dtf.formatToParts(dateObj);
+    const partMap: Record<string, string> = {};
+    for (const p of parts) partMap[p.type] = p.value;
+
+    const formattedYear = Number(partMap.year);
+    const formattedMonth = Number(partMap.month);
+    const formattedDay = Number(partMap.day);
+    const formattedHour = Number(partMap.hour === '24' ? 0 : partMap.hour);
+    const formattedMin = Number(partMap.minute);
+
+    if (
+      formattedYear === y &&
+      formattedMonth === m &&
+      formattedDay === d &&
+      formattedHour === h &&
+      formattedMin === min
+    ) {
+      matchingCandidates.push({ utcIso: dateObj.toISOString(), offsetHours: offset });
+    }
+  }
+
+  if (matchingCandidates.length === 0) {
+    return {
+      valid: false,
+      reason: 'nonexistent_dst_time',
+      message: 'Hora inexistente por cambio de hora estacional (adelanto de primavera en Europe/Madrid).',
+    };
+  }
+
+  if (matchingCandidates.length > 1) {
+    return {
+      valid: false,
+      reason: 'ambiguous_dst_time',
+      message: 'Hora ambigua por cambio de hora estacional (retraso de otoño en Europe/Madrid). Requiere revisión editorial.',
+    };
+  }
+
+  return {
+    valid: true,
+    utcIso: matchingCandidates[0].utcIso,
+    offsetHours: matchingCandidates[0].offsetHours,
+  };
+}
+
+/**
  * Calcula la etiqueta editorial para una fecha y hora dadas
  * Ejemplos: "Viernes", "Viernes noche", "Sábado", "Domingo tarde"
  */
-export function computeEditorialLabel(editorialDateStr: string, startTimeIso: string): string {
+export function computeEditorialLabel(editorialDateStr: string, startTimeIso?: string | null): string {
   const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   
   const [year, month, day] = editorialDateStr.split('-').map(Number);
   const dateObj = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
   const dayName = daysOfWeek[dateObj.getUTCDay()] ?? 'Fecha';
 
+  if (!startTimeIso || startTimeIso.trim().length === 0) {
+    return dayName;
+  }
+
   const startDate = new Date(startTimeIso);
-  const hour = startDate.getHours();
+  if (Number.isNaN(startDate.getTime())) {
+    return dayName;
+  }
+
+  // Extraer la hora específicamente en la zona horaria Europe/Madrid
+  const madridHourStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Madrid',
+    hour: 'numeric',
+    hour12: false,
+  }).format(startDate);
+  const hour = Number(madridHourStr === '24' ? 0 : madridHourStr);
 
   if (hour >= 20 || hour < 6) {
     if (dayName === 'Viernes' || dayName === 'Sábado') {

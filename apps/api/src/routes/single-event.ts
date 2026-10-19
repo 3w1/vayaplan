@@ -39,9 +39,13 @@ singleEventRoutes.get('/events/:id', async (c) => {
       e.title,
       e.description,
       e.category,
+      COALESCE(e.time_status, 'confirmed') AS time_status,
       e.start_time,
       e.end_time,
       e.editorial_date,
+      e.end_date,
+      e.schedule_text,
+      e.approximate_schedule,
       e.price_cents,
       e.is_free,
       e.image_url,
@@ -85,11 +89,17 @@ singleEventRoutes.get('/events/:id', async (c) => {
 
   const row = result.rows[0];
 
-  const startTimeIso = new Date(row.start_time).toISOString();
+  const timeStatus = (row.time_status || 'confirmed') as any;
+  const startTimeIso = (row.start_time && timeStatus === 'confirmed')
+    ? new Date(row.start_time).toISOString()
+    : null;
   const endTimeIso = row.end_time ? new Date(row.end_time).toISOString() : null;
   const editorialDateStr = typeof row.editorial_date === 'string'
     ? row.editorial_date
     : new Date(row.editorial_date).toISOString().split('T')[0];
+  const endDateStr = row.end_date
+    ? (typeof row.end_date === 'string' ? row.end_date : new Date(row.end_date).toISOString().split('T')[0])
+    : null;
 
   const mapsUrl = resolveGoogleMapsUrl(
     row.venue_google_maps_url,
@@ -97,15 +107,44 @@ singleEventRoutes.get('/events/:id', async (c) => {
     row.venue_longitude
   );
 
+  let festivalsList: any[] = [];
+  try {
+    const festRes = await query(
+      `SELECT f.id, f.name, f.edition, f.slug, f.official_url
+       FROM event_festivals ef
+       INNER JOIN festivals f ON ef.festival_id = f.id
+       WHERE ef.event_id = $1
+       ORDER BY f.name ASC`,
+      [eventId]
+    );
+    festivalsList = festRes.rows.map((f: any) => ({
+      id: Number(f.id),
+      name: f.name,
+      edition: f.edition || null,
+      slug: f.slug,
+      official_url: f.official_url || null,
+    }));
+  } catch (err: any) {
+    console.error(`[GET /events/${eventId}] Error al consultar relaciones event_festivals:`, {
+      message: err?.message,
+      code: err?.code,
+      eventId,
+    });
+  }
+
   const event: PublicEventItem = {
     id: Number(row.id),
     title: row.title,
     description: row.description || null,
     category: row.category,
+    time_status: timeStatus,
     start_time: startTimeIso,
     end_time: endTimeIso,
     editorial_date: editorialDateStr,
     editorial_label: computeEditorialLabel(editorialDateStr, startTimeIso),
+    end_date: endDateStr,
+    schedule_text: row.schedule_text || null,
+    approximate_schedule: row.approximate_schedule || null,
     price: {
       amount_cents: Number(row.price_cents),
       is_free: Boolean(row.is_free),
@@ -139,6 +178,8 @@ singleEventRoutes.get('/events/:id', async (c) => {
           status: row.promotion_status,
         }
       : null,
+    festival: festivalsList[0] || null,
+    festivals: festivalsList.length > 0 ? festivalsList : undefined,
   };
 
   const response: SingleEventResponseContract = {

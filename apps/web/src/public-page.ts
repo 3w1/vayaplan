@@ -871,6 +871,75 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       gap: 0.5rem;
     }
 
+    .badge-status-pending {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: #EFF6FF;
+      color: #1D4ED8;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-pill);
+      font-size: 0.6875rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+    }
+
+    .card-time-pending {
+      color: #2563EB;
+      font-weight: 700;
+    }
+
+    .card-time-exhibition {
+      color: var(--color-primary);
+      font-weight: 700;
+    }
+
+    .event-pending-notice {
+      background: #EFF6FF;
+      color: #1E40AF;
+      border: 1px solid #BFDBFE;
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .event-festival-banner {
+      background: var(--color-primary-soft, #F0EBFF);
+      border: 1px solid var(--color-primary-light, #9D7BFF);
+      border-radius: var(--radius-md, 8px);
+      padding: 0.75rem 1rem;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .festival-banner-tag {
+      font-size: 0.6875rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-primary);
+      margin-bottom: 0.2rem;
+    }
+
+    .festival-banner-name {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--color-night);
+    }
+
+    .festival-banner-desc {
+      font-size: 0.8125rem;
+      color: var(--color-text-muted);
+      margin-top: 0.35rem;
+      line-height: 1.4;
+    }
+
     .recurrence-badge {
       display: inline-flex;
       align-items: center;
@@ -1871,18 +1940,53 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         teatro: 'Teatro',
         exposicion: 'Exposición',
         cultura: 'Cultura',
+        baloncesto: 'Baloncesto',
+        futbol: 'Fútbol',
+        rugby: 'Rugby',
+        conferencia: 'Charla o conferencia',
       };
       return labels[category] || category || 'Plan';
     }
 
-    function formatPromotedHeroDateTime(isoString) {
-      if (!isoString) return '';
+    function formatPromotedHeroDateTime(evOrIso) {
+      if (!evOrIso) return '';
+      if (typeof evOrIso === 'object') {
+        const ev = evOrIso;
+        if (ev.time_status === 'pending_time' || !ev.start_time) {
+          if (ev.editorial_date) {
+            const parts = ev.editorial_date.split('-').map(Number);
+            const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
+            const weekday = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, weekday: 'long' }).toUpperCase();
+            const day = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, day: 'numeric' });
+            const month = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, month: 'short' }).replace('.', '').toUpperCase();
+            return \`\${weekday} \${day} \${month} · HORARIO POR CONFIRMAR\`;
+          }
+          return 'HORARIO POR CONFIRMAR';
+        }
+        if (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date) {
+          return 'EXPOSICIÓN EN CURSO';
+        }
+        return formatPromotedHeroDateTime(ev.start_time);
+      }
+      const isoString = evOrIso;
       const date = new Date(isoString);
+      if (Number.isNaN(date.getTime())) return '';
       const weekday = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, weekday: 'long' }).toUpperCase();
       const day = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, day: 'numeric' });
       const month = date.toLocaleDateString('es-ES', { timeZone: CITY_TIMEZONE, month: 'short' }).replace('.', '').toUpperCase();
       const time = formatTime(isoString);
       return \`\${weekday} \${day} \${month} · \${time}\`;
+    }
+
+    function renderCardTimeHtml(ev) {
+      if (ev.time_status === 'continuous' || (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date)) {
+        return '<span class="card-time card-time-exhibition">🏛️ Exposición en curso</span>';
+      }
+      if (ev.time_status === 'pending_time' || (!ev.start_time && ev.time_status !== 'continuous')) {
+        return '<span class="card-time card-time-pending">⏳ Horario por confirmar</span>';
+      }
+      const realDateTime = formatEventRealDateTime(ev.start_time);
+      return \`<span class="card-time">⏰ \${formatTime(ev.start_time)}\${realDateTime.isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>\`;
     }
 
     function cleanupCarousel() {
@@ -2005,7 +2109,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           <div class="promoted-carousel-track" id="promoted-track" role="group" aria-label="Carril de eventos destacados">
             \${promotedEvents.map((ev) => {
               const hasImage = Boolean(ev.image_url);
-              const dt = formatPromotedHeroDateTime(ev.start_time);
+              const dt = formatPromotedHeroDateTime(ev);
               return \`
                 <button type="button" class="promoted-hero-card \${!hasImage ? 'no-image' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="Evento destacado: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}, \${escapeHtml(dt)}">
                   <div class="hero-media-box">
@@ -2499,7 +2603,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                 <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
               </div>
               <div class="card-bottom-row">
-                <span class="card-time">⏰ \${formatTime(ev.start_time)}\${formatEventRealDateTime(ev.start_time).isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>
+                \${renderCardTimeHtml(ev)}
                 <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
               </div>
             </div>
@@ -2627,7 +2731,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                   <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
                 </div>
                 <div class="card-bottom-row">
-                  <span class="card-time">⏰ \${formatTime(ev.start_time)}\${formatEventRealDateTime(ev.start_time).isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>
+                  \${renderCardTimeHtml(ev)}
                   <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
                 </div>
               </div>
@@ -2725,6 +2829,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         tardeo: 'Tardeo',
         cine: 'Cine',
         cultura: 'Cultura',
+        teatro: 'Teatro',
+        exposicion: 'Exposiciones',
+        deporte: 'Deporte',
+        baloncesto: 'Baloncesto',
+        futbol: 'Fútbol',
+        rugby: 'Rugby',
+        conferencia: 'Charlas y conferencias',
       };
       return t[cat] || 'Planes';
     }
@@ -2732,7 +2843,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     // ==============================================================================
     // Ficha Modal de Evento Individual y Estados Temporales
     // ==============================================================================
-    function computeTemporalState(startTimeIso, endTimeIso) {
+    function computeTemporalState(startTimeIso, endTimeIso, timeStatus) {
+      if (timeStatus === 'pending_time' || !startTimeIso) {
+        return { type: 'pending_time', label: 'Horario por confirmar' };
+      }
       const now = new Date();
       const start = new Date(startTimeIso);
       const end = endTimeIso ? new Date(endTimeIso) : null;
@@ -2750,8 +2864,12 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     function renderEventDetail(ev, sheet) {
       const promoId = ev.promotion ? ev.promotion.id : null;
       const isCancelled = ev.status === 'cancelled';
+      const isExhibition = ev.time_status === 'continuous' || Boolean(ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date);
+      const isPendingTime = !isExhibition && (ev.time_status === 'pending_time' || (!ev.start_time && ev.time_status !== 'continuous'));
       const realDateTime = formatEventRealDateTime(ev.start_time);
-      const temporal = computeTemporalState(ev.start_time, ev.end_time);
+      const temporal = computeTemporalState(ev.start_time, ev.end_time, ev.time_status);
+
+      const officialLink = (ev.actions && (ev.actions.tickets_url || ev.actions.booking_url)) || (ev.festival && ev.festival.official_url) || null;
 
       let priceLabel = ev.price.label;
       if (ev.price.amount_cents === 0 || ev.price.is_free) {
@@ -2792,8 +2910,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             <div class="modal-status-badges">
               \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (
                 (ev.promotion ? '<span class="badge-destacado">Destacado</span>' : '') +
-                (temporal.type === 'in_progress' ? '<span class="badge-status-live"><span style="width:7px;height:7px;border-radius:50%;background:#D97706;display:inline-block;"></span>En curso</span>' : '') +
-                (temporal.type === 'finished' ? '<span class="badge-status-finished">Finalizado</span>' : '')
+                (isPendingTime ? '<span class="badge-status-pending">⏳ Horario por confirmar</span>' : (
+                  (temporal.type === 'in_progress' ? '<span class="badge-status-live"><span style="width:7px;height:7px;border-radius:50%;background:#D97706;display:inline-block;"></span>En curso</span>' : '') +
+                  (temporal.type === 'finished' ? '<span class="badge-status-finished">Finalizado</span>' : '')
+                ))
               )}
             </div>
 
@@ -2805,22 +2925,41 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
           \${isCancelled ? \`
             <div class="cancelled-banner">
-              <svg style="width:20px;height:20px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+              <svg style="width:20px;height:20px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
               <span>Este evento ha sido cancelado por la organización.</span>
             </div>
           \` : (
-            temporal.type === 'finished' ? \`
-              <div class="event-temporal-notice">
+            isPendingTime ? \`
+              <div class="event-pending-notice" role="status">
                 <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-                <span>Este evento ya ha finalizado.</span>
+                <div class="event-pending-text-wrap">
+                  <div>Horario pendiente de confirmación. Consulta esta ficha para comprobar si se ha publicado la hora definitiva.</div>
+                  \${officialLink ? \`
+                    <div style="margin-top:6px;">
+                      <a href="\${escapeHtml(officialLink)}" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary);font-weight:600;text-decoration:underline;display:inline-flex;align-items:center;gap:4px;">
+                        <span>Consulta horarios y condiciones en la web oficial</span>
+                        <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3m-2 16H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7z"/></svg>
+                      </a>
+                    </div>
+                  \` : \`
+                    <div style="margin-top:4px;font-size:0.85em;color:var(--color-text-muted);">Información oficial web no disponible en este momento.</div>
+                  \`}
+                </div>
               </div>
             \` : (
-              temporal.type === 'started_no_end' ? \`
+              temporal.type === 'finished' ? \`
                 <div class="event-temporal-notice">
                   <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
-                  <span>Este evento comenzó el \${escapeHtml(realDateTime.dateText)} a las \${formatTime(ev.start_time)} h.</span>
+                  <span>Este evento ya ha finalizado.</span>
                 </div>
-              \` : ''
+              \` : (
+                temporal.type === 'started_no_end' ? \`
+                  <div class="event-temporal-notice">
+                    <svg style="width:18px;height:18px;fill:currentColor;flex-shrink:0" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                    <span>Este evento comenzó el \${escapeHtml(realDateTime.dateText)} a las \${formatTime(ev.start_time)} h.</span>
+                  </div>
+                \` : ''
+              )
             )
           )}
 
@@ -2831,12 +2970,30 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                 <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
               </div>
               <div class="when-where-content">
-                <div class="when-date-text">
-                  \${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}
-                </div>
-                <div class="when-time-text">
-                  \${formatTime(ev.start_time)} h\${ev.end_time ? ' - ' + formatTime(ev.end_time) + ' h' : ''}
-                </div>
+                \${isExhibition ? \`
+                  <div class="when-date-text">
+                    \${ev.end_date ? 'Del ' + formatDateSpanish(ev.editorial_date) + ' al ' + formatDateSpanish(ev.end_date) : 'Desde el ' + formatDateSpanish(ev.editorial_date)}
+                  </div>
+                  <div class="when-time-text">
+                    \${ev.schedule_text ? 'Horario de visita: ' + escapeHtml(ev.schedule_text) : 'Horario de visita no informado'}\${officialLink ? \` &middot; <a href="\${escapeHtml(officialLink)}" target="_blank" rel="noopener noreferrer" style="color:var(--color-primary);text-decoration:underline;">Web oficial</a>\` : ''}
+                  </div>
+                \` : (
+                  isPendingTime ? \`
+                    <div class="when-date-text">
+                      \${escapeHtml(realDateTime.dateText || formatDateSpanish(ev.editorial_date))}
+                    </div>
+                    <div class="when-time-text">
+                      ⏳ Horario por confirmar\${ev.approximate_schedule ? ' (' + escapeHtml(ev.approximate_schedule) + ')' : ''}
+                    </div>
+                  \` : \`
+                    <div class="when-date-text">
+                      \${escapeHtml(realDateTime.dateText)}\${realDateTime.isMadrugada ? ' <span class="madrugada-tag">Madrugada</span>' : ''}
+                    </div>
+                    <div class="when-time-text">
+                      \${formatTime(ev.start_time)} h\${ev.end_time ? ' - ' + formatTime(ev.end_time) + ' h' : ''}
+                    </div>
+                  \`
+                )}
               </div>
             </div>
 
@@ -2851,6 +3008,20 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
               </div>
             </div>
           </div>
+
+          <!-- Festival / Ciclo si pertenece a uno o varios -->
+          \${(ev.festivals && ev.festivals.length > 0) ? \`
+            <div class="event-festival-banner">
+              <div class="festival-banner-tag">\${ev.festivals.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo'}</div>
+              <div class="festival-banner-name">Forma parte de \${ev.festivals.map((f) => \`<a href="/festivals/\${encodeURIComponent(f.slug)}" style="color:var(--color-primary);text-decoration:underline;"><strong>\${escapeHtml(f.name)}</strong></a>\`).join(' · ')}</div>
+            </div>
+          \` : (ev.festival ? \`
+            <div class="event-festival-banner">
+              <div class="festival-banner-tag">Festival / Ciclo</div>
+              <div class="festival-banner-name">Forma parte de <a href="/festivals/\${encodeURIComponent(ev.festival.slug)}" style="color:var(--color-primary);text-decoration:underline;"><strong>\${escapeHtml(ev.festival.name)}</strong></a></div>
+              \${ev.festival.description ? \`<div class="festival-banner-desc">\${escapeHtml(ev.festival.description)}</div>\` : ''}
+            </div>
+          \` : '')}
 
           <!-- Bloque de Entradas si tickets_url está disponible -->
           \${(!isCancelled && ev.actions.tickets_url) ? \`

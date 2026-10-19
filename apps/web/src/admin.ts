@@ -2565,7 +2565,11 @@ export function renderAdminHtml(): string {
                 <option value="cine">Cine (proyecciones, cineclub, estrenos)</option>
                 <option value="teatro">Teatro & Artes escénicas</option>
                 <option value="exposicion">Exposición & Arte</option>
-                <option value="cultura">Cultura & Divulgación (charlas, talleres, catas)</option>
+                <option value="cultura">Cultura & Divulgación (talleres, catas, conferencias)</option>
+                <option value="baloncesto">🏀 Baloncesto (competiciones y partidos)</option>
+                <option value="futbol">⚽ Fútbol (competiciones y partidos)</option>
+                <option value="rugby">🏉 Rugby (competiciones y partidos)</option>
+                <option value="conferencia">🗣️ Charla & Conferencia</option>
               </select>
             </div>
           </section>
@@ -2607,17 +2611,40 @@ export function renderAdminHtml(): string {
             </div>
           </section>
 
-          <!-- SECCIÓN C: FECHA Y HORA -->
+          <!-- SECCIÓN C: FECHA Y HORA (CONTRATO TEMPORAL EUROPE/MADRID) -->
           <section class="sec-schedule event-field-card" aria-labelledby="sec-schedule-title">
             <div class="event-field-header">
-              <span id="sec-schedule-title" class="event-section-label">⏰ Horario y Jornada</span>
+              <span id="sec-schedule-title" class="event-section-label">⏰ Horario y Modalidad Temporal</span>
               <span style="font-size:0.75rem; color:var(--text-dim); background:var(--bg-subtle); border:1px solid var(--border); padding:0.15rem 0.5rem; border-radius:9999px;">🌐 Europe/Madrid</span>
             </div>
 
+            <!-- Modalidad temporal -->
             <div class="form-group">
-              <label for="ev-start-time" style="font-weight:700; color:var(--text-main);">Fecha y hora de inicio *</label>
-              <input type="datetime-local" id="ev-start-time" class="event-input event-input-large" required oninput="onEvStartTimeChange()">
-              <small style="font-size:0.75rem; color:var(--text-muted);">Hora local oficial en Palencia</small>
+              <label for="ev-time-status" style="font-weight:700; color:var(--text-main);">Modalidad temporal del evento *</label>
+              <select id="ev-time-status" class="event-select" onchange="onTimeStatusChange(this.value)">
+                <option value="confirmed">⏰ Fecha y hora confirmadas (Inicio puntual)</option>
+                <option value="pending_time">⏳ Fecha confirmada, hora pendiente (Por confirmar)</option>
+                <option value="continuous">🏛️ Periodo continuado / Exposición (Sin hora puntual)</option>
+                <option value="tentative_date">📅 Fecha orientativa / Borrador preliminar</option>
+              </select>
+              <small id="ev-time-status-hint" style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:0.25rem;">
+                Determina cómo se procesa y publica la actividad en la agenda de Palencia.
+              </small>
+            </div>
+
+            <!-- Fecha exacta o de inicio -->
+            <div class="form-group" id="ev-date-group">
+              <label for="ev-date-local" style="font-weight:700; color:var(--text-main);" id="lbl-date-local">Fecha del evento *</label>
+              <input type="date" id="ev-date-local" class="event-input event-input-large" required oninput="onEvDateChange()">
+              <small id="hint-date-local" style="font-size:0.75rem; color:var(--text-muted);">Día en que se celebra (o inicio de la exposición).</small>
+            </div>
+
+            <!-- Hora puntual en Palencia (Europe/Madrid) -->
+            <div class="form-group" id="ev-time-group">
+              <label for="ev-time-local" style="font-weight:700; color:var(--text-main);">Hora de inicio (Europe/Madrid) *</label>
+              <input type="time" id="ev-time-local" class="event-input" oninput="onEvTimeChange()">
+              <input type="hidden" id="ev-start-time">
+              <small style="font-size:0.75rem; color:var(--text-muted);">Hora local oficial en Palencia (formato HH:MM, ej. 20:30).</small>
             </div>
 
             <!-- Resumen humano de jornada editorial -->
@@ -2626,7 +2653,7 @@ export function renderAdminHtml(): string {
             </div>
 
             <!-- Botón / Sección desplegable de finalización -->
-            <div>
+            <div id="ev-end-time-wrapper">
               <button type="button" id="btn-toggle-end-time" class="btn-sm btn-secondary" onclick="toggleEndTime()" style="display:inline-flex; align-items:center; gap:0.4rem;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 Añadir hora de finalización (opcional)
@@ -2639,6 +2666,82 @@ export function renderAdminHtml(): string {
                 </div>
                 <input type="datetime-local" id="ev-end-time" class="event-input" oninput="onEvEndTimeChange()">
                 <small style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:0.25rem;">Admite eventos que finalizan de madrugada o al día siguiente.</small>
+              </div>
+            </div>
+
+            <!-- Campos específicos para exposiciones continuas -->
+            <div id="ev-continuous-fields" style="display:none; margin-top:0.75rem; padding:0.85rem; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+              <div style="font-weight:700; font-size:0.8125rem; color:var(--text-main); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.4rem;">
+                <span>🏛️</span> Configuración de Exposición / Periodo
+              </div>
+              <div class="form-group" style="margin-bottom:0.6rem;">
+                <label for="ev-end-date" style="font-weight:700; font-size:0.8125rem; color:var(--text-main);">Fecha final de periodo (Obligatoria para publicar)</label>
+                <input type="date" id="ev-end-date" class="event-input" oninput="markFormDirty()">
+                <small style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:0.25rem;">
+                  Último día de visita. Si aún no se conoce la fecha de clausura, el evento debe conservarse como borrador (tentative).
+                </small>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label for="ev-schedule-text" style="font-weight:700; font-size:0.8125rem; color:var(--text-main);">Horario de visita publicado (Texto)</label>
+                <input type="text" id="ev-schedule-text" class="event-input" placeholder="Ej: L-V 10:00-14:00 y 17:00-20:00, Sábados 10:00-14:00" oninput="markFormDirty()">
+                <small style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:0.25rem;">
+                  Horario de apertura de la sala que se mostrará en la ficha para guiar al visitante.
+                </small>
+              </div>
+            </div>
+
+            <!-- Campos para hora pendiente / orientativa -->
+            <div id="ev-pending-fields" style="display:none; margin-top:0.75rem; padding:0.85rem; background:#fffbeb; border:1px solid var(--amber-border); border-radius:8px;">
+              <div style="font-weight:700; font-size:0.8125rem; color:var(--amber-text); margin-bottom:0.4rem; display:flex; align-items:center; gap:0.4rem;">
+                <span>⏳</span> Nota orientativa de horario o jornada
+              </div>
+              <input type="text" id="ev-approximate-schedule" class="event-input" placeholder="Ej: Jornada 8 - Pendiente de confirmación por la federación" oninput="markFormDirty()">
+              <small style="font-size:0.72rem; color:var(--text-muted); display:block; margin-top:0.25rem;">
+                Aviso explicativo para el público. No inventa una hora puntual; indica el estado real de la convocatoria.
+              </small>
+            </div>
+          </section>
+
+          <!-- SECCIÓN FESTIVALES Y PROGRAMAS MARCO (N:M) -->
+          <section class="sec-festivals event-field-card" aria-labelledby="sec-festivals-title">
+            <div class="event-field-header">
+              <span id="sec-festivals-title" class="event-section-label">🎪 Festivales y Ciclos Temáticos (N:M)</span>
+              <button type="button" class="btn-sm btn-link" style="color:var(--primary); font-weight:700; cursor:pointer;" onclick="toggleNewFestivalForm()">+ Nuevo programa</button>
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.5rem;">
+              Asocia esta actividad a uno o varios programas marco o festivales (p. ej. XIII Jazz Palencia Festival, Otoño Cultural 2026) sin duplicar el evento.
+            </div>
+            
+            <div id="ev-festivals-checkbox-list" style="display:flex; flex-direction:column; gap:0.4rem; max-height:160px; overflow-y:auto; padding:0.5rem; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+              <div style="font-size:0.75rem; color:var(--text-dim); text-align:center; padding:0.5rem;">Cargando programas...</div>
+            </div>
+
+            <!-- Mini-formulario para alta inline de programas marco -->
+            <div id="new-festival-form" style="display:none; margin-top:0.6rem; padding:0.75rem; background:#ffffff; border:1px dashed var(--primary); border-radius:8px;">
+              <div style="font-weight:700; font-size:0.8125rem; color:var(--primary); margin-bottom:0.5rem;">Crear nuevo programa marco o festival</div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.5rem;">
+                <div>
+                  <label style="font-size:0.7rem; font-weight:700; display:block;">Nombre del festival *</label>
+                  <input type="text" id="new-fest-name" class="event-input" placeholder="Ej: XIII Jazz Palencia Festival" style="font-size:0.8rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.7rem; font-weight:700; display:block;">Edición</label>
+                  <input type="text" id="new-fest-edition" class="event-input" placeholder="Ej: 13ª edición" style="font-size:0.8rem;">
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.5rem;">
+                <div>
+                  <label style="font-size:0.7rem; font-weight:700; display:block;">Fecha de inicio *</label>
+                  <input type="date" id="new-fest-start" class="event-input" style="font-size:0.8rem;">
+                </div>
+                <div>
+                  <label style="font-size:0.7rem; font-weight:700; display:block;">Fecha de fin *</label>
+                  <input type="date" id="new-fest-end" class="event-input" style="font-size:0.8rem;">
+                </div>
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:0.4rem;">
+                <button type="button" class="btn-sm btn-secondary" onclick="toggleNewFestivalForm(false)">Cancelar</button>
+                <button type="button" class="btn-sm btn-primary" onclick="submitCreateFestivalInline()">Guardar y seleccionar</button>
               </div>
             </div>
           </section>
@@ -2693,6 +2796,17 @@ export function renderAdminHtml(): string {
             <div id="ev-image-manual-wrap" style="display:none; margin-top:0.35rem;">
               <input type="url" id="ev-image-url-manual" class="event-input" placeholder="https://ejemplo.com/cartel.jpg" oninput="handleManualImageUrl(this.value)" style="font-size:0.85rem;">
             </div>
+
+            <!-- Aviso informativo de imagen de origen -->
+            <div id="ev-source-image-notice" style="display:none; margin-top:0.6rem; padding:0.65rem 0.85rem; background:#fffbeb; border:1px solid var(--amber-border); border-radius:8px;">
+              <div style="display:flex; align-items:flex-start; gap:0.5rem;">
+                <span style="font-size:1.1rem;">⚠️</span>
+                <div style="font-size:0.75rem; color:var(--amber-text); line-height:1.4;">
+                  <strong>Imagen de origen detectada:</strong> La fuente oficial incluye una imagen (<a id="ev-source-image-link" href="#" target="_blank" rel="noopener noreferrer" style="color:var(--primary); font-weight:700; text-decoration:underline;">Ver imagen original de origen ↗</a>).
+                  <br>Por política estricta de derechos, <em>no se publica automáticamente ni se usa en og:image</em>. La agenda pública mostrará el cartel de categoría por defecto salvo que subas un cartel con derechos expresamente autorizados.
+                </div>
+              </div>
+            </div>
           </section>
 
           <!-- SECCIÓN E: DETALLES -->
@@ -2738,13 +2852,24 @@ export function renderAdminHtml(): string {
           <!-- SECCIÓN F: FUENTE -->
           <section class="sec-source event-field-card" aria-labelledby="sec-source-title">
             <div class="event-field-header">
-              <span id="sec-source-title" class="event-section-label">🔗 Fuente del evento</span>
+              <span id="sec-source-title" class="event-section-label">🔗 Fuente y Procedencia</span>
+            </div>
+
+            <!-- Badge de procedencia -->
+            <div id="ev-source-provenance-box" style="display:none; margin-bottom:0.75rem; padding:0.6rem 0.75rem; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+                <div style="display:flex; align-items:center; gap:0.4rem;">
+                  <span style="font-size:1.1rem;">🏛️</span>
+                  <span id="ev-source-type-badge" style="font-size:0.75rem; font-weight:700; color:#0369a1;">Origen: Manual</span>
+                </div>
+                <a id="ev-source-provenance-link" href="#" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem; color:#0284c7; font-weight:700; text-decoration:underline;">Abrir fuente oficial ↗</a>
+              </div>
             </div>
 
             <div class="form-group">
-              <label for="ev-source-url" style="font-weight:700; color:var(--text-main);">Fuente del evento</label>
-              <input type="url" id="ev-source-url" class="event-input" placeholder="https://instagram.com/p/... o página oficial" oninput="markFormDirty()">
-              <small style="font-size:0.75rem; color:var(--text-muted);">Enlace a la publicación original, cartelera o página oficial.</small>
+              <label for="ev-source-url" style="font-weight:700; color:var(--text-main);">URL de la fuente oficial o publicación</label>
+              <input type="url" id="ev-source-url" class="event-input" placeholder="https://instagram.com/p/... o página oficial de federación/teatro" oninput="markFormDirty()">
+              <small style="font-size:0.75rem; color:var(--text-muted);">Enlace a la publicación original, cartelera oficial, acta federativa o programación cultural.</small>
             </div>
           </section>
 
@@ -3480,6 +3605,10 @@ export function renderAdminHtml(): string {
         'teatro': 'Teatro',
         'exposicion': 'Exposición',
         'cultura': 'Cultura',
+        'baloncesto': 'Baloncesto',
+        'futbol': 'Fútbol',
+        'rugby': 'Rugby',
+        'conferencia': 'Conferencia',
       };
       return map[cat] || cat;
     }
@@ -3849,14 +3978,29 @@ export function renderAdminHtml(): string {
 
               <div class="card-meta-top">
                 <span class="badge-category">\${formatCategory(e.category)}</span>
+                \${e.time_status === 'pending_time' ? '<span class="badge-tag" style="background:#fef3c7; color:#92400e; font-size:0.7rem;">⏳ Hora pdte</span>' : ''}
+                \${e.time_status === 'continuous' ? '<span class="badge-tag" style="background:#ede9fe; color:#6d28d9; font-size:0.7rem;">🏛️ Exposición</span>' : ''}
+                \${e.time_status === 'tentative_date' ? '<span class="badge-tag" style="background:#f1f5f9; color:#475569; font-size:0.7rem;">📅 Borrador</span>' : ''}
                 <span class="card-price">\${e.is_free ? 'Gratis' : ((e.price_cents || 0)/100).toFixed(2).replace('.', ',') + ' €'}</span>
               </div>
 
               <h3 class="card-title">\${escapeHtml(e.title)}</h3>
 
+              \${e.festivals && e.festivals.length > 0 ? \`
+                <div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-bottom:0.45rem;">
+                  \${e.festivals.map(f => \`<span style="font-size:0.7rem; font-weight:700; background:#dbeafe; color:#1e40af; padding:0.15rem 0.45rem; border-radius:4px;">🎪 \${escapeHtml(f.name)}</span>\`).join('')}
+                </div>
+              \` : ''}
+
               <div class="card-timing">
                 <span class="card-timing-item">📅 <strong>\${e.editorial_date}</strong></span>
-                <span class="card-timing-item">⏰ <strong style="color:var(--primary);">\${formatMadridTime(e.start_time)}</strong></span>
+                \${e.time_status === 'pending_time' ? \`
+                  <span class="card-timing-item" style="color:#d97706; font-weight:700;">⏳ Hora pendiente</span>
+                \` : e.time_status === 'continuous' ? \`
+                  <span class="card-timing-item" style="color:#7c3aed; font-weight:700;">🏛️ Hasta \${e.end_date || '—'}</span>
+                \` : \`
+                  <span class="card-timing-item">⏰ <strong style="color:var(--primary);">\${formatMadridTime(e.start_time)}</strong></span>
+                \`}
                 \${e.source_url ? \`
                   <a href="\${escapeHtml(e.source_url)}" target="_blank" rel="noopener" class="card-timing-item" style="color:var(--primary); font-weight:600; text-decoration:none;">🔗 Fuente ↗</a>
                 \` : \`
@@ -3960,8 +4104,12 @@ export function renderAdminHtml(): string {
                 <td>\${statusBadge}</td>
                 <td>
                   <div style="font-weight:700; font-size:0.9375rem; color:var(--text-main); line-height:1.35;">\${escapeHtml(e.title)}</div>
-                  <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem;">
+                  <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.3rem; flex-wrap:wrap;">
                     <span class="badge-tag">\${formatCategory(e.category)}</span>
+                    \${e.time_status === 'pending_time' ? '<span class="badge-tag" style="background:#fef3c7; color:#92400e;">⏳ Hora pdte</span>' : ''}
+                    \${e.time_status === 'continuous' ? '<span class="badge-tag" style="background:#ede9fe; color:#6d28d9;">🏛️ Exposición</span>' : ''}
+                    \${e.time_status === 'tentative_date' ? '<span class="badge-tag" style="background:#f1f5f9; color:#475569;">📅 Borrador fecha</span>' : ''}
+                    \${e.festivals && e.festivals.length > 0 ? e.festivals.map(f => \`<span class="badge-tag" style="background:#dbeafe; color:#1e40af;">🎪 \${escapeHtml(f.name)}</span>\`).join('') : ''}
                   </div>
                   \${isUnassigned ? \`
                     <div style="margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
@@ -3994,7 +4142,15 @@ export function renderAdminHtml(): string {
                 </td>
                 <td>
                   <div>📅 <strong>\${e.editorial_date}</strong></div>
-                  <div style="margin-top:0.25rem; font-size:0.8125rem;">⏰ <strong style="color:var(--primary); font-size:0.875rem;">\${formatMadridTime(e.start_time)}</strong> <span style="font-size:0.6875rem; color:var(--text-dim);">(Madrid)</span></div>
+                  \${e.time_status === 'pending_time' ? \`
+                    <div style="margin-top:0.25rem; font-size:0.8125rem; color:#d97706; font-weight:700;">⏳ Hora pendiente</div>
+                    \${e.approximate_schedule ? \`<div style="font-size:0.7rem; color:var(--text-muted);">\${escapeHtml(e.approximate_schedule)}</div>\` : ''}
+                  \` : e.time_status === 'continuous' ? \`
+                    <div style="margin-top:0.25rem; font-size:0.8125rem; color:#7c3aed; font-weight:700;">🏛️ Hasta \${e.end_date || '—'}</div>
+                    \${e.schedule_text ? \`<div style="font-size:0.7rem; color:var(--text-muted);">\${escapeHtml(e.schedule_text)}</div>\` : ''}
+                  \` : \`
+                    <div style="margin-top:0.25rem; font-size:0.8125rem;">⏰ <strong style="color:var(--primary); font-size:0.875rem;">\${formatMadridTime(e.start_time)}</strong> <span style="font-size:0.6875rem; color:var(--text-dim);">(Madrid)</span></div>
+                  \`}
                 </td>
                 <td>
                   <strong style="font-size:0.875rem; color:var(--text-main);">\${e.is_free ? '<span style="color:var(--emerald);">Gratis</span>' : ((e.price_cents || 0) / 100).toFixed(2).replace('.', ',') + ' €'}</strong>
@@ -4039,6 +4195,10 @@ export function renderAdminHtml(): string {
                   <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                     \${statusBadge}
                     <span class="badge-tag">\${formatCategory(e.category)}</span>
+                    \${e.time_status === 'pending_time' ? '<span class="badge-tag" style="background:#fef3c7; color:#92400e; font-size:0.7rem;">⏳ Hora pdte</span>' : ''}
+                    \${e.time_status === 'continuous' ? '<span class="badge-tag" style="background:#ede9fe; color:#6d28d9; font-size:0.7rem;">🏛️ Exposición</span>' : ''}
+                    \${e.time_status === 'tentative_date' ? '<span class="badge-tag" style="background:#f1f5f9; color:#475569; font-size:0.7rem;">📅 Borrador</span>' : ''}
+                    \${e.festivals && e.festivals.length > 0 ? e.festivals.map(f => \`<span class="badge-tag" style="background:#dbeafe; color:#1e40af; font-size:0.7rem;">🎪 \${escapeHtml(f.name)}</span>\`).join('') : ''}
                     <span style="font-size:0.75rem; font-weight:700; color:var(--text-dim);">#\${e.id}</span>
                   </div>
                   <div style="font-size:0.9375rem; font-weight:800; color:var(--text-main);">
@@ -4083,7 +4243,13 @@ export function renderAdminHtml(): string {
                   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
                     <div>
                       <span>📅 <strong>\${e.editorial_date}</strong></span> •
-                      <span>⏰ <strong style="color:var(--primary);">\${formatMadridTime(e.start_time)}</strong> <span style="font-size:0.6875rem; color:var(--text-dim);">(Madrid)</span></span>
+                      \${e.time_status === 'pending_time' ? \`
+                        <span style="color:#d97706; font-weight:700;">⏳ Hora pendiente</span>
+                      \` : e.time_status === 'continuous' ? \`
+                        <span style="color:#7c3aed; font-weight:700;">🏛️ Hasta \${e.end_date || '—'}</span>
+                      \` : \`
+                        <span>⏰ <strong style="color:var(--primary);">\${formatMadridTime(e.start_time)}</strong> <span style="font-size:0.6875rem; color:var(--text-dim);">(Madrid)</span></span>
+                      \`}
                     </div>
                     <div style="font-size:0.75rem; color:var(--text-muted);">
                       Fuente: <span style="text-transform:capitalize;">\${escapeHtml(e.source_type || 'manual')}</span>
@@ -4482,15 +4648,22 @@ export function renderAdminHtml(): string {
     }
 
     function updateEditorialDateUI() {
-      const startVal = document.getElementById('ev-start-time').value;
+      const timeStatus = document.getElementById('ev-time-status')?.value || 'confirmed';
+      const dateVal = document.getElementById('ev-date-local')?.value || '';
+      const startVal = document.getElementById('ev-start-time')?.value || '';
       const editorialDateInput = document.getElementById('ev-editorial-date');
       const tagManual = document.getElementById('ev-manual-override-tag');
       const btnReset = document.getElementById('btn-reset-editorial-date');
       const summaryText = document.getElementById('ev-editorial-summary-text');
 
       if (!editorialDateManualOverride) {
-        const autoDate = computeEditorialDateFromLocal(startVal);
-        if (autoDate) {
+        let autoDate = '';
+        if (timeStatus === 'confirmed' && startVal) {
+          autoDate = computeEditorialDateFromLocal(startVal);
+        } else if (dateVal) {
+          autoDate = dateVal;
+        }
+        if (autoDate && editorialDateInput) {
           editorialDateInput.value = autoDate;
         }
         if (tagManual) tagManual.style.display = 'none';
@@ -4500,10 +4673,183 @@ export function renderAdminHtml(): string {
         if (btnReset) btnReset.style.display = 'inline-block';
       }
 
-      if (summaryText) {
-        summaryText.innerHTML = escapeHtml(formatHumanEditorialSummary(editorialDateInput.value, startVal));
+      if (summaryText && editorialDateInput) {
+        if (timeStatus === 'pending_time') {
+          summaryText.innerHTML = escapeHtml('Jornada del ' + (editorialDateInput.value || dateVal) + ' • ⏳ Hora pendiente de confirmación');
+        } else if (timeStatus === 'continuous') {
+          const endDateVal = document.getElementById('ev-end-date')?.value || '';
+          summaryText.innerHTML = escapeHtml('Exposición del ' + (editorialDateInput.value || dateVal) + (endDateVal ? ' al ' + endDateVal : ' (fin sin determinar)'));
+        } else if (timeStatus === 'tentative_date') {
+          summaryText.innerHTML = escapeHtml('Fecha orientativa: ' + (editorialDateInput.value || dateVal) + ' • 📅 Borrador preliminar');
+        } else {
+          summaryText.innerHTML = escapeHtml(formatHumanEditorialSummary(editorialDateInput.value, startVal));
+        }
       }
     }
+
+    window.onTimeStatusChange = function(status) {
+      markFormDirty();
+      clearFormError();
+
+      const timeGroup = document.getElementById('ev-time-group');
+      const endTimeWrapper = document.getElementById('ev-end-time-wrapper');
+      const continuousFields = document.getElementById('ev-continuous-fields');
+      const pendingFields = document.getElementById('ev-pending-fields');
+      const lblDate = document.getElementById('lbl-date-local');
+      const hintStatus = document.getElementById('ev-time-status-hint');
+
+      if (status === 'confirmed') {
+        if (timeGroup) timeGroup.style.display = 'block';
+        if (endTimeWrapper) endTimeWrapper.style.display = 'block';
+        if (continuousFields) continuousFields.style.display = 'none';
+        if (pendingFields) pendingFields.style.display = 'none';
+        if (lblDate) lblDate.textContent = 'Fecha del evento *';
+        if (hintStatus) hintStatus.textContent = '⏰ Fecha y hora confirmadas. Exige hora puntual.';
+      } else if (status === 'pending_time') {
+        if (timeGroup) timeGroup.style.display = 'none';
+        if (endTimeWrapper) endTimeWrapper.style.display = 'none';
+        if (continuousFields) continuousFields.style.display = 'none';
+        if (pendingFields) pendingFields.style.display = 'block';
+        if (lblDate) lblDate.textContent = 'Fecha del evento *';
+        if (hintStatus) hintStatus.textContent = '⏳ Fecha confirmada pero hora aún por fijar (ej. partido pendiente de televisión o programación provisional).';
+      } else if (status === 'continuous') {
+        if (timeGroup) timeGroup.style.display = 'none';
+        if (endTimeWrapper) endTimeWrapper.style.display = 'none';
+        if (continuousFields) continuousFields.style.display = 'block';
+        if (pendingFields) pendingFields.style.display = 'none';
+        if (lblDate) lblDate.textContent = 'Fecha de inicio del periodo *';
+        if (hintStatus) hintStatus.textContent = '🏛️ Periodo continuado / Exposición sin hora puntual. Exige fecha final para publicar.';
+      } else if (status === 'tentative_date') {
+        if (timeGroup) timeGroup.style.display = 'none';
+        if (endTimeWrapper) endTimeWrapper.style.display = 'none';
+        if (continuousFields) continuousFields.style.display = 'none';
+        if (pendingFields) pendingFields.style.display = 'block';
+        if (lblDate) lblDate.textContent = 'Fecha orientativa preliminar *';
+        if (hintStatus) hintStatus.textContent = '📅 Fecha tentativa o jornada orientativa. No puede publicarse como confirmada (debe permanecer en borrador).';
+      }
+
+      onEvDateChange();
+    };
+
+    window.onEvDateChange = function() {
+      markFormDirty();
+      clearFormError();
+      const dateVal = document.getElementById('ev-date-local')?.value || '';
+      const timeVal = document.getElementById('ev-time-local')?.value || '20:00';
+      const status = document.getElementById('ev-time-status')?.value || 'confirmed';
+
+      if (status === 'confirmed') {
+        document.getElementById('ev-start-time').value = dateVal ? (dateVal + 'T' + timeVal) : '';
+      } else {
+        document.getElementById('ev-start-time').value = '';
+      }
+      updateEditorialDateUI();
+    };
+
+    window.onEvTimeChange = function() {
+      markFormDirty();
+      clearFormError();
+      const dateVal = document.getElementById('ev-date-local')?.value || '';
+      const timeVal = document.getElementById('ev-time-local')?.value || '';
+      if (dateVal && timeVal) {
+        document.getElementById('ev-start-time').value = dateVal + 'T' + timeVal;
+      }
+      updateEditorialDateUI();
+    };
+
+    let adminFestivalsCache = [];
+
+    window.loadAdminFestivals = async function(selectedIds = []) {
+      const container = document.getElementById('ev-festivals-checkbox-list');
+      if (!container) return;
+      try {
+        const res = await apiFetch('/api/v1/admin/festivals');
+        const data = await res.json();
+        adminFestivalsCache = data.festivals || [];
+        renderFestivalsCheckboxList(selectedIds);
+      } catch (err) {
+        container.innerHTML = '<div style="font-size:0.75rem; color:var(--red); padding:0.5rem;">Error al cargar festivales.</div>';
+      }
+    };
+
+    function renderFestivalsCheckboxList(selectedIds = []) {
+      const container = document.getElementById('ev-festivals-checkbox-list');
+      if (!container) return;
+      if (adminFestivalsCache.length === 0) {
+        container.innerHTML = '<div style="font-size:0.75rem; color:var(--text-dim); text-align:center; padding:0.5rem;">No hay programas o festivales dados de alta en Palencia. Pulsa "+ Nuevo programa" para añadir uno.</div>';
+        return;
+      }
+      container.innerHTML = adminFestivalsCache.map(f => {
+        const isChecked = selectedIds.includes(f.id);
+        return \`
+          <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; color:var(--text-main); cursor:pointer; padding:0.2rem 0.3rem; border-radius:4px;">
+            <input type="checkbox" name="ev-festivals" value="\${f.id}" \${isChecked ? 'checked' : ''} onchange="markFormDirty()">
+            <span><strong>\${escapeHtml(f.name)}</strong> \${f.edition ? \`<span style="color:var(--text-dim); font-size:0.75rem;">(\${escapeHtml(f.edition)})</span>\` : ''} <span style="font-size:0.7rem; color:var(--text-muted); margin-left:0.25rem;">[\${f.start_date || '—'} → \${f.end_date || '—'}]</span></span>
+          </label>
+        \`;
+      }).join('');
+    }
+
+    window.toggleNewFestivalForm = function(force) {
+      const form = document.getElementById('new-festival-form');
+      if (!form) return;
+      const shouldShow = typeof force === 'boolean' ? force : (form.style.display === 'none');
+      form.style.display = shouldShow ? 'block' : 'none';
+      if (shouldShow) {
+        const nameInput = document.getElementById('new-fest-name');
+        if (nameInput) nameInput.focus();
+      }
+    };
+
+    window.submitCreateFestivalInline = async function() {
+      const name = (document.getElementById('new-fest-name')?.value || '').trim();
+      const edition = (document.getElementById('new-fest-edition')?.value || '').trim();
+      const startDate = (document.getElementById('new-fest-start')?.value || '').trim();
+      const endDate = (document.getElementById('new-fest-end')?.value || '').trim();
+
+      if (!name) {
+        alert('El nombre del festival o programa es obligatorio.');
+        return;
+      }
+      if (!startDate || !endDate) {
+        alert('Las fechas de inicio y fin son obligatorias.');
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/festivals', {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            edition: edition || null,
+            start_date: startDate,
+            end_date: endDate,
+            location_scope: 'Palencia'
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.message || 'Error al crear festival.');
+          return;
+        }
+
+        const currentChecked = Array.from(document.querySelectorAll('input[name="ev-festivals"]:checked')).map(cb => Number(cb.value));
+        if (data.festival && data.festival.id) {
+          currentChecked.push(data.festival.id);
+        }
+
+        document.getElementById('new-fest-name').value = '';
+        document.getElementById('new-fest-edition').value = '';
+        document.getElementById('new-fest-start').value = '';
+        document.getElementById('new-fest-end').value = '';
+        toggleNewFestivalForm(false);
+
+        await loadAdminFestivals(currentChecked);
+        markFormDirty();
+      } catch (err) {
+        alert('Error al conectar con el servidor.');
+      }
+    };
 
     window.onEvStartTimeChange = function() {
       markFormDirty();
@@ -5008,12 +5354,32 @@ export function renderAdminHtml(): string {
       // Categoría sin preselección
       document.getElementById('ev-category').value = '';
 
-      // Fecha y hora de inicio por defecto en Europe/Madrid a las 22:00
+      // Resetear modalidad temporal a confirmed
+      const timeStatusSelect = document.getElementById('ev-time-status');
+      if (timeStatusSelect) timeStatusSelect.value = 'confirmed';
+      onTimeStatusChange('confirmed');
+
+      // Fecha y hora de inicio por defecto en Europe/Madrid a las 20:00
       const nowMadrid = formatToMadridDatetimeLocal(new Date());
       const todayMadridDate = nowMadrid ? nowMadrid.split('T')[0] : new Date().toISOString().split('T')[0];
-      document.getElementById('ev-start-time').value = todayMadridDate + 'T22:00';
+      document.getElementById('ev-date-local').value = todayMadridDate;
+      document.getElementById('ev-time-local').value = '20:00';
+      document.getElementById('ev-start-time').value = todayMadridDate + 'T20:00';
+      document.getElementById('ev-end-date').value = '';
+      document.getElementById('ev-schedule-text').value = '';
+      document.getElementById('ev-approximate-schedule').value = '';
+
       editorialDateManualOverride = false;
       updateEditorialDateUI();
+
+      // Cargar programas marco / festivales
+      loadAdminFestivals([]);
+
+      // Resetear avisos de procedencia e imagen de origen
+      const srcNotice = document.getElementById('ev-source-image-notice');
+      if (srcNotice) srcNotice.style.display = 'none';
+      const provBox = document.getElementById('ev-source-provenance-box');
+      if (provBox) provBox.style.display = 'none';
 
       setSaveButtonsLoading(false);
       eventModalFormDirty = false;
@@ -5051,10 +5417,36 @@ export function renderAdminHtml(): string {
           clearSelectedVenue();
         }
 
+        // Modalidad temporal
+        const timeStatus = ev.time_status || 'confirmed';
+        document.getElementById('ev-time-status').value = timeStatus;
+        onTimeStatusChange(timeStatus);
+
+        // Fecha y hora local
+        let datePart = '';
+        let timePart = '';
+        if (ev.start_time) {
+          const localStart = formatToMadridDatetimeLocal(ev.start_time);
+          if (localStart && localStart.includes('T')) {
+            const p = localStart.split('T');
+            datePart = p[0];
+            timePart = p[1].slice(0, 5);
+          }
+        } else if (ev.editorial_date) {
+          datePart = ev.editorial_date;
+        }
+
+        document.getElementById('ev-date-local').value = datePart;
+        document.getElementById('ev-time-local').value = timePart;
+        document.getElementById('ev-start-time').value = (datePart && timePart) ? (datePart + 'T' + timePart) : '';
+        document.getElementById('ev-end-date').value = ev.end_date || '';
+        document.getElementById('ev-schedule-text').value = ev.schedule_text || '';
+        document.getElementById('ev-approximate-schedule').value = ev.approximate_schedule || '';
+
         // Horario y jornada editorial
-        const localStart = formatToMadridDatetimeLocal(ev.start_time);
-        document.getElementById('ev-start-time').value = localStart;
-        const autoEditorial = computeEditorialDateFromLocal(localStart);
+        const autoEditorial = (timeStatus === 'confirmed' && datePart && timePart)
+          ? computeEditorialDateFromLocal(datePart + 'T' + timePart)
+          : datePart;
         document.getElementById('ev-editorial-date').value = ev.editorial_date || autoEditorial;
         editorialDateManualOverride = (ev.editorial_date && ev.editorial_date !== autoEditorial);
         updateEditorialDateUI();
@@ -5068,6 +5460,9 @@ export function renderAdminHtml(): string {
           removeEndTime();
         }
 
+        // Programas / Festivales vinculados (N:M)
+        loadAdminFestivals(ev.festival_ids || []);
+
         // Precio
         if (!ev.is_free && ev.price_cents > 0) {
           setPriceType('paid');
@@ -5076,7 +5471,7 @@ export function renderAdminHtml(): string {
           setPriceType('free');
         }
 
-        // Cartel / imagen
+        // Cartel / imagen pública
         document.getElementById('ev-image-url').value = ev.image_url || '';
         const thumbInput = document.getElementById('ev-image-thumb-url');
         if (thumbInput) thumbInput.value = ev.image_thumb_url || '';
@@ -5099,6 +5494,45 @@ export function renderAdminHtml(): string {
           if (uploadBox) uploadBox.style.display = 'none';
         } else {
           removeEventImage();
+        }
+
+        // Aviso de imagen de origen no publicada automáticamente
+        const srcImageNotice = document.getElementById('ev-source-image-notice');
+        const srcImageLink = document.getElementById('ev-source-image-link');
+        if (ev.image_original_url && !ev.image_url) {
+          if (srcImageNotice) srcImageNotice.style.display = 'block';
+          if (srcImageLink) srcImageLink.href = ev.image_original_url;
+        } else {
+          if (srcImageNotice) srcImageNotice.style.display = 'none';
+        }
+
+        // Badge de procedencia y enlace a fuente oficial
+        const provBox = document.getElementById('ev-source-provenance-box');
+        const provBadge = document.getElementById('ev-source-type-badge');
+        const provLink = document.getElementById('ev-source-provenance-link');
+        if (provBox) {
+          if (ev.source_type || ev.source_url) {
+            provBox.style.display = 'block';
+            if (provBadge) {
+              if (ev.source_type === 'jcyl_cultural') {
+                provBadge.innerHTML = '🏛️ Origen: Importación JCyL (Cultura CyL)';
+              } else if (ev.source_type) {
+                provBadge.innerHTML = \`Origen: \${escapeHtml(ev.source_type)}\`;
+              } else {
+                provBadge.innerHTML = 'Origen: Fuente externa';
+              }
+            }
+            if (provLink) {
+              if (ev.source_url) {
+                provLink.href = ev.source_url;
+                provLink.style.display = 'inline-block';
+              } else {
+                provLink.style.display = 'none';
+              }
+            }
+          } else {
+            provBox.style.display = 'none';
+          }
         }
 
         // Badge de estado en cabecera
@@ -5167,9 +5601,16 @@ export function renderAdminHtml(): string {
       const category = document.getElementById('ev-category').value;
       const venueIdStr = document.getElementById('ev-venue-id').value;
       const venueId = venueIdStr ? Number(venueIdStr) : null;
-      const startVal = document.getElementById('ev-start-time').value;
-      const endVal = document.getElementById('ev-end-time').value;
-      const editorialDate = document.getElementById('ev-editorial-date').value;
+
+      const timeStatus = document.getElementById('ev-time-status')?.value || 'confirmed';
+      const dateLocal = document.getElementById('ev-date-local')?.value || '';
+      const timeLocal = document.getElementById('ev-time-local')?.value || '';
+      const endDate = document.getElementById('ev-end-date')?.value || '';
+      const scheduleText = document.getElementById('ev-schedule-text')?.value.trim() || null;
+      const approximateSchedule = document.getElementById('ev-approximate-schedule')?.value.trim() || null;
+      const editorialDate = document.getElementById('ev-editorial-date')?.value || '';
+      const endVal = document.getElementById('ev-end-time')?.value || '';
+
       const isFreeVal = document.getElementById('ev-is-free').value;
       const eurosVal = document.getElementById('ev-price-euros').value;
       const description = document.getElementById('ev-description').value.trim() || null;
@@ -5177,6 +5618,10 @@ export function renderAdminHtml(): string {
       const imageUrl = document.getElementById('ev-image-url').value.trim() || null;
       const imageThumbUrl = document.getElementById('ev-image-thumb-url')?.value.trim() || null;
       const imageOriginalUrl = document.getElementById('ev-image-original-url')?.value.trim() || null;
+
+      // Festivales seleccionados
+      const festivalCheckboxes = document.querySelectorAll('input[name="ev-festivals"]:checked');
+      const festivalIds = Array.from(festivalCheckboxes).map(cb => Number(cb.value));
 
       // Determinar estado objetivo
       let targetStatus = statusOverride;
@@ -5195,9 +5640,26 @@ export function renderAdminHtml(): string {
         return;
       }
 
-      if (!startVal) {
-        showFormError('Debes indicar la fecha y hora de inicio del evento.', 'ev-start-time');
+      if (!dateLocal) {
+        showFormError('Debes indicar la fecha del evento.', 'ev-date-local');
         return;
+      }
+
+      if (timeStatus === 'confirmed') {
+        if (!timeLocal) {
+          showFormError('Para un evento con hora confirmada debes indicar la hora puntual de inicio (HH:MM).', 'ev-time-local');
+          return;
+        }
+      } else if (timeStatus === 'continuous') {
+        if (targetStatus === 'published' && !endDate) {
+          showFormError('Para publicar una exposición continuada es obligatorio indicar la fecha final de periodo.', 'ev-end-date');
+          return;
+        }
+      } else if (timeStatus === 'tentative_date') {
+        if (targetStatus === 'published') {
+          showFormError('Un evento con fecha orientativa o preliminar no puede publicarse como confirmado. Guárdalo como borrador.', 'ev-time-status');
+          return;
+        }
       }
 
       // Verificación de local: obligatorio para publicar
@@ -5236,15 +5698,18 @@ export function renderAdminHtml(): string {
       }
 
       // Cálculo de ISO timestamps en Europe/Madrid
-      let startTimeIso;
-      if (currentEditingEvent && id && formatToMadridDatetimeLocal(currentEditingEvent.start_time) === startVal) {
-        startTimeIso = currentEditingEvent.start_time;
-      } else {
-        startTimeIso = parseMadridToUtcIso(startVal);
+      let startTimeIso = null;
+      if (timeStatus === 'confirmed' && dateLocal && timeLocal) {
+        const localCombined = dateLocal + 'T' + timeLocal;
+        if (currentEditingEvent && id && formatToMadridDatetimeLocal(currentEditingEvent.start_time) === localCombined) {
+          startTimeIso = currentEditingEvent.start_time;
+        } else {
+          startTimeIso = parseMadridToUtcIso(localCombined);
+        }
       }
 
       let endTimeIso = null;
-      if (endVal) {
+      if (timeStatus === 'confirmed' && endVal) {
         if (currentEditingEvent && id && formatToMadridDatetimeLocal(currentEditingEvent.end_time) === endVal) {
           endTimeIso = currentEditingEvent.end_time;
         } else {
@@ -5260,9 +5725,14 @@ export function renderAdminHtml(): string {
       const payload = {
         title,
         category,
-        editorial_date: editorialDate || computeEditorialDateFromLocal(startVal),
+        editorial_date: editorialDate || dateLocal,
+        time_status: timeStatus,
         start_time: startTimeIso,
         end_time: endTimeIso,
+        end_date: timeStatus === 'continuous' ? (endDate || null) : null,
+        schedule_text: timeStatus === 'continuous' ? scheduleText : null,
+        approximate_schedule: (timeStatus === 'pending_time' || timeStatus === 'tentative_date') ? approximateSchedule : null,
+        festival_ids: festivalIds,
         price_cents: priceCents,
         is_free: isFree,
         status: targetStatus,
@@ -5275,6 +5745,8 @@ export function renderAdminHtml(): string {
 
       if (venueId && Number(venueId) !== 9999) {
         payload.venue_id = Number(venueId);
+      } else {
+        payload.venue_id = null;
       }
 
       modalEventSaveInProgress = true;
@@ -5331,23 +5803,39 @@ export function renderAdminHtml(): string {
       const id = document.getElementById('ev-id').value;
       if (!id) return;
 
-      // Si se pasa a published, verificar que tenga local asignado
-      const venueId = document.getElementById('ev-venue-id').value;
-      if (newStatus === 'published' && (!venueId || Number(venueId) === 9999)) {
-        const venueErrMsg = 'Para publicar el evento es obligatorio asignar un local del censo.';
-        showFormError(venueErrMsg, 'ev-venue-search');
-        const venueErr = document.getElementById('ev-venue-field-error');
-        if (venueErr) {
-          venueErr.innerText = venueErrMsg;
-          venueErr.style.display = 'block';
+      // Si se pasa a published, verificar precondiciones
+      if (newStatus === 'published') {
+        const venueId = document.getElementById('ev-venue-id').value;
+        if (!venueId || Number(venueId) === 9999) {
+          const venueErrMsg = 'Para publicar el evento es obligatorio asignar un local del censo.';
+          showFormError(venueErrMsg, 'ev-venue-search');
+          const venueErr = document.getElementById('ev-venue-field-error');
+          if (venueErr) {
+            venueErr.innerText = venueErrMsg;
+            venueErr.style.display = 'block';
+          }
+          const venueInput = document.getElementById('ev-venue-search');
+          if (venueInput) {
+            venueInput.style.borderColor = '#dc2626';
+            venueInput.setAttribute('aria-invalid', 'true');
+            venueInput.setAttribute('aria-describedby', 'ev-venue-field-error ev-venue-unassigned-notice');
+          }
+          return;
         }
-        const venueInput = document.getElementById('ev-venue-search');
-        if (venueInput) {
-          venueInput.style.borderColor = '#dc2626';
-          venueInput.setAttribute('aria-invalid', 'true');
-          venueInput.setAttribute('aria-describedby', 'ev-venue-field-error ev-venue-unassigned-notice');
+
+        const timeStatus = document.getElementById('ev-time-status')?.value;
+        if (timeStatus === 'tentative_date') {
+          showFormError('Un evento con fecha orientativa o preliminar no puede publicarse como confirmado.');
+          return;
         }
-        return;
+        if (timeStatus === 'continuous' && !document.getElementById('ev-end-date')?.value) {
+          showFormError('Para publicar una exposición continuada es obligatorio indicar la fecha final de periodo.');
+          return;
+        }
+        if (timeStatus === 'confirmed' && !document.getElementById('ev-time-local')?.value) {
+          showFormError('Para publicar un evento puntual confirmado es obligatoria la hora de inicio (HH:MM).');
+          return;
+        }
       }
 
       await submitEventForm(newStatus);

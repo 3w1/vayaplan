@@ -137,9 +137,13 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       e.title,
       e.description,
       e.category,
+      COALESCE(e.time_status, 'confirmed') AS time_status,
       e.start_time,
       e.end_time,
       e.editorial_date,
+      e.end_date,
+      e.schedule_text,
+      e.approximate_schedule,
       e.price_cents,
       e.is_free,
       e.image_url,
@@ -171,6 +175,7 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
     ORDER BY 
       e.editorial_date ASC,
       (CASE WHEN p.id IS NOT NULL THEN 0 ELSE 1 END) ASC,
+      (CASE WHEN COALESCE(e.time_status, 'confirmed') = 'confirmed' THEN 0 ELSE 1 END) ASC,
       e.start_time ASC;
   `;
 
@@ -183,11 +188,17 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
   }
 
   for (const row of eventsResult.rows) {
-    const startTimeIso = new Date(row.start_time).toISOString();
+    const timeStatus = (row.time_status || 'confirmed') as any;
+    const startTimeIso = (row.start_time && timeStatus === 'confirmed')
+      ? new Date(row.start_time).toISOString()
+      : null;
     const endTimeIso = row.end_time ? new Date(row.end_time).toISOString() : null;
     const editorialDateStr = typeof row.editorial_date === 'string'
       ? row.editorial_date
       : new Date(row.editorial_date).toISOString().split('T')[0];
+    const endDateStr = row.end_date
+      ? (typeof row.end_date === 'string' ? row.end_date : new Date(row.end_date).toISOString().split('T')[0])
+      : null;
 
     const mapsUrl = resolveGoogleMapsUrl(
       row.venue_google_maps_url,
@@ -200,10 +211,14 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       title: row.title,
       description: row.description || null,
       category: row.category,
+      time_status: timeStatus,
       start_time: startTimeIso,
       end_time: endTimeIso,
       editorial_date: editorialDateStr,
       editorial_label: computeEditorialLabel(editorialDateStr, startTimeIso),
+      end_date: endDateStr,
+      schedule_text: row.schedule_text || null,
+      approximate_schedule: row.approximate_schedule || null,
       price: {
         amount_cents: Number(row.price_cents),
         is_free: Boolean(row.is_free),
@@ -237,6 +252,7 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
             status: row.promotion_status,
           }
         : null,
+      festival: null,
     };
 
     const targetList = eventsByDate.get(editorialDateStr);

@@ -10,7 +10,17 @@ export type EventCategory =
   | 'cine'
   | 'teatro'
   | 'exposicion'
-  | 'cultura';
+  | 'cultura'
+  | 'baloncesto'
+  | 'futbol'
+  | 'rugby'
+  | 'conferencia';
+
+export type EventTimeStatus =
+  | 'confirmed'
+  | 'pending_time'
+  | 'tentative_date'
+  | 'continuous';
 
 export type EventStatus =
   | 'tentative'
@@ -112,6 +122,48 @@ export interface Venue {
   updated_at: string;
 }
 
+export interface Festival {
+  id: number;
+  city_id: number;
+  name: string;
+  edition: string | null;
+  slug: string;
+  description: string | null;
+  start_date: string;
+  end_date: string;
+  official_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FestivalSummary {
+  id: number;
+  name: string;
+  edition: string | null;
+  slug: string;
+  official_url: string | null;
+}
+
+export interface FestivalProgramResponseContract {
+  festival: {
+    id: number;
+    name: string;
+    edition: string | null;
+    slug: string;
+    description: string | null;
+    start_date: string;
+    end_date: string;
+    official_url: string | null;
+  };
+  city: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  events: PublicEventItem[];
+}
+
 export interface Event {
   id: number;
   city_id: number;
@@ -119,9 +171,13 @@ export interface Event {
   title: string;
   description: string | null;
   category: EventCategory;
-  start_time: string;
+  time_status: EventTimeStatus;
+  start_time: string | null;
   end_time: string | null;
   editorial_date: string;
+  end_date?: string | null;
+  schedule_text?: string | null;
+  approximate_schedule?: string | null;
   price_cents: number;
   is_free: boolean;
   image_url: string | null;
@@ -264,10 +320,14 @@ export interface PublicEventItem {
   title: string;
   description?: string | null;
   category: EventCategory;
-  start_time: string;
+  time_status: EventTimeStatus;
+  start_time: string | null;
   end_time: string | null;
   editorial_date: string;
   editorial_label: string;
+  end_date?: string | null;
+  schedule_text?: string | null;
+  approximate_schedule?: string | null;
   price: EventPriceInfo;
   status: EventStatus;
   venue: VenueSummary;
@@ -276,6 +336,8 @@ export interface PublicEventItem {
   actions: EventActionInfo;
   verification: EventVerificationInfo;
   promotion: PromotionInfo | null;
+  festival?: FestivalSummary | null;
+  festivals?: FestivalSummary[];
 }
 
 export interface PublicActivePromotionItem {
@@ -431,6 +493,8 @@ export interface AdminEventItem extends Event {
   venue_address?: string | null;
   promotion_id?: number | null;
   collision_alert?: CollisionAlertInfo | null;
+  festivals?: FestivalSummary[];
+  festival_ids?: number[];
 }
 
 export interface EventMetricsSummary {

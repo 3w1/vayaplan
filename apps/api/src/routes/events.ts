@@ -84,9 +84,13 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       e.id,
       e.title,
       e.category,
+      COALESCE(e.time_status, 'confirmed') AS time_status,
       e.start_time,
       e.end_time,
       e.editorial_date,
+      e.end_date,
+      e.schedule_text,
+      e.approximate_schedule,
       e.price_cents,
       e.is_free,
       e.image_url,
@@ -113,8 +117,11 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       AND p.starts_at <= now()
       AND p.ends_at > now()
     WHERE e.city_id = $1 
-      AND e.editorial_date = $2 
       AND e.status = 'published'
+      AND (
+        (e.end_date IS NULL AND e.editorial_date = $2) OR
+        (e.end_date IS NOT NULL AND e.editorial_date <= $2 AND e.end_date >= $2)
+      )
   `;
 
   if (categoryFilter) {
@@ -122,16 +129,25 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
     eventsSql += ` AND e.category = $3`;
   }
 
-  eventsSql += ` ORDER BY (CASE WHEN p.id IS NOT NULL THEN 0 ELSE 1 END) ASC, e.start_time ASC;`;
+  eventsSql += ` ORDER BY 
+    (CASE WHEN p.id IS NOT NULL THEN 0 ELSE 1 END) ASC, 
+    (CASE WHEN COALESCE(e.time_status, 'confirmed') = 'confirmed' THEN 0 ELSE 1 END) ASC, 
+    e.start_time ASC;`;
 
   const eventsResult = await query(eventsSql, eventQueryParams);
 
   const events: PublicEventItem[] = eventsResult.rows.map((row) => {
-    const startTimeIso = new Date(row.start_time).toISOString();
+    const timeStatus = (row.time_status || 'confirmed') as any;
+    const startTimeIso = (row.start_time && timeStatus === 'confirmed')
+      ? new Date(row.start_time).toISOString()
+      : null;
     const endTimeIso = row.end_time ? new Date(row.end_time).toISOString() : null;
     const editorialDateStr = typeof row.editorial_date === 'string'
       ? row.editorial_date
       : new Date(row.editorial_date).toISOString().split('T')[0];
+    const endDateStr = row.end_date
+      ? (typeof row.end_date === 'string' ? row.end_date : new Date(row.end_date).toISOString().split('T')[0])
+      : null;
 
     const mapsUrl = resolveGoogleMapsUrl(
       row.venue_google_maps_url,
@@ -143,10 +159,14 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       id: Number(row.id),
       title: row.title,
       category: row.category,
+      time_status: timeStatus,
       start_time: startTimeIso,
       end_time: endTimeIso,
       editorial_date: editorialDateStr,
       editorial_label: computeEditorialLabel(editorialDateStr, startTimeIso),
+      end_date: endDateStr,
+      schedule_text: row.schedule_text || null,
+      approximate_schedule: row.approximate_schedule || null,
       price: {
         amount_cents: Number(row.price_cents),
         is_free: Boolean(row.is_free),
@@ -180,8 +200,48 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
             status: row.promotion_status,
           }
         : null,
+      festival: null,
     };
   });
+
+  if (events.length > 0) {
+    try {
+      const eventIds = events.map((e) => e.id);
+      const festRes = await query(
+        `SELECT ef.event_id, f.id, f.name, f.edition, f.slug, f.official_url
+         FROM event_festivals ef
+         INNER JOIN festivals f ON ef.festival_id = f.id
+         WHERE ef.event_id = ANY($1::int[])
+         ORDER BY f.name ASC`,
+        [eventIds]
+      );
+      const festMap = new Map<number, any[]>();
+      for (const f of festRes.rows) {
+        const eid = Number(f.event_id);
+        if (!festMap.has(eid)) festMap.set(eid, []);
+        festMap.get(eid)!.push({
+          id: Number(f.id),
+          name: f.name,
+          edition: f.edition || null,
+          slug: f.slug,
+          official_url: f.official_url || null,
+        });
+      }
+      for (const ev of events) {
+        const linked = festMap.get(ev.id);
+        if (linked && linked.length > 0) {
+          ev.festivals = linked;
+          ev.festival = linked[0];
+        }
+      }
+    } catch (err: any) {
+      console.error('[GET /events] Error al consultar relaciones event_festivals:', {
+        message: err?.message,
+        code: err?.code,
+        eventCount: events.length,
+      });
+    }
+  }
 
   // 4. Consultar recurrencias aplicables para el día de la semana
   const recurrencesSql = `

@@ -8,6 +8,7 @@ import { weekendRoutes } from './routes/weekend';
 import { placesRoutes } from './routes/places';
 import { singleEventRoutes } from './routes/single-event';
 import { metricsRoutes } from './routes/metrics';
+import { festivalsRoutes } from './routes/festivals';
 import { activePromotionsRoutes } from './routes/active-promotions';
 import { adminAuthRoutes } from './routes/admin/auth';
 import { adminEventsRoutes } from './routes/admin/events';
@@ -56,6 +57,7 @@ app.route('/api', healthRoutes);
 
 // Rutas versión 1 de la API (Públicas)
 app.route('/api/v1', eventsRoutes);
+app.route('/api/v1', festivalsRoutes);
 app.route('/api/v1', weekendRoutes);
 app.route('/api/v1', placesRoutes);
 app.route('/api/v1', singleEventRoutes);
