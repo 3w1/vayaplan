@@ -493,6 +493,8 @@ export interface AdminEventItem extends Event {
   venue_address?: string | null;
   promotion_id?: number | null;
   collision_alert?: CollisionAlertInfo | null;
+  festivals?: FestivalSummary[];
+  festival_ids?: number[];
 }
 
 export interface EventMetricsSummary {

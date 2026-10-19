@@ -196,17 +196,20 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
       });
 
       if (existingRes.rows.length === 0) {
-        // Insertar nuevo borrador (status = 'tentative') registrando su source_hash
+        // Insertar nuevo borrador (status = 'tentative') registrando su source_hash.
+        // Política de imágenes: image_url público permanece estrictamente NULL para usar fallback
+        // de marca/categoría sin publicar imágenes externas ni usarlas en og:image.
+        // Se preserva la URL externa únicamente en image_original_url para revisión editorial en /admin.
         await query(
           `INSERT INTO events (
              city_id, venue_id, title, description, category,
              time_status, start_time, end_time, editorial_date, end_date,
-             schedule_text, price_cents, is_free, image_url, status,
+             schedule_text, price_cents, is_free, image_url, image_original_url, status,
              source_type, source_url, source_hash, dedupe_key, created_at, updated_at
            ) VALUES (
              $1, $2, $3, $4, $5,
              $6, $7, $8, $9, $10,
-             $11, $12, $13, $14, 'tentative',
+             $11, $12, $13, NULL, $14, 'tentative',
              'api', $15, $16, $17, now(), now()
            );`,
           [
@@ -255,7 +258,7 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
           isFree: existing.is_free,
           venueId: existing.venue_id,
           sourceUrl: existing.source_url,
-          imageUrl: existing.image_url,
+          imageUrl: existing.image_url || existing.image_original_url,
         });
 
         // Si existe un source_hash anterior y difiere del contenido actual de la BD,
@@ -271,7 +274,8 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
           continue;
         }
 
-        // Regla 4: Si no fue editado por humanos y el feed oficial actualizó datos, se actualiza el borrador
+        // Regla 4: Si no fue editado por humanos y el feed oficial actualizó datos, se actualiza el borrador.
+        // Se conserva image_url en NULL y se refresca image_original_url con la URL de origen.
         await query(
           `UPDATE events SET
              venue_id = $1,
@@ -286,7 +290,7 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
              schedule_text = $10,
              price_cents = $11,
              is_free = $12,
-             image_url = $13,
+             image_original_url = $13,
              source_url = $14,
              source_hash = $15,
              updated_at = now()

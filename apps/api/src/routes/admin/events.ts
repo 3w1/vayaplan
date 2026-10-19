@@ -9,7 +9,7 @@ import {
   isValidDateString,
   getCurrentDateInTimezone,
 } from '@vayaplan/shared';
-import type { AdminEventItem, AdminUser, EventCategory, EventSourceType, EventStatus } from '@vayaplan/types';
+import type { AdminEventItem, AdminUser, EventCategory, EventSourceType, EventStatus, EventTimeStatus, FestivalSummary } from '@vayaplan/types';
 import { hasImageVariantsColumns } from '../../services/image-storage';
 
 export const adminEventsRoutes = new Hono<{
@@ -20,6 +20,57 @@ export const adminEventsRoutes = new Hono<{
 
 // Proteger todas las rutas administrativas de eventos
 adminEventsRoutes.use('*', requireAdminAuth);
+
+/**
+ * GET /api/v1/admin/festivals
+ * Lista los festivales / programas marco para selector en el formulario
+ */
+adminEventsRoutes.get('/festivals', async (c) => {
+  const result = await query(
+    `SELECT id, city_id, name, edition, slug, description, start_date, end_date, official_url, is_active
+     FROM festivals
+     WHERE city_id = 1
+     ORDER BY is_active DESC, start_date ASC;`
+  );
+  return c.json({ festivals: result.rows });
+});
+
+/**
+ * POST /api/v1/admin/festivals
+ * Crea un nuevo festival o programa marco desde el panel
+ */
+adminEventsRoutes.post('/festivals', async (c) => {
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid_json', message: 'Cuerpo de petición inválido.' }, 400);
+  }
+  const name = body.name?.trim();
+  const edition = body.edition?.trim() || null;
+  const startDate = body.start_date?.trim();
+  const endDate = body.end_date?.trim();
+  const officialUrl = body.official_url?.trim() || null;
+  const description = body.description?.trim() || null;
+  if (!name || name.length < 3) {
+    return c.json({ error: 'invalid_parameter', message: 'El nombre del programa marco debe tener al menos 3 caracteres.' }, 400);
+  }
+  if (!startDate || !isValidDateString(startDate) || !endDate || !isValidDateString(endDate)) {
+    return c.json({ error: 'invalid_parameter', message: 'Fechas de inicio y fin válidas obligatorias (YYYY-MM-DD).' }, 400);
+  }
+  if (endDate < startDate) {
+    return c.json({ error: 'invalid_parameter', message: 'La fecha de fin no puede ser anterior a la de inicio.' }, 400);
+  }
+  const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `festival-${Date.now()}`;
+  const res = await query(
+    `INSERT INTO festivals (city_id, name, edition, slug, description, start_date, end_date, official_url, is_active)
+     VALUES (1, $1, $2, $3, $4, $5, $6, $7, true)
+     ON CONFLICT (city_id, slug) DO UPDATE SET name = EXCLUDED.name, edition = EXCLUDED.edition, updated_at = now()
+     RETURNING id, name, edition, slug, start_date, end_date, official_url, is_active;`,
+    [name, edition, slug, description, startDate, endDate, officialUrl]
+  );
+  return c.json({ status: 'ok', festival: res.rows[0] }, 201);
+});
 
 /**
  * GET /api/v1/admin/events
@@ -55,9 +106,23 @@ adminEventsRoutes.get('/events', async (c) => {
           AND c.status NOT IN ('cancelled', 'duplicate')
           AND e.venue_id IS NOT NULL
           AND e.venue_id != 9999
+          AND e.start_time IS NOT NULL
+          AND c.start_time IS NOT NULL
           AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
         LIMIT 1
-      ) AS collision_alert
+      ) AS collision_alert,
+      (
+        SELECT json_agg(json_build_object(
+          'id', f.id,
+          'name', f.name,
+          'edition', f.edition,
+          'slug', f.slug,
+          'official_url', f.official_url
+        ))
+        FROM event_festivals ef
+        INNER JOIN festivals f ON ef.festival_id = f.id
+        WHERE ef.event_id = e.id
+      ) AS festivals_json
     FROM events e
     LEFT JOIN venues v ON e.venue_id = v.id
     LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
@@ -90,6 +155,8 @@ adminEventsRoutes.get('/events', async (c) => {
         AND c.status NOT IN ('cancelled', 'duplicate')
         AND e.venue_id IS NOT NULL
         AND e.venue_id != 9999
+        AND e.start_time IS NOT NULL
+        AND c.start_time IS NOT NULL
         AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
     )`;
   }
@@ -98,7 +165,7 @@ adminEventsRoutes.get('/events', async (c) => {
   if (statusFilter === 'tentative') {
     sql += `
       ORDER BY 
-        e.start_time ASC,
+        e.start_time ASC NULLS LAST,
         e.id ASC
       LIMIT 200;
     `;
@@ -107,7 +174,7 @@ adminEventsRoutes.get('/events', async (c) => {
       ORDER BY 
         CASE WHEN e.status = 'tentative' THEN 0 ELSE 1 END ASC,
         e.editorial_date DESC,
-        e.start_time ASC
+        e.start_time ASC NULLS LAST
       LIMIT 200;
     `;
   }
@@ -121,11 +188,15 @@ adminEventsRoutes.get('/events', async (c) => {
     title: row.title,
     description: row.description,
     category: row.category,
-    start_time: new Date(row.start_time).toISOString(),
+    start_time: row.start_time ? new Date(row.start_time).toISOString() : null,
     end_time: row.end_time ? new Date(row.end_time).toISOString() : null,
     editorial_date: typeof row.editorial_date === 'string'
       ? row.editorial_date
       : new Date(row.editorial_date).toISOString().split('T')[0],
+    time_status: (row.time_status as EventTimeStatus) || 'confirmed',
+    end_date: row.end_date || null,
+    schedule_text: row.schedule_text || null,
+    approximate_schedule: row.approximate_schedule || null,
     price_cents: Number(row.price_cents),
     is_free: Boolean(row.is_free),
     image_url: row.image_url,
@@ -147,6 +218,8 @@ adminEventsRoutes.get('/events', async (c) => {
     venue_address: row.venue_address || null,
     promotion_id: row.promotion_id ? Number(row.promotion_id) : null,
     collision_alert: row.collision_alert || null,
+    festivals: row.festivals_json || [],
+    festival_ids: (row.festivals_json || []).map((f: any) => Number(f.id)),
   }));
 
   return c.json({
@@ -204,6 +277,25 @@ adminEventsRoutes.get('/events/:id', async (c) => {
   }
 
   const row = result.rows[0];
+
+  // Consultar festivales asociados en event_festivals
+  const festRes = await query(
+    `SELECT f.id, f.name, f.edition, f.slug, f.official_url
+     FROM event_festivals ef
+     INNER JOIN festivals f ON ef.festival_id = f.id
+     WHERE ef.event_id = $1
+     ORDER BY f.name ASC;`,
+    [id]
+  );
+  const festivals: FestivalSummary[] = festRes.rows.map((f: any) => ({
+    id: Number(f.id),
+    name: f.name,
+    edition: f.edition || null,
+    slug: f.slug,
+    official_url: f.official_url || null,
+  }));
+  const festivalIds: number[] = festivals.map((f) => f.id);
+
   const event: AdminEventItem = {
     id: Number(row.id),
     city_id: Number(row.city_id),
@@ -211,11 +303,15 @@ adminEventsRoutes.get('/events/:id', async (c) => {
     title: row.title,
     description: row.description,
     category: row.category,
-    start_time: new Date(row.start_time).toISOString(),
+    start_time: row.start_time ? new Date(row.start_time).toISOString() : null,
     end_time: row.end_time ? new Date(row.end_time).toISOString() : null,
     editorial_date: typeof row.editorial_date === 'string'
       ? row.editorial_date
       : new Date(row.editorial_date).toISOString().split('T')[0],
+    time_status: (row.time_status as EventTimeStatus) || 'confirmed',
+    end_date: row.end_date || null,
+    schedule_text: row.schedule_text || null,
+    approximate_schedule: row.approximate_schedule || null,
     price_cents: Number(row.price_cents),
     is_free: Boolean(row.is_free),
     image_url: row.image_url,
@@ -237,6 +333,8 @@ adminEventsRoutes.get('/events/:id', async (c) => {
     venue_address: row.venue_address || null,
     promotion_id: row.promotion_id ? Number(row.promotion_id) : null,
     collision_alert: row.collision_alert || null,
+    festivals,
+    festival_ids: festivalIds,
   };
 
   return c.json({ event });
@@ -259,9 +357,13 @@ adminEventsRoutes.post('/events', async (c) => {
   const venueId = Number(body.venue_id);
   const title = body.title?.trim();
   const category = body.category as EventCategory;
-  const startTime = body.start_time;
-  const endTime = body.end_time || null;
-  const editorialDate = body.editorial_date?.trim() || (startTime ? startTime.split('T')[0] : null);
+  const timeStatus = (body.time_status as EventTimeStatus) || 'confirmed';
+  const startTime = timeStatus === 'confirmed' ? (body.start_time || null) : null;
+  const endTime = timeStatus === 'confirmed' ? (body.end_time || null) : null;
+  const editorialDate = body.editorial_date?.trim() || (body.start_time ? body.start_time.split('T')[0] : null);
+  const endDate = body.end_date?.trim() || null;
+  const scheduleText = body.schedule_text?.trim() || null;
+  const approximateSchedule = body.approximate_schedule?.trim() || null;
   const priceCents = Number(body.price_cents || 0);
   const isFree = body.is_free !== undefined ? Boolean(body.is_free) : priceCents === 0;
   const description = body.description?.trim() || null;
@@ -271,6 +373,9 @@ adminEventsRoutes.post('/events', async (c) => {
   const sourceType = (body.source_type as EventSourceType) || 'manual';
   const sourceUrl = body.source_url?.trim() || null;
   const status = (body.status as EventStatus) || 'published';
+  const festivalIds: number[] = Array.isArray(body.festival_ids)
+    ? body.festival_ids.map(Number).filter((n: number) => !Number.isNaN(n) && n > 0)
+    : [];
 
   // Validaciones
   if (!title || title.length < 3) {
@@ -282,11 +387,23 @@ adminEventsRoutes.post('/events', async (c) => {
   if (!category || !VALID_EVENT_CATEGORIES.includes(category)) {
     return c.json({ error: 'invalid_parameter', message: `Categoría inválida. Valores: ${VALID_EVENT_CATEGORIES.join(', ')}` }, 400);
   }
-  if (!startTime) {
-    return c.json({ error: 'invalid_parameter', message: 'La hora de inicio (start_time) es obligatoria.' }, 400);
+  if (timeStatus === 'confirmed' && !startTime) {
+    return c.json({ error: 'invalid_parameter', message: 'La hora de inicio (start_time) es obligatoria para eventos confirmados.' }, 400);
+  }
+  if (timeStatus === 'tentative_date' && status === 'published') {
+    return c.json({ error: 'tentative_date_cannot_be_published', message: 'Un evento con fecha orientativa o tentativa no puede publicarse directamente a la agenda pública.' }, 400);
+  }
+  if (timeStatus === 'continuous' && status === 'published' && !endDate) {
+    return c.json({ error: 'continuous_end_date_required', message: 'Para publicar una exposición continuada es obligatorio indicar la fecha final de periodo.' }, 400);
   }
   if (!editorialDate || !isValidDateString(editorialDate)) {
     return c.json({ error: 'invalid_parameter', message: 'La fecha editorial debe tener formato YYYY-MM-DD.' }, 400);
+  }
+  if (endDate && !isValidDateString(endDate)) {
+    return c.json({ error: 'invalid_parameter', message: 'La fecha final de periodo debe tener formato YYYY-MM-DD.' }, 400);
+  }
+  if (endDate && editorialDate && endDate < editorialDate) {
+    return c.json({ error: 'invalid_parameter', message: 'La fecha final de periodo no puede ser anterior a la de inicio.' }, 400);
   }
 
   // Generar dedupe_key básico
@@ -295,17 +412,17 @@ adminEventsRoutes.post('/events', async (c) => {
   const hasVariants = await hasImageVariantsColumns();
   const insertCols = hasVariants
     ? `city_id, venue_id, title, description, category,
-       start_time, end_time, editorial_date, price_cents, is_free,
-       image_url, image_thumb_url, image_original_url, source_type, source_url, dedupe_key,
-       status, verified_at, verified_by, created_at, updated_at`
+       time_status, start_time, end_time, editorial_date, end_date, schedule_text, approximate_schedule,
+       price_cents, is_free, image_url, image_thumb_url, image_original_url,
+       source_type, source_url, dedupe_key, status, verified_at, verified_by, created_at, updated_at`
     : `city_id, venue_id, title, description, category,
-       start_time, end_time, editorial_date, price_cents, is_free,
-       image_url, source_type, source_url, dedupe_key,
+       time_status, start_time, end_time, editorial_date, end_date, schedule_text, approximate_schedule,
+       price_cents, is_free, image_url, source_type, source_url, dedupe_key,
        status, verified_at, verified_by, created_at, updated_at`;
 
   const insertVals = hasVariants
-    ? `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now(), $18, now(), now()`
-    : `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now(), $16, now(), now()`;
+    ? `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, now(), $22, now(), now()`
+    : `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, now(), $20, now(), now()`;
 
   const insertParams: any[] = [
     cityId,
@@ -313,9 +430,13 @@ adminEventsRoutes.post('/events', async (c) => {
     title,
     description,
     category,
+    timeStatus,
     startTime,
     endTime,
     editorialDate,
+    endDate,
+    scheduleText,
+    approximateSchedule,
     priceCents,
     isFree,
     imageUrl,
@@ -334,8 +455,21 @@ adminEventsRoutes.post('/events', async (c) => {
   `;
 
   const result = await query(insertSql, insertParams);
+  const newEventId = Number(result.rows[0].id);
 
-  return c.json({ status: 'ok', event_id: Number(result.rows[0].id) }, 201);
+  // Asociar a festivales N:M si corresponde
+  if (festivalIds.length > 0) {
+    for (const fId of festivalIds) {
+      await query(
+        `INSERT INTO event_festivals (event_id, festival_id)
+         VALUES ($1, $2)
+         ON CONFLICT (event_id, festival_id) DO NOTHING;`,
+        [newEventId, fId]
+      );
+    }
+  }
+
+  return c.json({ status: 'ok', event_id: newEventId }, 201);
 });
 
 /**
@@ -354,8 +488,12 @@ adminEventsRoutes.post('/events/draft', async (c) => {
   const venueId = body.venue_id !== undefined && body.venue_id !== null ? Number(body.venue_id) : null;
   const title = body.title?.trim() || 'Borrador sin título';
   const category = (body.category as EventCategory) || 'cultura';
-  const startTime = body.start_time || new Date().toISOString();
-  const editorialDate = body.editorial_date || startTime.split('T')[0];
+  const timeStatus = (body.time_status as EventTimeStatus) || 'confirmed';
+  const startTime = timeStatus === 'confirmed' ? (body.start_time || new Date().toISOString()) : null;
+  const editorialDate = body.editorial_date || (startTime ? startTime.split('T')[0] : new Date().toISOString().split('T')[0]);
+  const endDate = body.end_date?.trim() || null;
+  const scheduleText = body.schedule_text?.trim() || null;
+  const approximateSchedule = body.approximate_schedule?.trim() || null;
   const priceCents = Number(body.price_cents || 0);
   const isFree = body.is_free !== undefined ? Boolean(body.is_free) : priceCents === 0;
   const sourceType = (body.source_type as EventSourceType) || 'whatsapp';
@@ -364,21 +502,24 @@ adminEventsRoutes.post('/events/draft', async (c) => {
   const imageUrl = body.image_url?.trim() || null;
   const imageThumbUrl = body.image_thumb_url?.trim() || null;
   const imageOriginalUrl = body.image_original_url?.trim() || null;
+  const festivalIds: number[] = Array.isArray(body.festival_ids)
+    ? body.festival_ids.map(Number).filter((n: number) => !Number.isNaN(n) && n > 0)
+    : [];
 
   const hasVariants = await hasImageVariantsColumns();
   const insertCols = hasVariants
     ? `city_id, venue_id, title, description, category,
-       start_time, editorial_date, price_cents, is_free,
-       image_url, image_thumb_url, image_original_url, source_type, source_url,
+       time_status, start_time, editorial_date, end_date, schedule_text, approximate_schedule,
+       price_cents, is_free, image_url, image_thumb_url, image_original_url, source_type, source_url,
        status, created_at, updated_at`
     : `city_id, venue_id, title, description, category,
-       start_time, editorial_date, price_cents, is_free,
-       image_url, source_type, source_url,
+       time_status, start_time, editorial_date, end_date, schedule_text, approximate_schedule,
+       price_cents, is_free, image_url, source_type, source_url,
        status, created_at, updated_at`;
 
   const insertVals = hasVariants
-    ? `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'tentative', now(), now()`
-    : `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'tentative', now(), now()`;
+    ? `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'tentative', now(), now()`
+    : `$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'tentative', now(), now()`;
 
   const insertParams: any[] = [
     cityId,
@@ -386,8 +527,12 @@ adminEventsRoutes.post('/events/draft', async (c) => {
     title,
     description,
     category,
+    timeStatus,
     startTime,
     editorialDate,
+    endDate,
+    scheduleText,
+    approximateSchedule,
     priceCents,
     isFree,
     imageUrl,
@@ -406,8 +551,20 @@ adminEventsRoutes.post('/events/draft', async (c) => {
   `;
 
   const result = await query(insertSql, insertParams);
+  const newEventId = Number(result.rows[0].id);
 
-  return c.json({ status: 'ok', event_id: Number(result.rows[0].id), event_status: 'tentative' }, 201);
+  if (festivalIds.length > 0) {
+    for (const fId of festivalIds) {
+      await query(
+        `INSERT INTO event_festivals (event_id, festival_id)
+         VALUES ($1, $2)
+         ON CONFLICT (event_id, festival_id) DO NOTHING;`,
+        [newEventId, fId]
+      );
+    }
+  }
+
+  return c.json({ status: 'ok', event_id: newEventId, event_status: 'tentative' }, 201);
 });
 
 /**
@@ -428,7 +585,7 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
   }
 
   // Comprobar que existe
-  const check = await query(`SELECT id, venue_id, status FROM events WHERE id = $1 LIMIT 1;`, [id]);
+  const check = await query(`SELECT id, venue_id, status, time_status, start_time, end_date FROM events WHERE id = $1 LIMIT 1;`, [id]);
   if (check.rows.length === 0) {
     return c.json({ error: 'event_not_found', message: `Evento ${id} no encontrado.` }, 404);
   }
@@ -444,11 +601,40 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
     }, 400);
   }
 
+  // Validaciones del contrato temporal
+  const effectiveTimeStatus = (body.time_status !== undefined ? body.time_status : existing.time_status) as EventTimeStatus || 'confirmed';
+
+  if (effectiveTimeStatus === 'pending_time' || effectiveTimeStatus === 'continuous' || effectiveTimeStatus === 'tentative_date') {
+    body.start_time = null;
+    body.end_time = null;
+  } else if (effectiveTimeStatus === 'confirmed') {
+    const finalStart = body.start_time !== undefined ? body.start_time : existing.start_time;
+    if (!finalStart) {
+      return c.json({ error: 'invalid_parameter', message: 'La hora de inicio es obligatoria para eventos confirmados.' }, 400);
+    }
+  }
+
+  if (effectiveTimeStatus === 'tentative_date' && targetStatus === 'published') {
+    return c.json({
+      error: 'tentative_date_cannot_be_published',
+      message: 'Un evento con fecha tentativa no puede publicarse en la agenda pública.',
+    }, 400);
+  }
+
+  const finalEndDate = body.end_date !== undefined ? body.end_date : existing.end_date;
+  if (effectiveTimeStatus === 'continuous' && targetStatus === 'published' && !finalEndDate) {
+    return c.json({
+      error: 'continuous_end_date_required',
+      message: 'Para publicar una exposición continuada es obligatorio indicar la fecha final de periodo.',
+    }, 400);
+  }
+
   const hasVariants = await hasImageVariantsColumns();
   const allowedFields = [
     'title', 'description', 'category', 'venue_id', 'start_time',
     'end_time', 'editorial_date', 'price_cents', 'is_free', 'image_url',
-    'source_type', 'source_url', 'status'
+    'source_type', 'source_url', 'status',
+    'time_status', 'end_date', 'schedule_text', 'approximate_schedule'
   ];
   if (hasVariants) {
     allowedFields.push('image_thumb_url', 'image_original_url');
@@ -464,20 +650,39 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
     }
   }
 
-  if (updates.length === 0) {
+  // Si se envió festival_ids, actualizar event_festivals
+  if (body.festival_ids !== undefined && Array.isArray(body.festival_ids)) {
+    await query(`DELETE FROM event_festivals WHERE event_id = $1;`, [id]);
+    for (const fId of body.festival_ids) {
+      const numFid = Number(fId);
+      if (!Number.isNaN(numFid) && numFid > 0) {
+        await query(
+          `INSERT INTO event_festivals (event_id, festival_id)
+           VALUES ($1, $2)
+           ON CONFLICT (event_id, festival_id) DO NOTHING;`,
+          [id, numFid]
+        );
+      }
+    }
+  }
+
+  if (updates.length === 0 && body.festival_ids === undefined) {
     return c.json({ error: 'no_fields_to_update', message: 'No se enviaron campos válidos para actualizar.' }, 400);
   }
 
-  values.push(id);
-  const sql = `
-    UPDATE events
-    SET ${updates.join(', ')}, updated_at = now()
-    WHERE id = $${values.length}
-    RETURNING id, status;
-  `;
+  if (updates.length > 0) {
+    values.push(id);
+    const sql = `
+      UPDATE events
+      SET ${updates.join(', ')}, updated_at = now()
+      WHERE id = $${values.length}
+      RETURNING id, status;
+    `;
+    const result = await query(sql, values);
+    return c.json({ status: 'ok', event: result.rows[0] });
+  }
 
-  const result = await query(sql, values);
-  return c.json({ status: 'ok', event: result.rows[0] });
+  return c.json({ status: 'ok', event: { id, status: existing.status } });
 });
 
 /**
@@ -527,7 +732,7 @@ adminEventsRoutes.post('/ingest/cultural-agenda', async (c) => {
 
 /**
  * POST /api/v1/admin/events/:id/publish
- * Valida y publica un borrador tentativo
+ * Valida y publica un borrador tentativo con verificación estricta de precondiciones
  */
 adminEventsRoutes.post('/events/:id/publish', async (c) => {
   const id = Number(c.req.param('id'));
@@ -537,7 +742,7 @@ adminEventsRoutes.post('/events/:id/publish', async (c) => {
   const admin = c.get('user') as AdminUser;
 
   // 1. Verificar existencia y asignación de venue válido
-  const check = await query(`SELECT id, venue_id, status FROM events WHERE id = $1 LIMIT 1;`, [id]);
+  const check = await query(`SELECT id, venue_id, status, time_status, start_time, end_date FROM events WHERE id = $1 LIMIT 1;`, [id]);
   if (check.rows.length === 0) {
     return c.json({ error: 'event_not_found', message: `Evento ${id} no encontrado.` }, 404);
   }
@@ -547,6 +752,28 @@ adminEventsRoutes.post('/events/:id/publish', async (c) => {
     return c.json({
       error: 'venue_not_assigned',
       message: 'No se puede publicar un evento sin local asignado del censo. Asigna un local válido antes de publicar.',
+    }, 400);
+  }
+
+  // 2. Comprobación del contrato temporal
+  if (currentEvent.time_status === 'tentative_date') {
+    return c.json({
+      error: 'tentative_date_cannot_be_published',
+      message: 'No se puede publicar un evento con fecha tentativa. Confirma la fecha exacta antes de publicar.',
+    }, 400);
+  }
+
+  if (currentEvent.time_status === 'continuous' && !currentEvent.end_date) {
+    return c.json({
+      error: 'continuous_end_date_required',
+      message: 'Para publicar una exposición continuada es obligatorio indicar la fecha final de periodo.',
+    }, 400);
+  }
+
+  if (currentEvent.time_status === 'confirmed' && !currentEvent.start_time) {
+    return c.json({
+      error: 'start_time_required',
+      message: 'Para publicar un evento puntual confirmado es obligatoria la hora de inicio.',
     }, 400);
   }
 

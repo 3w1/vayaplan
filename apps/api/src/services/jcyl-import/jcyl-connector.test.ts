@@ -109,6 +109,7 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
       evento_biblioteca: 'SI',
       nombre_localidad: 'Palencia',
       enlace_contenido: 'https://bibliotecas.jcyl.es/evento/999901',
+      imagen_evento: 'https://bibliotecas.jcyl.es/foto1.jpg',
     },
     {
       id_evento: 999902,
@@ -184,6 +185,8 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     expect(row1.start_time).not.toBeNull();
     expect(row1.is_free).toBe(true);
     expect(row1.description).toBe('Descripción con HTML'); // Sanitizado
+    expect(row1.image_url).toBeNull(); // Política: image_url público es NULL para no publicar imágenes externas sin permiso
+    expect(row1.image_original_url).toBe('https://bibliotecas.jcyl.es/foto1.jpg'); // Preservada para revisión editorial en admin
 
     // Verificar el registro sin hora (pending_time)
     const res2 = await testPool.query("SELECT * FROM events WHERE dedupe_key = 'jcyl:999902'");
