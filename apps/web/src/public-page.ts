@@ -1,4 +1,8 @@
 import type { PublicEventItem } from '@vayaplan/types';
+import {
+  getEventActionsStyles,
+  getEventActionsClientScript,
+} from './event-actions';
 
 export interface PublicPageMeta {
   title?: string;
@@ -1378,6 +1382,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+
+    ${getEventActionsStyles()}
   </style>
 </head>
 <body>
@@ -1523,6 +1529,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
   <script id="__VAYAPLAN_BOOTSTRAP__" type="application/json">${escapeJsonForScript(bootstrapData)}</script>
 
   <script type="module">
+    ${getEventActionsClientScript()}
+
     // ==============================================================================
     // Estado y variables globales
     // ==============================================================================
@@ -2668,6 +2676,9 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             \${(!isCancelled && ev.actions.tickets_url) ? '<div class="action-disclaimer">Compra en una web externa</div>' : ''}
           </div>
 
+          <!-- Acciones de Evento: WhatsApp, Compartir, Copiar enlace, Cómo llegar y Calendario -->
+          \${renderEventActionsHtml(extractEventActionSource(ev))}
+
           \${ev.description ? \`
             <div style="margin-top:1.5rem;">
               <h3 style="font-size:1rem;font-weight:800;margin-bottom:0.4rem;color:var(--color-night);">Sobre el evento</h3>
@@ -3128,6 +3139,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         openRecurrenceModal(Number(trigger.dataset.id));
       } else if (action === 'close-modal' || action === 'navigate-home') {
         closeModal();
+      } else if (action === 'share-event') {
+        executeEventShare(trigger.dataset.url, trigger.dataset.title, trigger);
+      } else if (action === 'copy-event-link') {
+        executeEventLinkCopy(trigger.dataset.url, trigger);
       } else if (action === 'open-full-poster') {
         openPosterLightbox(trigger.dataset.posterUrl, trigger.dataset.posterTitle, trigger);
       } else if (action === 'close-lightbox') {

@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { renderAdminHtml } from './admin';
 import { renderPublicHtml } from './public-page';
+import { extractEventActionSource, computeCalendarState, generateIcsCalendar } from './event-actions';
 import type { PublicEventItem } from '@vayaplan/types';
 
 const app = new Hono();
@@ -254,6 +255,89 @@ app.get('/icons/:filename', (c) => {
 // ==============================================================================
 app.get('/', (c) => {
   return c.html(renderPublicHtml());
+});
+
+// ==============================================================================
+// Descarga de Calendario de Evento (.ics): GET /events/:id/calendar.ics
+// ==============================================================================
+app.get('/events/:id/calendar.ics', async (c) => {
+  const rawId = c.req.param('id')?.trim();
+  const eventId = Number(rawId);
+
+  // 1. Validación de ID: debe ser número entero positivo
+  if (!rawId || Number.isNaN(eventId) || !Number.isInteger(eventId) || eventId <= 0) {
+    return c.text('El identificador del evento debe ser un número entero positivo.', 400, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
+
+  // 2. Consulta a la API interna pública (aplica visibilidad WHERE status IN ('published', 'cancelled'))
+  const internalApi = (process.env.INTERNAL_API_URL || 'http://api:4000').replace(/\/$/, '');
+  const apiUrl = `${internalApi}/api/v1/events/${eventId}`;
+
+  let apiRes: Response;
+  try {
+    apiRes = await fetch(apiUrl, {
+      signal: AbortSignal.timeout(3000),
+      headers: { Accept: 'application/json' },
+    });
+  } catch (err: any) {
+    return c.text('El servicio no está disponible en este momento.', 502, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
+
+  if (apiRes.status === 404) {
+    return c.text('El evento solicitado no existe o no está publicado.', 404, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
+
+  if (!apiRes.ok) {
+    return c.text('Error al consultar el servicio interno de eventos.', 502, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
+
+  let data: { event: PublicEventItem };
+  try {
+    data = (await apiRes.json()) as { event: PublicEventItem };
+  } catch {
+    return c.text('Respuesta inválida del servicio interno de eventos.', 502, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
+
+  const ev = data.event;
+  const publicOrigin = (process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '');
+  const actionSource = extractEventActionSource(ev, `${publicOrigin}/events/${ev.id}`);
+
+  // 3. Aplica en servidor las restricciones del calendario (no sólo en el botón)
+  const calState = computeCalendarState(actionSource);
+  if (!calState.allowed) {
+    return c.text(calState.notice || 'No es posible añadir este evento al calendario.', 400, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
+
+  // 4. Genera contenido iCalendar RFC 5545
+  let icsContent: string;
+  try {
+    icsContent = generateIcsCalendar(actionSource);
+  } catch (err: any) {
+    return c.text(err?.message || 'Error al generar el archivo de calendario.', 400, {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
+  }
+
+  return new Response(icsContent, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': `attachment; filename="evento-${ev.id}.ics"`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    },
+  });
 });
 
 // ==============================================================================
