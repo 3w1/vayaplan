@@ -1,0 +1,14 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-vayaplan-backup-batches-30d",
+      "Status": "Enabled",
+      "Filter": {
+        "Prefix": "backups/batches/"
+      },
+      "Expiration": {
+        "Days": 30
+      }
+    }
+  ]
+}
