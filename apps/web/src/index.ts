@@ -121,8 +121,8 @@ app.get('/manifest.json', (c) => {
 // Service Worker (Shell Offline & Cache)
 // ==============================================================================
 app.get('/sw.js', (c) => {
-  const swCode = `// VayaPlan Service Worker v1.4
-const CACHE_NAME = 'vayaplan-pwa-v2';
+  const swCode = `// VayaPlan Service Worker v1.5
+const CACHE_NAME = 'vayaplan-pwa-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -173,7 +173,8 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then((response) => {
         // Solo cachear respuestas 200 OK para evitar enmascarar errores (404, 5xx)
-        if (response && response.status === 200) {
+        // y excluir expresamente rutas dinámicas de eventos /events/
+        if (response && response.status === 200 && !url.pathname.startsWith('/events/')) {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         }
@@ -438,7 +439,7 @@ app.get('/events/:id', async (c) => {
     }),
     200,
     {
-      'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
     }
   );
 });

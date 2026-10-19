@@ -1539,6 +1539,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     let savedScrollY = 0; // Guarda la posición de scroll del fondo para restaurarla al cerrar modal
     let currentRequestId = 0; // Previene condiciones de carrera en respuestas asíncronas
     let activeDetailRequestId = 0; // Previene condiciones de carrera en carga de fichas individuales
+    let activeDetailAbortController = null; // Controlador para abortar peticiones de ficha en curso
     let isDirectEntry = false; // Identifica si la sesión inició directamente en /events/:id
     let activePromotions = []; // Campañas vigentes cargadas del servidor
     let activePromotionsCity = ''; // Ciudad de las campañas en memoria
@@ -1928,6 +1929,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       currentCity = newSlug;
       activePromotions = [];
       activePromotionsCity = newSlug;
+      updateListingUrl();
       loadData();
     }
     window.changeCity = changeCity;
@@ -2083,6 +2085,106 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       switchView('today');
     }
     window.clearAllFilters = clearAllFilters;
+
+    // ==============================================================================
+    // Sincronización de Parámetros de URL y Filtros de Listado
+    // ==============================================================================
+    function applyFiltersFromUrl() {
+      if (window.location.pathname.startsWith('/events/')) return false;
+      const params = new URLSearchParams(window.location.search);
+      let changed = false;
+
+      const cityParam = params.get('city');
+      if (cityParam && cityParam.trim() && cityParam.trim().toLowerCase() !== currentCity) {
+        currentCity = cityParam.trim().toLowerCase();
+        changed = true;
+      }
+
+      const dateParam = params.get('date');
+      if (dateParam && new RegExp('^\\\\d{4}-\\\\d{2}-\\\\d{2}$').test(dateParam.trim())) {
+        const cleanDate = dateParam.trim();
+        if (cleanDate !== selectedDate) {
+          selectedDate = cleanDate;
+          changed = true;
+        }
+        if (selectedDate === getTodayDateString()) {
+          currentView = 'today';
+        } else if (selectedDate === getTomorrowDateString()) {
+          currentView = 'tomorrow';
+        } else {
+          currentView = 'calendar';
+        }
+      }
+
+      const viewParam = params.get('view');
+      if (viewParam && ['today', 'tomorrow', 'weekend', 'calendar'].includes(viewParam.trim().toLowerCase())) {
+        const cleanView = viewParam.trim().toLowerCase();
+        if (cleanView !== currentView) {
+          currentView = cleanView;
+          changed = true;
+        }
+      }
+
+      const catParam = (params.get('cat') || params.get('category'));
+      const validCategories = ['musica', 'tardeo', 'cine', 'cultura'];
+      const targetFilter = (catParam && validCategories.includes(catParam.trim().toLowerCase())) ? catParam.trim().toLowerCase() : 'all';
+      if (targetFilter !== currentFilter) {
+        currentFilter = targetFilter;
+        changed = true;
+      }
+
+      // Sincronizar botones y etiquetas en la interfaz
+      document.querySelectorAll('.time-tab').forEach((el) => {
+        el.classList.toggle('active', el.id === 'tab-' + currentView);
+      });
+      if (currentView === 'calendar') {
+        const calLabel = document.getElementById('calendar-label');
+        if (calLabel) calLabel.innerText = selectedDate;
+      }
+      document.querySelectorAll('.cat-btn').forEach((el) => {
+        el.classList.toggle('active', el.dataset.cat === currentFilter);
+      });
+
+      return changed;
+    }
+    window.applyFiltersFromUrl = applyFiltersFromUrl;
+
+    function updateListingUrl() {
+      if (window.location.pathname.startsWith('/events/')) return;
+      const params = new URLSearchParams(window.location.search);
+
+      if (params.has('city') || currentCity !== 'palencia') {
+        params.set('city', currentCity);
+      }
+
+      if (params.has('date') || selectedDate !== getTodayDateString()) {
+        params.set('date', selectedDate);
+      } else if (currentView !== 'calendar') {
+        params.delete('date');
+      }
+
+      if (currentFilter && currentFilter !== 'all') {
+        params.set('cat', currentFilter);
+        params.delete('category');
+      } else {
+        params.delete('cat');
+        params.delete('category');
+      }
+
+      if (currentView === 'weekend') {
+        params.set('view', 'weekend');
+      } else {
+        params.delete('view');
+      }
+
+      const qs = params.toString();
+      const targetUrl = qs ? ('/?' + qs) : '/';
+      const currentFull = window.location.pathname + window.location.search;
+      if (currentFull !== targetUrl && !window.location.pathname.startsWith('/events/')) {
+        history.replaceState(history.state, '', targetUrl);
+      }
+    }
+    window.updateListingUrl = updateListingUrl;
 
     // ==============================================================================
     // Helper de Portada / Fallback
@@ -2592,6 +2694,15 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       const modal = document.getElementById('detail-modal');
       const sheet = document.getElementById('modal-content');
 
+      // 1. Abortar y desacoplar cualquier petición de detalle previa en curso
+      if (activeDetailAbortController) {
+        activeDetailAbortController.abort();
+        activeDetailAbortController = null;
+      }
+      const reqId = ++activeDetailRequestId;
+      const abortCtrl = new AbortController();
+      activeDetailAbortController = abortCtrl;
+
       if (!options.fromDirectEntry && !options.initialData) {
         savedScrollY = window.scrollY;
       }
@@ -2613,24 +2724,38 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         return;
       }
 
-      const reqId = ++activeDetailRequestId;
       sheet.innerHTML = '<div class="loader-spinner" style="margin:4rem auto;"></div>';
 
+      const returnUrl = (history.state && history.state.returnUrl) || (window.location.pathname + window.location.search);
+
       if (options.pushHistory) {
-        history.pushState(
-          { modal: 'event', eventId: Number(eventId), fromListing: true, scrollY: savedScrollY },
+        const method = (history.state && history.state.modal === 'event') ? 'replaceState' : 'pushState';
+        history[method](
+          {
+            modal: 'event',
+            eventId: Number(eventId),
+            fromListing: true,
+            scrollY: savedScrollY,
+            returnUrl: returnUrl,
+          },
           '',
           '/events/' + eventId
         );
       }
 
       try {
-        const res = await fetch(\`/api/v1/events/\${eventId}\`);
+        const res = await fetch(\`/api/v1/events/\${eventId}\`, { signal: abortCtrl.signal });
         if (reqId !== activeDetailRequestId) return;
+        if (!modal.classList.contains('active')) return;
+        if (!window.location.pathname.startsWith('/events/')) return;
 
         if (!res.ok) throw new Error('Evento no encontrado');
         const data = await res.json();
         const ev = data.event;
+
+        if (reqId !== activeDetailRequestId) return;
+        if (!modal.classList.contains('active')) return;
+        if (!window.location.pathname.startsWith('/events/')) return;
 
         if (activeModalEventId !== ev.id) {
           trackMetric(ev.id, 'impression', ev.promotion ? ev.promotion.id : null);
@@ -2641,6 +2766,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         document.title = (ev.status === 'cancelled' ? '[Cancelado] ' : '') + ev.title + ' — ' + ev.venue.name + ' | VayaPlan';
       } catch (err) {
         if (reqId !== activeDetailRequestId) return;
+        if (abortCtrl.signal.aborted) return;
+        if (!modal.classList.contains('active')) return;
+        if (!window.location.pathname.startsWith('/events/')) return;
+
         sheet.innerHTML = \`
           <div class="modal-body" style="text-align:center;padding:3rem 1rem;">
             <h3 style="font-size:1.15rem;margin-bottom:0.5rem;color:var(--color-night);">No se pudo cargar la información</h3>
@@ -2797,6 +2926,14 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     function closeModal() {
       const isPopState = arguments[0] === true;
       const modal = document.getElementById('detail-modal');
+
+      // Invalida y aborta inmediatamente peticiones de detalle en curso
+      activeDetailRequestId++;
+      if (activeDetailAbortController) {
+        activeDetailAbortController.abort();
+        activeDetailAbortController = null;
+      }
+
       if (!modal || !modal.classList.contains('active')) return;
 
       modal.classList.remove('active');
@@ -2814,7 +2951,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         if (history.state && history.state.fromListing) {
           history.back();
         } else {
-          history.replaceState(null, '', '/');
+          const fallbackUrl = (history.state && history.state.returnUrl) || '/';
+          history.replaceState(null, '', fallbackUrl);
           isDirectEntry = false;
         }
       }
@@ -2933,6 +3071,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
 
       loadData();
+      updateListingUrl();
     }
     window.switchView = switchView;
 
@@ -2941,6 +3080,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       document.querySelectorAll('.cat-btn').forEach((el) => {
         el.classList.toggle('active', el.dataset.cat === filter);
       });
+
+      updateListingUrl();
 
       if (currentView === 'weekend') {
         renderWeekendAgenda();
@@ -3159,6 +3300,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     // Sincronización de Historial del Navegador (Atrás / Adelante)
     // ==============================================================================
     window.addEventListener('popstate', (e) => {
+      // Invalida y aborta peticiones de detalle en curso al viajar por el historial
+      activeDetailRequestId++;
+      if (activeDetailAbortController) {
+        activeDetailAbortController.abort();
+        activeDetailAbortController = null;
+      }
+
       const lightbox = document.getElementById('poster-lightbox');
       if (lightbox && lightbox.style.display !== 'none') {
         closePosterLightbox();
@@ -3174,6 +3322,14 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           openEventModal(Number(match[1]), { pushHistory: false });
         } else {
           closeModal(true);
+          const filtersChanged = applyFiltersFromUrl();
+          if (filtersChanged && currentData) {
+            if (currentView === 'weekend') {
+              renderWeekendAgenda();
+            } else {
+              renderDayAgenda();
+            }
+          }
         }
       }
     });
@@ -3190,6 +3346,9 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     // Inicialización al cargar la página
     document.addEventListener('DOMContentLoaded', () => {
       getSessionHash();
+
+      // Sincronizar estado inicial de listado según parámetros en la URL (p.ej. ?city=palencia&date=...&cat=...)
+      applyFiltersFromUrl();
 
       // Bootstrap inicial si venimos de SSR (/events/:id)
       const bootstrapEl = document.getElementById('__VAYAPLAN_BOOTSTRAP__');

@@ -177,7 +177,8 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     expect(contentType).toContain('text/html');
 
     const cacheControl = res.headers.get('cache-control') || '';
-    expect(cacheControl).toContain('public');
+    expect(cacheControl).toContain('no-store');
+    expect(cacheControl).toContain('no-cache');
 
     const html = await res.text();
     // Título y datos de espacio
@@ -316,14 +317,16 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     expect(html).not.toContain('sitio-malicioso.com');
   });
 
-  test('Service Worker /sw.js no disfraza rutas /events/* como la shell principal /', async () => {
+  test('Service Worker /sw.js no disfraza rutas /events/* como la shell principal / y excluye /events/* de Cache Storage', async () => {
     const fetchFn = (webApp as any).fetch;
     const res = await fetchFn(new Request('http://localhost/sw.js'));
     expect(res.status).toBe(200);
 
     const swCode = await res.text();
+    expect(swCode).toContain("const CACHE_NAME = 'vayaplan-pwa-v3'");
     expect(swCode).toContain('response.status === 200');
     expect(swCode).toContain("!url.pathname.startsWith('/events/')");
+    expect(swCode).toContain('caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache))');
     expect(swCode).toContain('Sin conexión a internet');
   });
 });

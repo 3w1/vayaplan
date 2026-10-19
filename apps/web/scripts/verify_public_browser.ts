@@ -134,30 +134,47 @@ async function runBrowserVerification() {
     await sendCDP('Network.enable');
 
     // -------------------------------------------------------------------------
-    // 1. Portada y Listado de Eventos
+    // 1. Portada y Listado con Filtros Activos y Sincronización de URL
     // -------------------------------------------------------------------------
-    console.log('\n--- PRUEBA 1: Carga de Portada y Listado ---');
+    console.log('\n--- PRUEBA 1: Carga de Portada con Filtros Activos (ciudad, fecha, categoría) ---');
     consoleErrors.length = 0;
     jsExceptions.length = 0;
 
-    await sendCDP('Page.navigate', { url: `http://127.0.0.1:${testPort}/?city=palencia&date=2026-10-19` });
+    const initialListingUrl = `http://127.0.0.1:${testPort}/?city=palencia&date=2026-10-19&cat=musica`;
+    await sendCDP('Page.navigate', { url: initialListingUrl });
     await new Promise((r) => setTimeout(r, 2000));
 
     const pageTitle = await evaluate('document.title');
     record('Título de Portada', pageTitle.includes('VayaPlan'), `Título recibido: "${pageTitle}"`);
 
-    const eventCardsCount = await evaluate("document.querySelectorAll('.card-compact[data-action=\"open-event\"]').length");
-    record('Listado de Eventos Renderizado', eventCardsCount > 0, `Tarjetas de eventos encontradas: ${eventCardsCount}`);
+    const currentSearch = await evaluate('window.location.search');
+    record('Preservación de Query Params en URL de Listado', currentSearch.includes('city=palencia') && currentSearch.includes('cat=musica'), `Search: "${currentSearch}"`);
 
-    record('Ausencia de Errores JS en Portada', consoleErrors.length === 0 && jsExceptions.length === 0,
+    const isMusicaTabActive = await evaluate("document.querySelector('.cat-btn[data-cat=\"musica\"]')?.classList.contains('active')");
+    record('Botón de Categoría Música Activo', !!isMusicaTabActive, `cat-btn[musica] active: ${isMusicaTabActive}`);
+
+    const isFilterBarVisible = await evaluate("document.getElementById('active-filters-bar')?.classList.contains('visible')");
+    const chipsContent = await evaluate("document.getElementById('chips-list')?.textContent?.trim()");
+    record('Barra de Filtros Activos Visible con Chip de Música', !!(isFilterBarVisible && chipsContent?.includes('Música')), `Barra visible: ${isFilterBarVisible}, Chip: "${chipsContent}"`);
+
+    const eventCardsCount = await evaluate("document.querySelectorAll('.card-compact[data-action=\"open-event\"]').length");
+    record('Listado de Eventos Filtrados Renderizado', eventCardsCount > 0, `Tarjetas de eventos encontradas: ${eventCardsCount}`);
+
+    record('Ausencia de Errores JS en Portada con Filtros', consoleErrors.length === 0 && jsExceptions.length === 0,
       `Console errors: ${consoleErrors.length}, Exceptions: ${jsExceptions.length}`);
 
     // -------------------------------------------------------------------------
-    // 2. Ficha de Detalle, Actualización de URL y Visor de Cartel (Lightbox)
+    // 2. Ficha de Detalle, Retorno con Filtros, Scroll e Historial
     // -------------------------------------------------------------------------
-    console.log('\n--- PRUEBA 2: Ficha de Detalle, URL e Historial ---');
+    console.log('\n--- PRUEBA 2: Ficha de Detalle, Retorno a Listado con Filtros y Scroll ---');
     consoleErrors.length = 0;
     jsExceptions.length = 0;
+
+    // Simular desplazamiento de scroll en el listado antes de abrir evento
+    await evaluate("document.body.style.minHeight = '2500px'");
+    await evaluate('window.scrollTo(0, 320)');
+    await new Promise((r) => setTimeout(r, 200));
+    const scrollBeforeOpen = await evaluate('window.scrollY');
 
     await evaluate("document.querySelector('.card-compact[data-action=\"open-event\"]').click()");
     await new Promise((r) => setTimeout(r, 600));
@@ -200,27 +217,176 @@ async function runBrowserVerification() {
       record('Restauración de Foco al Disparador', focusedTag === 'open-full-poster', `Elemento enfocado: ${focusedTag}`);
     }
 
-    // Presionar Escape para cerrar Modal Detalle (Segundo Escape)
+    // 2A. Cierre mediante botón de cerrar ficha y comprobación de restauración de filtros, URL y scroll
+    await evaluate("document.querySelector('.modal-close-btn')?.click()");
+    await new Promise((r) => setTimeout(r, 400));
+
+    const isClosedByBtn = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
+    const fullUrlAfterBtnClose = await evaluate('window.location.pathname + window.location.search');
+    const expectedListingPath = '/?city=palencia&date=2026-10-19&cat=musica';
+    record('Cierre con Botón restaura exactamente URL y parámetros de listado', isClosedByBtn && fullUrlAfterBtnClose === expectedListingPath, `URL restaurada: ${fullUrlAfterBtnClose}`);
+
+    const filterAfterBtnClose = await evaluate("document.querySelector('.cat-btn[data-cat=\"musica\"]')?.classList.contains('active')");
+    record('Filtro de Música sigue activo tras cerrar modal', !!filterAfterBtnClose, `Filtro música activo: ${filterAfterBtnClose}`);
+
+    const scrollAfterBtnClose = await evaluate('window.scrollY');
+    record('Scroll previo restaurado fielmente tras cierre', Math.abs(scrollAfterBtnClose - scrollBeforeOpen) <= 5, `Scroll: antes=${scrollBeforeOpen}, después=${scrollAfterBtnClose}`);
+
+    // Restaurar estilo temporal de scroll
+    await evaluate("document.body.style.minHeight = ''");
+
+    // 2B. Reapertura y Cierre mediante tecla Escape
+    await evaluate("document.querySelector('.card-compact[data-action=\"open-event\"]').click()");
+    await new Promise((r) => setTimeout(r, 500));
+
     await sendCDP('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', windowsVirtualKeyCode: 27 });
     await sendCDP('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', windowsVirtualKeyCode: 27 });
     await new Promise((r) => setTimeout(r, 400));
 
-    const isDetailModalClosed = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
-    const urlAfterModalClose = await evaluate('window.location.pathname');
-    record('Cierre Modal Detalle con Escape y Retorno de URL a /', !!(isDetailModalClosed && urlAfterModalClose === '/'), `Modal cerrado: ${isDetailModalClosed}, URL: ${urlAfterModalClose}`);
+    const isClosedByEscape = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
+    const fullUrlAfterEscape = await evaluate('window.location.pathname + window.location.search');
+    record('Cierre con Escape restaura exactamente URL de listado con filtros', isClosedByEscape && fullUrlAfterEscape === expectedListingPath, `URL: ${fullUrlAfterEscape}`);
 
-    // Probar navegación adelante/atrás en historial del navegador
+    // 2C. Navegación adelante/atrás en historial del navegador
     await evaluate('window.history.forward()');
     await new Promise((r) => setTimeout(r, 500));
     const modalReopenedOnForward = await evaluate("document.getElementById('detail-modal')?.classList.contains('active')");
-    record('Navegación Adelante (forward) reabre modal', !!modalReopenedOnForward, `Modal activo en forward: ${modalReopenedOnForward}`);
+    const forwardUrl = await evaluate('window.location.pathname');
+    record('Navegación Adelante (forward) reabre modal y actualiza URL a /events/:id', !!(modalReopenedOnForward && forwardUrl.startsWith('/events/')), `Modal: ${modalReopenedOnForward}, URL: ${forwardUrl}`);
 
     await evaluate('window.history.back()');
     await new Promise((r) => setTimeout(r, 500));
     const modalClosedOnBack = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
-    record('Navegación Atrás (back) cierra modal y sincroniza', !!modalClosedOnBack, `Modal cerrado en back: ${modalClosedOnBack}`);
+    const backFullUrl = await evaluate('window.location.pathname + window.location.search');
+    record('Navegación Atrás (back) cierra modal y sincroniza URL con filtros', !!(modalClosedOnBack && backFullUrl === expectedListingPath), `Modal cerrado: ${modalClosedOnBack}, URL: ${backFullUrl}`);
 
     record('Ausencia de Errores JS en Detalle e Historial', consoleErrors.length === 0 && jsExceptions.length === 0,
+      `Console errors: ${consoleErrors.length}, Exceptions: ${jsExceptions.length}`);
+
+    // -------------------------------------------------------------------------
+    // 2D. Consultas Pendientes, Respuestas Demoradas y Cancelación Segura
+    // -------------------------------------------------------------------------
+    console.log('\n--- PRUEBA 2D: Cancelación de Peticiones en Vuelo y Respuestas Demoradas ---');
+    consoleErrors.length = 0;
+    jsExceptions.length = 0;
+
+    // Configurar mock de fetch con control de retardos y datos sintéticos
+    await evaluate(`(() => {
+      window.__realFetch = window.fetch;
+      window.fetch = (input, init) => {
+        const url = typeof input === 'string' ? input : input.url;
+        // Petición A (evento 8): demora de 800ms
+        if (url.includes('/api/v1/events/8')) {
+          return new Promise((resolve, reject) => {
+            const timeout = setTimeout(async () => {
+              try {
+                const res = await window.__realFetch(input, init);
+                resolve(res);
+              } catch (e) {
+                reject(e);
+              }
+            }, 800);
+            if (init && init.signal) {
+              init.signal.addEventListener('abort', () => {
+                clearTimeout(timeout);
+                reject(new DOMException('Aborted', 'AbortError'));
+              });
+            }
+          });
+        }
+        // Petición B (evento 9991): respuesta rápida sintética de 150ms
+        if (url.includes('/api/v1/events/9991')) {
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              resolve(new Response(JSON.stringify({
+                event: {
+                  id: 9991,
+                  title: 'Evento B Concierto',
+                  start_time: '2026-10-19T21:00:00.000Z',
+                  end_time: null,
+                  status: 'published',
+                  venue: { name: 'Sala B' },
+                  price: { is_free: true, amount_cents: 0 },
+                  actions: {},
+                  category: 'musica_directo'
+                }
+              }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+            }, 150);
+          });
+        }
+        return window.__realFetch(input, init);
+      };
+    })()`);
+
+    // Caso A: Abrir evento y cerrar inmediatamente antes de que llegue la respuesta
+    const listingTitleBeforeSlow = await evaluate('document.title');
+    await evaluate('(() => { window.openEventModal(8, { pushHistory: true }); })()');
+    await new Promise((r) => setTimeout(r, 60)); // Espera corta para que inicie la petición asíncrona
+    const spinnerVisibleWhileLoading = await evaluate("!!document.querySelector('.loader-spinner')");
+    record('Spinner visible durante petición demorada', spinnerVisibleWhileLoading, `Spinner presente: ${spinnerVisibleWhileLoading}`);
+
+    // Cerrar modal de inmediato antes de que transcurran los 800ms
+    await evaluate('window.closeModal()');
+    await new Promise((r) => setTimeout(r, 1000)); // Esperar a que venza el temporizador de la petición abortada
+
+    const modalStaysClosedAfterDelayedFetch = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
+    record('Petición Demorada Cancelada: Modal permanece cerrado', modalStaysClosedAfterDelayedFetch, `Modal cerrado tras resolución tardía: ${modalStaysClosedAfterDelayedFetch}`);
+
+    const titleRemainsListingAfterAbort = await evaluate('document.title');
+    record('Petición Demorada Cancelada: Título no es sobrescrito', titleRemainsListingAfterAbort === listingTitleBeforeSlow, `Título: "${titleRemainsListingAfterAbort}"`);
+
+    const urlRemainsListingAfterAbort = await evaluate('window.location.pathname + window.location.search');
+    record('Petición Demorada Cancelada: URL permanece en listado con filtros', urlRemainsListingAfterAbort === expectedListingPath, `URL: ${urlRemainsListingAfterAbort}`);
+
+    // Caso B: Abrir A y pulsar Atrás antes de recibir respuesta (no debe revertir navegación)
+    await evaluate('(() => { window.openEventModal(8, { pushHistory: true }); })()');
+    await new Promise((r) => setTimeout(r, 50));
+    await evaluate('window.history.back()');
+    await new Promise((r) => setTimeout(r, 1000));
+
+    const modalClosedAfterBackOnLoading = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
+    const urlAfterBackOnLoading = await evaluate('window.location.pathname + window.location.search');
+    record('Abrir A y pulsar Atrás antes de recibir: Modal cerrado y navegación no revertida',
+      modalClosedAfterBackOnLoading && urlAfterBackOnLoading === expectedListingPath,
+      `Modal cerrado: ${modalClosedAfterBackOnLoading}, URL: ${urlAfterBackOnLoading}`);
+
+    // Caso C: Abrir A y después B (A demorado no sustituye a B rápido)
+    await evaluate('(() => { window.openEventModal(8, { pushHistory: true }); })()');
+    await new Promise((r) => setTimeout(r, 50));
+    await evaluate('(() => { window.openEventModal(9991, { pushHistory: true }); })()');
+    // Esperar 250ms para que B responda (150ms)
+    await new Promise((r) => setTimeout(r, 250));
+    const titleModalB = await evaluate("document.getElementById('modal-title-main')?.textContent?.trim()");
+    record('Evento B rápido se renderiza en modal', titleModalB === 'Evento B Concierto', `Título en modal: "${titleModalB}"`);
+
+    // Esperar 800ms adicionales para que la respuesta de A venza si no hubiese sido abortada
+    await new Promise((r) => setTimeout(r, 800));
+    const titleModalStillB = await evaluate("document.getElementById('modal-title-main')?.textContent?.trim()");
+    record('Evento A demorado nunca sustituye ni sobrescribe a B', titleModalStillB === 'Evento B Concierto', `Título en modal: "${titleModalStillB}"`);
+
+    // Cerrar modal tras Caso C
+    await evaluate('window.closeModal()');
+    await new Promise((r) => setTimeout(r, 400));
+
+    // Caso D: Rápida alternancia Atrás/Adelante durante peticiones en curso
+    await evaluate('window.history.forward()');
+    await new Promise((r) => setTimeout(r, 80));
+    await evaluate('window.history.back()');
+    await new Promise((r) => setTimeout(r, 80));
+    await evaluate('window.history.forward()');
+    await new Promise((r) => setTimeout(r, 80));
+    await evaluate('window.history.back()');
+    await new Promise((r) => setTimeout(r, 400));
+
+    const modalInSyncAfterRapidNav = await evaluate("!document.getElementById('detail-modal')?.classList.contains('active')");
+    const urlInSyncAfterRapidNav = await evaluate('window.location.pathname + window.location.search');
+    record('Rápida navegación Atrás/Adelante sincroniza estado y URL', modalInSyncAfterRapidNav && urlInSyncAfterRapidNav === expectedListingPath,
+      `Modal cerrado: ${modalInSyncAfterRapidNav}, URL: ${urlInSyncAfterRapidNav}`);
+
+    // Restaurar fetch original
+    await evaluate('window.fetch = window.__realFetch');
+
+    record('Ausencia de Errores JS en Cancelación y Respuestas Demoradas', consoleErrors.length === 0 && jsExceptions.length === 0,
       `Console errors: ${consoleErrors.length}, Exceptions: ${jsExceptions.length}`);
 
     // -------------------------------------------------------------------------
