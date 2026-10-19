@@ -8,8 +8,13 @@ export interface EventActionSource {
   id: number;
   title: string;
   status: string;
-  start_time: string; // ISO 8601
+  start_time: string | null; // ISO 8601 or null if pending
   end_time: string | null; // ISO 8601
+  time_status?: 'confirmed' | 'pending_time' | 'tentative_date';
+  editorial_date?: string;
+  end_date?: string | null;
+  schedule_text?: string | null;
+  approximate_schedule?: string | null;
   venue_name: string;
   venue_address?: string | null;
   city?: string | null;
@@ -38,6 +43,11 @@ export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: str
     status: ev.status,
     start_time: ev.start_time,
     end_time: ev.end_time || null,
+    time_status: ev.time_status,
+    editorial_date: ev.editorial_date,
+    end_date: ev.end_date || null,
+    schedule_text: ev.schedule_text || null,
+    approximate_schedule: ev.approximate_schedule || null,
     venue_name: ev.venue?.name || '',
     venue_address: venue?.address || null,
     city: venue?.city || null,
@@ -53,9 +63,59 @@ export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: str
 
 /**
  * Formatea fecha y hora reales de un evento en zona horaria Europe/Madrid.
- * Evalúa siempre los instantes reales (start_time y end_time), nunca editorial_date.
+ * Evalúa los instantes reales (start_time y end_time), soportando horario pendiente y periodos de exposiciones.
  */
-export function formatEventDateTimeInMadrid(startTimeIso: string, endTimeIso?: string | null): string {
+export function formatEventDateTimeInMadrid(
+  startTimeIso: string | null | undefined,
+  endTimeIso?: string | null,
+  options?: {
+    time_status?: 'confirmed' | 'pending_time' | 'tentative_date';
+    editorial_date?: string;
+    end_date?: string | null;
+  }
+): string {
+  // 1. Si es una exposición continuada con periodo (end_date > editorial_date)
+  if (options?.end_date && options?.editorial_date && options.end_date > options.editorial_date) {
+    const parseYmd = (ymd: string) => {
+      const [y, m, d] = ymd.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    };
+    const sDate = parseYmd(options.editorial_date);
+    const eDate = parseYmd(options.end_date);
+    const monthFormatter = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', month: 'long' });
+    const dayFormatter = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
+    const sMonth = monthFormatter.format(sDate);
+    const eMonth = monthFormatter.format(eDate);
+
+    if (sDate.getUTCFullYear() === eDate.getUTCFullYear() && sMonth === eMonth) {
+      return `Del ${dayFormatter.format(sDate)} al ${dayFormatter.format(eDate)} de ${sMonth}`;
+    }
+    return `Del ${dayFormatter.format(sDate)} de ${sMonth} al ${dayFormatter.format(eDate)} de ${eMonth}`;
+  }
+
+  // 2. Si el horario está pendiente de confirmación o start_time es nulo
+  if (options?.time_status === 'pending_time' || !startTimeIso) {
+    let dateObj: Date | null = null;
+    if (startTimeIso) {
+      dateObj = new Date(startTimeIso);
+    } else if (options?.editorial_date) {
+      const [y, m, d] = options.editorial_date.split('-').map(Number);
+      dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    }
+    if (dateObj && !Number.isNaN(dateObj.getTime())) {
+      const dateFormatter = new Intl.DateTimeFormat('es-ES', {
+        timeZone: 'Europe/Madrid',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+      const rawStartDate = dateFormatter.format(dateObj);
+      const startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
+      return `${startDateText} · Horario por confirmar`;
+    }
+    return 'Horario por confirmar';
+  }
+
   const startDate = new Date(startTimeIso);
   if (Number.isNaN(startDate.getTime())) return '';
 
@@ -135,7 +195,11 @@ export function buildWhatsAppMessage(source: EventActionSource): string {
     : source.title;
   detailLines.push(title.trim());
 
-  const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+  const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time, {
+    time_status: source.time_status,
+    editorial_date: source.editorial_date,
+    end_date: source.end_date,
+  });
   if (dateTime) {
     detailLines.push(`📅 ${dateTime}`);
   }
@@ -173,7 +237,11 @@ export function buildShareText(source: EventActionSource): string {
     : source.title;
   detailLines.push(title.trim());
 
-  const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+  const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time, {
+    time_status: source.time_status,
+    editorial_date: source.editorial_date,
+    end_date: source.end_date,
+  });
   if (dateTime) {
     detailLines.push(`📅 ${dateTime}`);
   }
@@ -283,6 +351,8 @@ export function buildDirectionsUrl(source: {
  */
 export type CalendarState =
   | { status: 'cancelled'; allowed: false; notice: string }
+  | { status: 'pending_time'; allowed: false; notice: string }
+  | { status: 'exhibition_period'; allowed: false; notice: string }
   | { status: 'invalid_dates'; allowed: false; notice: string }
   | { status: 'finished'; allowed: false; notice: string }
   | { status: 'in_progress'; allowed: true; notice: string }
@@ -296,8 +366,11 @@ export type CalendarState =
 export function computeCalendarState(
   source: {
     status: string;
-    start_time: string;
+    start_time: string | null;
     end_time: string | null;
+    time_status?: 'confirmed' | 'pending_time' | 'tentative_date';
+    editorial_date?: string;
+    end_date?: string | null;
   },
   now: Date = new Date()
 ): CalendarState {
@@ -309,7 +382,25 @@ export function computeCalendarState(
     };
   }
 
-  // 1. Validación de start_time
+  // 1. Si el horario está pendiente de confirmación
+  if (source.time_status === 'pending_time') {
+    return {
+      status: 'pending_time',
+      allowed: false,
+      notice: 'Horario pendiente de confirmación. VayaPlan avisará cuando se publique la hora definitiva.',
+    };
+  }
+
+  // 2. Si es una exposición continuada (multi-día)
+  if (source.end_date && source.editorial_date && source.end_date > source.editorial_date) {
+    return {
+      status: 'exhibition_period',
+      allowed: false,
+      notice: 'Exposición con periodo de visita continuado. Consulta los horarios de sala.',
+    };
+  }
+
+  // 3. Validación de start_time
   if (!source.start_time || typeof source.start_time !== 'string') {
     return {
       status: 'invalid_dates',
@@ -468,8 +559,16 @@ export function generateIcsCalendar(
 ): string {
   const now = options?.now || new Date();
 
+  // Validación de horario pendiente y periodo de exposiciones
+  if (source.time_status === 'pending_time' || !source.start_time) {
+    throw new Error('Horario no confirmado: no se puede generar archivo de calendario sin hora definitiva');
+  }
+  if (source.end_date && source.editorial_date && source.end_date > source.editorial_date) {
+    throw new Error('Exposición continuada: no se puede generar un evento de calendario de una sola sesión');
+  }
+
   // Validación estricta de start_time
-  if (!source.start_time || typeof source.start_time !== 'string') {
+  if (typeof source.start_time !== 'string') {
     throw new Error('Fecha de inicio no disponible para iCalendar');
   }
   const startDate = new Date(source.start_time);
@@ -783,6 +882,11 @@ export function getEventActionsClientScript(): string {
         status: ev.status,
         start_time: ev.start_time,
         end_time: ev.end_time || null,
+        time_status: ev.time_status,
+        editorial_date: ev.editorial_date,
+        end_date: ev.end_date || null,
+        schedule_text: ev.schedule_text || null,
+        approximate_schedule: ev.approximate_schedule || null,
         venue_name: ev.venue ? ev.venue.name : '',
         venue_address: ev.venue ? ev.venue.address : null,
         city: ev.venue ? ev.venue.city : null,
@@ -796,35 +900,74 @@ export function getEventActionsClientScript(): string {
       };
     }
 
-    function formatEventDateTimeInMadrid(startTimeIso, endTimeIso) {
-      if (!startTimeIso) return '';
-      const startDate = new Date(startTimeIso);
+    function formatEventDateTimeInMadrid(startTimeIso, endTimeIso, options) {
+      if (options && options.end_date && options.editorial_date && options.end_date > options.editorial_date) {
+        var parseYmd = function(ymd) {
+          var p = ymd.split('-').map(Number);
+          return new Date(Date.UTC(p[0], p[1] - 1, p[2], 12, 0, 0));
+        };
+        var sDate = parseYmd(options.editorial_date);
+        var eDate = parseYmd(options.end_date);
+        var monthFormatter = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', month: 'long' });
+        var dayFormatter = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
+        var sMonth = monthFormatter.format(sDate);
+        var eMonth = monthFormatter.format(eDate);
+
+        if (sDate.getUTCFullYear() === eDate.getUTCFullYear() && sMonth === eMonth) {
+          return 'Del ' + dayFormatter.format(sDate) + ' al ' + dayFormatter.format(eDate) + ' de ' + sMonth;
+        }
+        return 'Del ' + dayFormatter.format(sDate) + ' de ' + sMonth + ' al ' + dayFormatter.format(eDate) + ' de ' + eMonth;
+      }
+
+      if ((options && options.time_status === 'pending_time') || !startTimeIso) {
+        var dateObj = null;
+        if (startTimeIso) {
+          dateObj = new Date(startTimeIso);
+        } else if (options && options.editorial_date) {
+          var p2 = options.editorial_date.split('-').map(Number);
+          dateObj = new Date(Date.UTC(p2[0], p2[1] - 1, p2[2], 12, 0, 0));
+        }
+        if (dateObj && !Number.isNaN(dateObj.getTime())) {
+          var dateFormatter = new Intl.DateTimeFormat('es-ES', {
+            timeZone: 'Europe/Madrid',
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+          });
+          var rawStartDate = dateFormatter.format(dateObj);
+          var startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
+          return startDateText + ' · Horario por confirmar';
+        }
+        return 'Horario por confirmar';
+      }
+
+      var startDate = new Date(startTimeIso);
       if (Number.isNaN(startDate.getTime())) return '';
 
-      const dateFormatter = new Intl.DateTimeFormat('es-ES', {
+      var dateFormatter = new Intl.DateTimeFormat('es-ES', {
         timeZone: 'Europe/Madrid',
         weekday: 'long',
         day: 'numeric',
         month: 'long',
       });
 
-      const timeFormatter = new Intl.DateTimeFormat('es-ES', {
+      var timeFormatter = new Intl.DateTimeFormat('es-ES', {
         timeZone: 'Europe/Madrid',
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
       });
 
-      const rawStartDate = dateFormatter.format(startDate);
-      const startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
-      const startTimeText = timeFormatter.format(startDate);
+      var rawStartDate = dateFormatter.format(startDate);
+      var startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
+      var startTimeText = timeFormatter.format(startDate);
 
       if (endTimeIso) {
-        const endDate = new Date(endTimeIso);
+        var endDate = new Date(endTimeIso);
         if (!Number.isNaN(endDate.getTime())) {
-          const rawEndDate = dateFormatter.format(endDate);
-          const endDateText = rawEndDate.charAt(0).toUpperCase() + rawEndDate.slice(1);
-          const endTimeText = timeFormatter.format(endDate);
+          var rawEndDate = dateFormatter.format(endDate);
+          var endDateText = rawEndDate.charAt(0).toUpperCase() + rawEndDate.slice(1);
+          var endTimeText = timeFormatter.format(endDate);
 
           if (rawStartDate === rawEndDate) {
             return startDateText + ' · ' + startTimeText + ' - ' + endTimeText + ' h';
@@ -857,7 +1000,11 @@ export function getEventActionsClientScript(): string {
         : source.title;
       detailLines.push(title.trim());
 
-      const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+      const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time, {
+        time_status: source.time_status,
+        editorial_date: source.editorial_date,
+        end_date: source.end_date,
+      });
       if (dateTime) detailLines.push('📅 ' + dateTime);
 
       if (source.venue_name && source.venue_name.trim().length > 0) {
@@ -886,7 +1033,11 @@ export function getEventActionsClientScript(): string {
         : source.title;
       detailLines.push(title.trim());
 
-      const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+      const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time, {
+        time_status: source.time_status,
+        editorial_date: source.editorial_date,
+        end_date: source.end_date,
+      });
       if (dateTime) detailLines.push('📅 ' + dateTime);
 
       if (source.venue_name && source.venue_name.trim().length > 0) {
@@ -962,6 +1113,22 @@ export function getEventActionsClientScript(): string {
           status: 'cancelled',
           allowed: false,
           notice: 'Evento cancelado por la organización.',
+        };
+      }
+
+      if (source.time_status === 'pending_time') {
+        return {
+          status: 'pending_time',
+          allowed: false,
+          notice: 'Horario pendiente de confirmación. VayaPlan avisará cuando se publique la hora definitiva.',
+        };
+      }
+
+      if (source.end_date && source.editorial_date && source.end_date > source.editorial_date) {
+        return {
+          status: 'exhibition_period',
+          allowed: false,
+          notice: 'Exposición con periodo de visita continuado. Consulta los horarios de sala.',
         };
       }
 
