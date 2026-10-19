@@ -42,6 +42,36 @@ BEGIN
   IF v_continuous_count > 0 THEN
     RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos con time_status != ''confirmed''.', v_continuous_count;
   END IF;
+
+  -- Comprobar si existen eventos con end_date informado
+  DECLARE
+    v_end_date_count INT;
+    v_schedule_text_count INT;
+    v_approx_sched_count INT;
+    v_new_cat_count INT;
+  BEGIN
+    SELECT COUNT(*) INTO v_end_date_count FROM events WHERE end_date IS NOT NULL;
+    IF v_end_date_count > 0 THEN
+      RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos con end_date informado. La eliminación de la columna causaría pérdida de datos.', v_end_date_count;
+    END IF;
+
+    SELECT COUNT(*) INTO v_schedule_text_count FROM events WHERE schedule_text IS NOT NULL;
+    IF v_schedule_text_count > 0 THEN
+      RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos con schedule_text informado. La eliminación de la columna causaría pérdida de datos.', v_schedule_text_count;
+    END IF;
+
+    SELECT COUNT(*) INTO v_approx_sched_count FROM events WHERE approximate_schedule IS NOT NULL;
+    IF v_approx_sched_count > 0 THEN
+      RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos con approximate_schedule informado. La eliminación de la columna causaría pérdida de datos.', v_approx_sched_count;
+    END IF;
+
+    -- Comprobar categorías no representables en el esquema base (pre-010)
+    SELECT COUNT(*) INTO v_new_cat_count FROM events
+    WHERE category NOT IN ('musica_directo', 'dj_tardeo', 'monologo', 'cine', 'teatro', 'exposicion', 'cultura');
+    IF v_new_cat_count > 0 THEN
+      RAISE EXCEPTION 'Rollback 010 abortado: Existen % eventos con categorías nuevas (baloncesto, futbol, rugby, conferencia) no soportadas en el esquema base.', v_new_cat_count;
+    END IF;
+  END;
 END $$;
 
 -- 2. Eliminar índices asociados

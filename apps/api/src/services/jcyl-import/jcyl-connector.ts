@@ -23,6 +23,9 @@ export function computeEventContentHash(fields: {
   scheduleText?: string | null;
   priceCents: number;
   isFree: boolean;
+  venueId?: number | null;
+  sourceUrl?: string | null;
+  imageUrl?: string | null;
 }): string {
   const normalized = {
     title: (fields.title || '').trim(),
@@ -36,6 +39,9 @@ export function computeEventContentHash(fields: {
     scheduleText: fields.scheduleText || null,
     priceCents: fields.priceCents,
     isFree: fields.isFree,
+    venueId: fields.venueId || null,
+    sourceUrl: fields.sourceUrl || null,
+    imageUrl: fields.imageUrl || null,
   };
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
@@ -167,12 +173,16 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
         schedule_text: string | null;
         price_cents: number;
         is_free: boolean;
+        venue_id: number | null;
+        source_url: string | null;
+        image_url: string | null;
         status: string;
         verified_at: string | null;
         source_hash: string | null;
       }>(
-        `SELECT id, title, description, category, time_status, start_time, end_time,
+        `SELECT id, venue_id, title, description, category, time_status, start_time, end_time,
                 editorial_date, end_date, schedule_text, price_cents, is_free,
+                venue_id, source_url, image_url,
                 status, verified_at, source_hash
          FROM events
          WHERE city_id = $1 AND dedupe_key = $2
@@ -180,7 +190,10 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
         [cityId, item.dedupeKey]
       );
 
-      const incomingHash = computeEventContentHash(item);
+      const incomingHash = computeEventContentHash({
+        ...item,
+        venueId: libraryVenueId,
+      });
 
       if (existingRes.rows.length === 0) {
         // Insertar nuevo borrador (status = 'tentative') registrando su source_hash
@@ -188,13 +201,13 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
           `INSERT INTO events (
              city_id, venue_id, title, description, category,
              time_status, start_time, end_time, editorial_date, end_date,
-             schedule_text, price_cents, is_free, status,
+             schedule_text, price_cents, is_free, image_url, status,
              source_type, source_url, source_hash, dedupe_key, created_at, updated_at
            ) VALUES (
              $1, $2, $3, $4, $5,
              $6, $7, $8, $9, $10,
-             $11, $12, $13, 'tentative',
-             'api', $14, $15, $16, now(), now()
+             $11, $12, $13, $14, 'tentative',
+             'api', $15, $16, $17, now(), now()
            );`,
           [
             cityId,
@@ -210,6 +223,7 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
             item.scheduleText,
             item.priceCents,
             item.isFree,
+            item.imageUrl,
             item.sourceUrl,
             incomingHash,
             item.dedupeKey,
@@ -226,7 +240,7 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
         }
 
         // Regla 2: Comprobar si el borrador fue modificado manualmente por un editor humano.
-        // Se calcula el hash del contenido actual en base de datos.
+        // Se calcula el hash del contenido actual en base de datos cubriendo todos los campos overwritable.
         const currentDbHash = computeEventContentHash({
           title: existing.title,
           description: existing.description,
@@ -239,6 +253,9 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
           scheduleText: existing.schedule_text,
           priceCents: existing.price_cents,
           isFree: existing.is_free,
+          venueId: existing.venue_id,
+          sourceUrl: existing.source_url,
+          imageUrl: existing.image_url,
         });
 
         // Si existe un source_hash anterior y difiere del contenido actual de la BD,
@@ -257,22 +274,25 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
         // Regla 4: Si no fue editado por humanos y el feed oficial actualizó datos, se actualiza el borrador
         await query(
           `UPDATE events SET
-             title = $1,
-             description = $2,
-             category = $3,
-             time_status = $4,
-             start_time = $5,
-             end_time = $6,
-             editorial_date = $7,
-             end_date = $8,
-             schedule_text = $9,
-             price_cents = $10,
-             is_free = $11,
-             source_url = $12,
-             source_hash = $13,
+             venue_id = $1,
+             title = $2,
+             description = $3,
+             category = $4,
+             time_status = $5,
+             start_time = $6,
+             end_time = $7,
+             editorial_date = $8,
+             end_date = $9,
+             schedule_text = $10,
+             price_cents = $11,
+             is_free = $12,
+             image_url = $13,
+             source_url = $14,
+             source_hash = $15,
              updated_at = now()
-           WHERE id = $14;`,
+           WHERE id = $16;`,
           [
+            libraryVenueId,
             item.title,
             item.description,
             item.category,
@@ -284,6 +304,7 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
             item.scheduleText,
             item.priceCents,
             item.isFree,
+            item.imageUrl,
             item.sourceUrl,
             incomingHash,
             existing.id,

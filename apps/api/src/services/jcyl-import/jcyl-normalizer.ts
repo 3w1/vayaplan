@@ -257,6 +257,9 @@ export function normalizeJcylRecord(record: JcylRecordRaw): NormalizedJcylEvent 
     priceKnown,
     rawPrice,
     sourceUrl: record.enlace_contenido || null,
+    imageUrl: (record.imagen_evento_ampliada || record.imagen_evento || null)
+      ? (record.imagen_evento_ampliada || record.imagen_evento)!.replace(/&amp;/g, '&').trim()
+      : null,
     venueName: record.lugar_celebracion?.trim() || 'Biblioteca Pública de Palencia',
     venueAddress: record.calle?.trim() || 'C/ Eduardo Dato, 4',
     latitude: typeof record.latitud === 'number' ? record.latitud : null,

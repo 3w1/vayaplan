@@ -52,6 +52,7 @@ export interface NormalizedJcylEvent {
   priceKnown: boolean;
   rawPrice: string | null;
   sourceUrl: string | null;
+  imageUrl: string | null;
   venueName: string;
   venueAddress: string | null;
   latitude: number | null;

@@ -284,6 +284,88 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     expect(check.rows[0].status).toBe('tentative');
   });
 
+  test('Protección de edición manual: cambio manual de precio o condición de gratuidad se conserva', async () => {
+    // Modificar precio manualmente
+    await testPool.query(`
+      UPDATE events 
+      SET price_cents = 500, is_free = false
+      WHERE dedupe_key = 'jcyl:999902'
+    `);
+
+    const result = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: mockFetch,
+    });
+
+    expect(result.preservedEditorial).toBeGreaterThanOrEqual(1);
+
+    const check = await testPool.query("SELECT price_cents, is_free FROM events WHERE dedupe_key = 'jcyl:999902'");
+    expect(Number(check.rows[0].price_cents)).toBe(500);
+    expect(check.rows[0].is_free).toBe(false);
+  });
+
+  test('Protección de edición manual: cambio manual de recinto o fecha se conserva', async () => {
+    // Modificar fecha editorial manualmente
+    await testPool.query(`
+      UPDATE events 
+      SET editorial_date = '2026-11-20'
+      WHERE dedupe_key = 'jcyl:999902'
+    `);
+
+    const result = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: mockFetch,
+    });
+
+    expect(result.preservedEditorial).toBeGreaterThanOrEqual(1);
+
+    const check = await testPool.query("SELECT editorial_date FROM events WHERE dedupe_key = 'jcyl:999902'");
+    const dateStr = typeof check.rows[0].editorial_date === 'string'
+      ? check.rows[0].editorial_date
+      : new Date(check.rows[0].editorial_date).toISOString().split('T')[0];
+    expect(dateStr).toBe('2026-11-20');
+  });
+
+  test('Protección de edición manual: cambio manual de URL o imagen no se sobrescribe', async () => {
+    // Modificar imagen y source_url manualmente
+    await testPool.query(`
+      UPDATE events 
+      SET image_url = 'https://custom-cdn.vayaplan.com/custom-poster.jpg',
+          source_url = 'https://custom-source.com/evento-curado'
+      WHERE dedupe_key = 'jcyl:999902'
+    `);
+
+    const result = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: mockFetch,
+    });
+
+    expect(result.preservedEditorial).toBeGreaterThanOrEqual(1);
+
+    const check = await testPool.query("SELECT image_url, source_url FROM events WHERE dedupe_key = 'jcyl:999902'");
+    expect(check.rows[0].image_url).toBe('https://custom-cdn.vayaplan.com/custom-poster.jpg');
+    expect(check.rows[0].source_url).toBe('https://custom-source.com/evento-curado');
+  });
+
+  test('Segunda sincronización tras cambios manuales: sigue siendo idempotente y preserva datos', async () => {
+    const result = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: mockFetch,
+    });
+
+    expect(result.inserted).toBe(0);
+    expect(result.updated).toBe(0);
+    expect(result.preservedEditorial).toBeGreaterThanOrEqual(2);
+
+    const check = await testPool.query("SELECT image_url, price_cents FROM events WHERE dedupe_key = 'jcyl:999902'");
+    expect(check.rows[0].image_url).toBe('https://custom-cdn.vayaplan.com/custom-poster.jpg');
+    expect(Number(check.rows[0].price_cents)).toBe(500);
+  });
+
   test('Exclusión estricta de otros municipios de la provincia y otros recintos', async () => {
     const extraRecords: JcylRecordRaw[] = [
       {
