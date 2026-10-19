@@ -489,9 +489,37 @@ app.get('/events/:id', async (c) => {
     timeZone: 'Europe/Madrid',
   });
 
-  const pageDescription = isCancelled
-    ? `CANCELADO: ${ev.title} en ${ev.venue.name} (${dateFormatted}, ${timeFormatted} h). Consulta detalles y estado en VayaPlan.`
-    : `${ev.title} en ${ev.venue.name}. ${dateFormatted} a las ${timeFormatted} h en Palencia. ${ev.description ? ev.description.slice(0, 130) + '...' : 'Agenda hiperlocal de Palencia sin registro ni fricción.'}`;
+  const dateFormattedCap = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
+  let priceText = '';
+  if (ev.price) {
+    if (ev.price.is_free || ev.price.amount_cents === 0) {
+      priceText = 'Gratis';
+    } else if (ev.price.amount_cents !== null && ev.price.amount_cents !== undefined) {
+      priceText = `${(ev.price.amount_cents / 100).toFixed(2).replace('.', ',')} €`;
+    } else if (ev.price.label) {
+      priceText = ev.price.label;
+    }
+  }
+
+  const descSnippet = ev.description ? ev.description.trim() : '';
+
+  let pageDescription: string;
+  if (isCancelled) {
+    pageDescription = `CANCELADO: ${ev.title} en ${ev.venue.name} (${dateFormatted}, ${timeFormatted} h). Consulta detalles y estado en VayaPlan.`;
+  } else {
+    const details = [
+      `${dateFormattedCap} · ${timeFormatted} h`,
+      ev.venue.name,
+      priceText ? `Precio: ${priceText}` : '',
+    ].filter(Boolean).join(' · ');
+
+    if (descSnippet) {
+      const excerpt = descSnippet.length > 130 ? descSnippet.slice(0, 130) + '...' : descSnippet;
+      pageDescription = `${ev.title} — ${details}. ${excerpt}`;
+    } else {
+      pageDescription = `${ev.title} — ${details}. Toda la información, cartel y cómo llegar en VayaPlan.`;
+    }
+  }
 
   const canonicalUrl = `${publicOrigin}/events/${ev.id}`;
 

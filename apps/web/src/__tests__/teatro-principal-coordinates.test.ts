@@ -6,6 +6,7 @@ import {
   isValidCoordinate,
   isValidExternalMapUrl,
   extractEventActionSource,
+  renderVenueDirectionsHtml,
   renderEventActionsHtml,
   type PublicEventItem,
 } from '../event-actions';
@@ -108,7 +109,7 @@ describe('Pruebas Dirigidas — Coordenadas y "Cómo llegar" de Teatro Principal
   });
 
   describe('3. Recorrido Dato -> API -> Botón de Acciones', () => {
-    test('extractEventActionSource y renderEventActionsBar generan el botón con destino definitivo', () => {
+    test('extractEventActionSource y renderVenueDirectionsHtml generan el botón con destino definitivo', () => {
       const mockApiEvent: PublicEventItem = {
         id: 8,
         title: 'Festival Jazz',
@@ -135,13 +136,17 @@ describe('Pruebas Dirigidas — Coordenadas y "Cómo llegar" de Teatro Principal
       expect(source.longitude).toBe(EXPECTED_LON);
       expect(source.venue_name).toBe('Teatro Principal de Palencia');
 
-      const html = renderEventActionsHtml(source);
+      const directionsHtml = renderVenueDirectionsHtml(source);
       
       // El HTML debe contener el enlace de Cómo llegar apuntando a destination=42.00994338,-4.53071776
-      expect(html).toContain('href="https://www.google.com/maps/dir/?api=1&amp;destination=42.00994338,-4.53071776"');
-      expect(html).toContain('target="_blank"');
-      expect(html).toContain('rel="noopener noreferrer"');
-      expect(html).toContain('Cómo llegar');
+      expect(directionsHtml).toContain('href="https://www.google.com/maps/dir/?api=1&amp;destination=42.00994338,-4.53071776"');
+      expect(directionsHtml).toContain('target="_blank"');
+      expect(directionsHtml).toContain('rel="noopener noreferrer"');
+      expect(directionsHtml).toContain('Cómo llegar ↗');
+
+      // Comprobar además que renderEventActionsHtml (la cuadrícula 2x2 de compartir) ya no contiene "Cómo llegar"
+      const actionsHtml = renderEventActionsHtml(source);
+      expect(actionsHtml).not.toContain('Cómo llegar');
     });
   });
 

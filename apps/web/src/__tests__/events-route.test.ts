@@ -190,8 +190,76 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     expect(html).toContain('Cartel de Noche de Monólogos en Teatro Principal en Teatro Principal');
     // Bootstrap con evento
     expect(html).toContain('id="__VAYAPLAN_BOOTSTRAP__"');
-    expect(html).toContain('"id":101');
-    expect(html).toContain('"title":"Noche de Monólogos en Teatro Principal"');
+    expect('"id":101').toBeTruthy();
+    expect('"title":"Noche de Monólogos en Teatro Principal"').toBeTruthy();
+  });
+
+  test('Evento sin imagen utiliza fallback de marca (icon-512x512.png) y mantiene coherencia social', async () => {
+    const eventWithoutImage: PublicEventItem = {
+      ...sampleEvent,
+      id: 104,
+      title: 'Taller Cultural Sin Cartel',
+      image_url: null,
+      image_thumb_url: null,
+    };
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const urlStr = typeof input === 'string' ? input : input.toString();
+      if (urlStr.includes('/api/v1/events/104')) {
+        return new Response(JSON.stringify({ event: eventWithoutImage }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    }) as any;
+
+    const fetchFn = (webApp as any).fetch;
+    const res = await fetchFn(new Request('http://localhost/events/104'));
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    // Fallback de marca para og:image y twitter:image
+    expect(html).toContain('<meta property="og:image" content="https://vayaplan.com/icons/icon-512x512.png">');
+    expect(html).toContain('<meta name="twitter:image" content="https://vayaplan.com/icons/icon-512x512.png">');
+    expect(html).toContain('<link rel="canonical" href="https://vayaplan.com/events/104">');
+    expect(html).toContain('<meta property="og:url" content="https://vayaplan.com/events/104">');
+
+    // Comprobar ausencia de etiquetas contradictorias
+    expect(html).not.toContain('content="null"');
+    expect(html).not.toContain('content="undefined"');
+  });
+
+  test('Evento sin descripción genera metadatos enriquecidos con datos factuales sin texto genérico de la home', async () => {
+    const eventWithoutDesc: PublicEventItem = {
+      ...sampleEvent,
+      id: 103,
+      title: 'Danza Contemporánea',
+      description: null,
+      price: { amount_cents: 0, is_free: true, label: 'Gratis' },
+    };
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const urlStr = typeof input === 'string' ? input : input.toString();
+      if (urlStr.includes('/api/v1/events/103')) {
+        return new Response(JSON.stringify({ event: eventWithoutDesc }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    }) as any;
+
+    const fetchFn = (webApp as any).fetch;
+    const res = await fetchFn(new Request('http://localhost/events/103'));
+    expect(res.status).toBe(200);
+
+    const html = await res.text();
+    expect(html).not.toContain('Agenda hiperlocal de Palencia sin registro ni fricción.');
+    expect(html).toContain('Danza Contemporánea');
+    expect(html).toContain('Teatro Principal');
+    expect(html).toContain('Gratis');
+    expect(html).toContain('Toda la información, cartel y cómo llegar en VayaPlan.');
   });
 
   test('Evento cancelado: responde 200 identificando claramente la cancelación', async () => {

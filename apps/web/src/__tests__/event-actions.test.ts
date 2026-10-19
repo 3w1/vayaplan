@@ -5,6 +5,7 @@ import {
   formatConfirmedPrice,
   buildWhatsAppMessage,
   buildWhatsAppShareUrl,
+  buildShareText,
   isValidCoordinate,
   isValidExternalMapUrl,
   buildDirectionsUrl,
@@ -14,6 +15,7 @@ import {
   formatUtcIcs,
   generateIcsCalendar,
   renderEventActionsHtml,
+  renderVenueDirectionsHtml,
   type EventActionSource,
 } from '../event-actions';
 import type { PublicEventItem } from '@vayaplan/types';
@@ -38,24 +40,24 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
   };
 
   describe('1. Formateo de Fechas en Europe/Madrid', () => {
-    test('formatea correctamente fecha y hora reales diurnas en Europe/Madrid', () => {
+    test('formatea correctamente fecha y hora reales diurnas en Europe/Madrid con mayúscula inicial', () => {
       // 18:00 UTC en horario de verano (CEST) = 20:00
       const formatted = formatEventDateTimeInMadrid('2026-10-19T18:00:00.000Z');
-      expect(formatted).toBe('lunes, 19 de octubre, 20:00 h');
+      expect(formatted).toBe('Lunes, 19 de octubre · 20:00 h');
     });
 
-    test('formatea rango de inicio y fin en el mismo día', () => {
+    test('formatea rango de inicio y fin en el mismo día con separador de punto medio', () => {
       const formatted = formatEventDateTimeInMadrid(
         '2026-10-19T18:00:00.000Z',
         '2026-10-19T20:30:00.000Z'
       );
-      expect(formatted).toBe('lunes, 19 de octubre, 20:00 - 22:30 h');
+      expect(formatted).toBe('Lunes, 19 de octubre · 20:00 - 22:30 h');
     });
 
     test('gestiona eventos de madrugada con cambio de día real en Europe/Madrid', () => {
       // 2026-10-19T23:30:00.000Z en UTC = 2026-10-20 01:30 CEST en Madrid (martes)
       const formatted = formatEventDateTimeInMadrid('2026-10-19T23:30:00.000Z');
-      expect(formatted).toBe('martes, 20 de octubre, 01:30 h');
+      expect(formatted).toBe('Martes, 20 de octubre · 01:30 h');
     });
 
     test('gestiona eventos que cruzan la medianoche entre dos días diferentes', () => {
@@ -64,8 +66,8 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
         '2026-10-24T21:00:00.000Z',
         '2026-10-25T01:00:00.000Z'
       );
-      expect(formatted).toContain('sábado, 24 de octubre, 23:00 h');
-      expect(formatted).toContain('domingo, 25 de octubre, 02:00 h');
+      expect(formatted).toContain('Sábado, 24 de octubre · 23:00 h');
+      expect(formatted).toContain('Domingo, 25 de octubre · 02:00 h');
     });
   });
 
@@ -93,23 +95,29 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
   });
 
   describe('3. WhatsApp: Mensaje y URL Codificada', () => {
-    test('mensaje estándar con datos completos, tildes y emojis', () => {
+    test('mensaje estándar con datos completos, tildes y emojis conforme al formato aprobado', () => {
       const msg = buildWhatsAppMessage(baseSyntheticEvent);
-      const lines = msg.split('\n');
+      // Estructura aprobada exacta
+      expect(msg.startsWith('¿Nos apuntamos a este plan?\n\n')).toBe(true);
+      expect(msg).not.toContain('¡Mira este plan en Palencia!');
+      expect(msg).toContain('Concierto de Jazz & Blues 🎷');
+      expect(msg).toContain('📅 Lunes, 19 de octubre · 20:00 - 22:30 h');
+      expect(msg).toContain('📍 Teatro Principal de Palencia');
+      expect(msg).toContain('🎟️ 15,00 €');
+      expect(msg).toContain('Más información en VayaPlan:\nhttps://vayaplan.com/events/42');
 
-      expect(lines.length).toBe(5);
-      expect(lines[0]).toBe('Concierto de Jazz & Blues 🎷');
-      expect(lines[1]).toBe('lunes, 19 de octubre, 20:00 - 22:30 h');
-      expect(lines[2]).toBe('Teatro Principal de Palencia');
-      expect(lines[3]).toBe('15,00 €');
-      expect(lines[4]).toBe('https://vayaplan.com/events/42');
+      // Exigir que la URL aparezca una sola vez en el mensaje
+      const urlOccurrences = (msg.match(/https:\/\/vayaplan\.com\/events\/42/g) || []).length;
+      expect(urlOccurrences).toBe(1);
     });
 
     test('evento cancelado incluye el prefijo CANCELADO: en la primera línea', () => {
       const msg = buildWhatsAppMessage({ ...baseSyntheticEvent, status: 'cancelled' });
-      const lines = msg.split('\n');
-
-      expect(lines[0]).toBe('CANCELADO: Concierto de Jazz & Blues 🎷');
+      expect(msg).toContain('¿Nos apuntamos a este plan?');
+      expect(msg).not.toContain('¡Mira este plan en Palencia!');
+      expect(msg).toContain('CANCELADO: Concierto de Jazz & Blues 🎷');
+      const urlOccurrences = (msg.match(/https:\/\/vayaplan\.com\/events\/42/g) || []).length;
+      expect(urlOccurrences).toBe(1);
     });
 
     test('omite datos ausentes sin inventarlos (sin precio confirmado y sin fin)', () => {
@@ -119,24 +127,44 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
         price_amount_cents: null,
         price_is_free: false,
       });
-      const lines = msg.split('\n');
-
-      expect(lines.length).toBe(4);
-      expect(lines[0]).toBe('Concierto de Jazz & Blues 🎷');
-      expect(lines[1]).toBe('lunes, 19 de octubre, 20:00 h');
-      expect(lines[2]).toBe('Teatro Principal de Palencia');
-      expect(lines[3]).toBe('https://vayaplan.com/events/42');
+      expect(msg).toContain('¿Nos apuntamos a este plan?');
+      expect(msg).not.toContain('¡Mira este plan en Palencia!');
+      expect(msg).toContain('Concierto de Jazz & Blues 🎷');
+      expect(msg).toContain('📅 Lunes, 19 de octubre · 20:00 h');
+      expect(msg).toContain('📍 Teatro Principal de Palencia');
+      expect(msg).not.toContain('🎟️');
+      expect(msg).toContain('Más información en VayaPlan:\nhttps://vayaplan.com/events/42');
+      const urlOccurrences = (msg.match(/https:\/\/vayaplan\.com\/events\/42/g) || []).length;
+      expect(urlOccurrences).toBe(1);
     });
 
-    test('buildWhatsAppShareUrl codifica completamente el mensaje para wa.me', () => {
+    test('buildShareText genera texto estructurado para el diálogo nativo de compartir sin duplicar URL', () => {
+      const text = buildShareText(baseSyntheticEvent);
+      expect(text.startsWith('¿Nos apuntamos a este plan?\n\n')).toBe(true);
+      expect(text).not.toContain('¡Mira este plan en Palencia!');
+      expect(text).toContain('Concierto de Jazz & Blues 🎷');
+      expect(text).toContain('📅 Lunes, 19 de octubre · 20:00 - 22:30 h');
+      expect(text).toContain('📍 Teatro Principal de Palencia');
+      expect(text).toContain('🎟️ 15,00 €');
+      // No debe contener la URL para que navigator.share ({ title, text, url }) no la duplique
+      expect(text).not.toContain('https://');
+      expect(text).not.toContain('http://');
+    });
+
+    test('buildWhatsAppShareUrl codifica completamente el mensaje para wa.me con URL única', () => {
       const url = buildWhatsAppShareUrl(baseSyntheticEvent);
       expect(url.startsWith('https://wa.me/?text=')).toBe(true);
 
       const encodedText = url.replace('https://wa.me/?text=', '');
       const decoded = decodeURIComponent(encodedText);
+      expect(decoded).toContain('¿Nos apuntamos a este plan?');
+      expect(decoded).not.toContain('¡Mira este plan en Palencia!');
       expect(decoded).toContain('Concierto de Jazz & Blues 🎷');
       expect(decoded).toContain('15,00 €');
       expect(decoded).toContain('https://vayaplan.com/events/42');
+
+      const urlOccurrences = (decoded.match(/https:\/\/vayaplan\.com\/events\/42/g) || []).length;
+      expect(urlOccurrences).toBe(1);
     });
   });
 
@@ -434,21 +462,23 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
     });
   });
 
-  describe('7. Marcado HTML de la Barra de Acciones', () => {
-    test('renderiza los 5 botones requeridos con etiquetas y atributos accesibles', () => {
+  describe('7. Marcado HTML de la Barra de Acciones y Cómo Llegar', () => {
+    test('renderiza exactamente las 4 acciones de compartir y guardar en cuadrícula 2x2 sin duplicar Cómo llegar', () => {
       const html = renderEventActionsHtml(baseSyntheticEvent, new Date('2026-10-19T10:00:00.000Z'));
 
       expect(html).toContain('class="event-actions-section"');
       expect(html).toContain('WhatsApp');
       expect(html).toContain('Compartir');
       expect(html).toContain('Copiar enlace');
-      expect(html).toContain('Cómo llegar');
       expect(html).toContain('Calendario');
+
+      // Comprueba que Cómo llegar ya no se duplica dentro de la cuadrícula de compartir y guardar
+      expect(html).not.toContain('Cómo llegar');
+      expect(html).not.toContain('data-action="directions-click"');
 
       expect(html).toContain('data-action="whatsapp-share"');
       expect(html).toContain('data-action="share-event"');
       expect(html).toContain('data-action="copy-event-link"');
-      expect(html).toContain('data-action="directions-click"');
       expect(html).toContain('data-action="calendar-download"');
 
       // Región accesible en vivo y fallback de copia
@@ -456,16 +486,24 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
       expect(html).toContain('id="actions-copy-fallback"');
     });
 
-    test('omite botón Cómo llegar si no hay coordenadas ni dirección suficiente', () => {
-      const html = renderEventActionsHtml({
+    test('renderVenueDirectionsHtml genera el botón de Cómo llegar directo asociado al local', () => {
+      const btnHtml = renderVenueDirectionsHtml(baseSyntheticEvent);
+
+      expect(btnHtml).toContain('class="btn-directions-link"');
+      expect(btnHtml).toContain('data-action="directions-click"');
+      expect(btnHtml).toContain('Cómo llegar ↗');
+      expect(btnHtml).toContain('destination=42.0094,-4.5298');
+    });
+
+    test('renderVenueDirectionsHtml devuelve cadena vacía si no hay coordenadas ni dirección suficiente', () => {
+      const emptyHtml = renderVenueDirectionsHtml({
         ...baseSyntheticEvent,
         latitude: null,
         longitude: null,
         maps_url: null,
         venue_address: null,
       });
-      expect(html).not.toContain('btn-directions');
-      expect(html).not.toContain('data-action="directions-click"');
+      expect(emptyHtml).toBe('');
     });
 
     test('deshabilita botón de Calendario en evento cancelado con explicación accesible', () => {

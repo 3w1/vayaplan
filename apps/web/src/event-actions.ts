@@ -27,6 +27,11 @@ export interface EventActionSource {
  */
 export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: string): EventActionSource {
   const venue = ev.venue as any;
+  const publicOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : (process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '');
+  const eventCanonical = (ev && ev.id) ? `${publicOrigin}/events/${ev.id}` : '';
+
   return {
     id: ev.id,
     title: ev.title,
@@ -42,7 +47,7 @@ export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: str
     price_is_free: ev.price?.is_free,
     price_amount_cents: ev.price?.amount_cents !== undefined ? ev.price.amount_cents : null,
     price_label: ev.price?.label || null,
-    canonical_url: canonicalUrl || `https://vayaplan.com/events/${ev.id}`,
+    canonical_url: canonicalUrl || eventCanonical,
   };
 }
 
@@ -68,23 +73,25 @@ export function formatEventDateTimeInMadrid(startTimeIso: string, endTimeIso?: s
     hour12: false,
   });
 
-  const startDateText = dateFormatter.format(startDate);
+  const rawStartDate = dateFormatter.format(startDate);
+  const startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
   const startTimeText = timeFormatter.format(startDate);
 
   if (endTimeIso) {
     const endDate = new Date(endTimeIso);
     if (!Number.isNaN(endDate.getTime())) {
-      const endDateText = dateFormatter.format(endDate);
+      const rawEndDate = dateFormatter.format(endDate);
+      const endDateText = rawEndDate.charAt(0).toUpperCase() + rawEndDate.slice(1);
       const endTimeText = timeFormatter.format(endDate);
 
-      if (startDateText === endDateText) {
-        return `${startDateText}, ${startTimeText} - ${endTimeText} h`;
+      if (rawStartDate === rawEndDate) {
+        return `${startDateText} · ${startTimeText} - ${endTimeText} h`;
       }
-      return `${startDateText}, ${startTimeText} h - ${endDateText}, ${endTimeText} h`;
+      return `${startDateText} · ${startTimeText} h - ${endDateText} · ${endTimeText} h`;
     }
   }
 
-  return `${startDateText}, ${startTimeText} h`;
+  return `${startDateText} · ${startTimeText} h`;
 }
 
 /**
@@ -104,44 +111,84 @@ export function formatConfirmedPrice(source: EventActionSource): string | null {
 
 /**
  * Genera el mensaje de texto para compartir por WhatsApp conforme a especificaciones:
- * [CANCELADO: ]Título
- * Fecha y hora reales en Europe/Madrid
- * Nombre del local
- * [Precio sólo si está confirmado]
- * URL canónica /events/:id
+ * ¿Nos apuntamos a este plan?
+ *
+ * ${título}
+ * 📅 ${fecha} · ${hora} h
+ * 📍 ${local}
+ * 🎟️ ${precio_confirmado}
+ *
+ * Más información en VayaPlan:
+ * ${url_canónica}
  */
 export function buildWhatsAppMessage(source: EventActionSource): string {
-  const lines: string[] = [];
+  const sections: string[] = [];
 
-  // 1. Título con prefijo de cancelación si aplica
+  // 1. Invitación
+  sections.push('¿Nos apuntamos a este plan?');
+
+  // 2. Ficha editorial
+  const detailLines: string[] = [];
+
   const title = source.status === 'cancelled'
     ? `CANCELADO: ${source.title}`
     : source.title;
-  lines.push(title.trim());
+  detailLines.push(title.trim());
 
-  // 2. Fecha y hora reales en Europe/Madrid
   const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
   if (dateTime) {
-    lines.push(dateTime);
+    detailLines.push(`📅 ${dateTime}`);
   }
 
-  // 3. Nombre del local
   if (source.venue_name && source.venue_name.trim().length > 0) {
-    lines.push(source.venue_name.trim());
+    detailLines.push(`📍 ${source.venue_name.trim()}`);
   }
 
-  // 4. Precio sólo si está confirmado
   const price = formatConfirmedPrice(source);
   if (price) {
-    lines.push(price);
+    detailLines.push(`🎟️ ${price}`);
   }
 
-  // 5. URL canónica
+  sections.push(detailLines.join('\n'));
+
+  // 3. Llamada a la acción y enlace canónico
   if (source.canonical_url && source.canonical_url.trim().length > 0) {
-    lines.push(source.canonical_url.trim());
+    sections.push(`Más información en VayaPlan:\n${source.canonical_url.trim()}`);
   }
 
-  return lines.join('\n');
+  return sections.join('\n\n');
+}
+
+/**
+ * Genera el cuerpo de texto para el diálogo nativo de compartir (navigator.share)
+ * Conserva el mismo criterio editorial sin duplicar innecesariamente la URL en text.
+ */
+export function buildShareText(source: EventActionSource): string {
+  const sections: string[] = [];
+  sections.push('¿Nos apuntamos a este plan?');
+
+  const detailLines: string[] = [];
+  const title = source.status === 'cancelled'
+    ? `CANCELADO: ${source.title}`
+    : source.title;
+  detailLines.push(title.trim());
+
+  const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+  if (dateTime) {
+    detailLines.push(`📅 ${dateTime}`);
+  }
+
+  if (source.venue_name && source.venue_name.trim().length > 0) {
+    detailLines.push(`📍 ${source.venue_name.trim()}`);
+  }
+
+  const price = formatConfirmedPrice(source);
+  if (price) {
+    detailLines.push(`🎟️ ${price}`);
+  }
+
+  sections.push(detailLines.join('\n'));
+  return sections.join('\n\n');
 }
 
 /**
@@ -511,17 +558,31 @@ function escapeHtml(str: string): string {
 }
 
 /**
- * Genera el marcado HTML accesible de la barra de acciones para el detalle del evento
+ * Renderiza el botón único "Cómo llegar ↗" asociado visualmente al bloque del local
+ */
+export function renderVenueDirectionsHtml(source: EventActionSource): string {
+  const directionsUrl = buildDirectionsUrl(source);
+  if (!directionsUrl) return '';
+
+  return `
+    <a href="${escapeHtml(directionsUrl)}" target="_blank" rel="noopener noreferrer" class="btn-directions-link" data-action="directions-click" data-metric="map_click" data-event-id="${source.id}" aria-label="Cómo llegar a ${escapeHtml(source.venue_name || 'destino')}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>
+      <span>Cómo llegar ↗</span>
+    </a>
+  `.trim();
+}
+
+/**
+ * Genera el marcado HTML accesible de la cuadrícula 2x2 para Compartir y Guardar
  */
 export function renderEventActionsHtml(source: EventActionSource, now: Date = new Date()): string {
   const isCancelled = source.status === 'cancelled';
   const waUrl = buildWhatsAppShareUrl(source);
-  const directionsUrl = buildDirectionsUrl(source);
   const calState = computeCalendarState(source, now);
   const shareTitle = isCancelled ? `[CANCELADO] ${source.title}` : source.title;
 
   return `
-    <div class="event-actions-section" aria-label="Acciones del evento">
+    <div class="event-actions-section" aria-label="Compartir y guardar evento">
       <div class="event-actions-header">
         <span class="event-actions-title">Compartir y guardar</span>
       </div>
@@ -534,7 +595,7 @@ export function renderEventActionsHtml(source: EventActionSource, now: Date = ne
         </a>
 
         <!-- 2. Compartir -->
-        <button type="button" class="event-action-btn btn-share" data-action="share-event" data-url="${escapeHtml(source.canonical_url)}" data-title="${escapeHtml(shareTitle)}" data-event-id="${source.id}" aria-label="Compartir evento">
+        <button type="button" class="event-action-btn btn-share" data-action="share-event" data-url="${escapeHtml(source.canonical_url)}" data-title="${escapeHtml(shareTitle)}" data-text="${escapeHtml(buildShareText(source))}" data-event-id="${source.id}" aria-label="Compartir evento">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
           <span class="action-btn-text">Compartir</span>
         </button>
@@ -545,15 +606,7 @@ export function renderEventActionsHtml(source: EventActionSource, now: Date = ne
           <span class="action-btn-text">Copiar enlace</span>
         </button>
 
-        <!-- 4. Direcciones (Sólo si hay información suficiente de destino) -->
-        ${directionsUrl ? `
-          <a href="${escapeHtml(directionsUrl)}" target="_blank" rel="noopener noreferrer" class="event-action-btn btn-directions" data-action="directions-click" data-event-id="${source.id}" aria-label="Cómo llegar a ${escapeHtml(source.venue_name)}">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>
-            <span class="action-btn-text">Cómo llegar</span>
-          </a>
-        ` : ''}
-
-        <!-- 5. Añadir al calendario (.ics) -->
+        <!-- 4. Añadir al calendario (.ics) -->
         ${calState.allowed ? `
           <a href="/events/${source.id}/calendar.ics" download="evento-${source.id}.ics" class="event-action-btn btn-calendar" data-action="calendar-download" data-event-id="${source.id}" aria-label="Añadir evento al calendario">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zm-7 5h5v5h-5z"/></svg>
@@ -616,22 +669,16 @@ export function getEventActionsStyles(): string {
 
     .event-actions-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 0.5rem;
-    }
-
-    @media (max-width: 480px) {
-      .event-actions-grid {
-        grid-template-columns: 1fr 1fr;
-      }
     }
 
     .event-action-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 0.4rem;
-      padding: 0.55rem 0.65rem;
+      gap: 0.45rem;
+      padding: 0.6rem 0.75rem;
       font-size: 0.8125rem;
       font-weight: 700;
       color: var(--color-night, #0B0F3B);
@@ -641,10 +688,11 @@ export function getEventActionsStyles(): string {
       text-decoration: none;
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-      min-height: 42px;
+      min-height: 44px;
       box-sizing: border-box;
       text-align: center;
       user-select: none;
+      touch-action: manipulation;
     }
 
     .event-action-btn:hover:not([disabled]):not(.is-disabled) {
@@ -727,10 +775,8 @@ export function getEventActionsStyles(): string {
 export function getEventActionsClientScript(): string {
   return `
     function extractEventActionSource(ev, canonicalUrl) {
-      const canonicalTag = document.querySelector('link[rel="canonical"]');
-      const defaultCanonical = canonicalTag && canonicalTag.href
-        ? canonicalTag.href
-        : (window.location.origin + '/events/' + ev.id);
+      const origin = (window.location && window.location.origin) ? window.location.origin : 'https://vayaplan.com';
+      const eventCanonical = (ev && ev.id) ? (origin + '/events/' + ev.id) : '';
       return {
         id: ev.id,
         title: ev.title,
@@ -746,7 +792,7 @@ export function getEventActionsClientScript(): string {
         price_is_free: ev.price ? ev.price.is_free : false,
         price_amount_cents: ev.price && ev.price.amount_cents !== undefined ? ev.price.amount_cents : null,
         price_label: ev.price ? ev.price.label : null,
-        canonical_url: canonicalUrl || defaultCanonical,
+        canonical_url: canonicalUrl || eventCanonical,
       };
     }
 
@@ -769,23 +815,25 @@ export function getEventActionsClientScript(): string {
         hour12: false,
       });
 
-      const startDateText = dateFormatter.format(startDate);
+      const rawStartDate = dateFormatter.format(startDate);
+      const startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
       const startTimeText = timeFormatter.format(startDate);
 
       if (endTimeIso) {
         const endDate = new Date(endTimeIso);
         if (!Number.isNaN(endDate.getTime())) {
-          const endDateText = dateFormatter.format(endDate);
+          const rawEndDate = dateFormatter.format(endDate);
+          const endDateText = rawEndDate.charAt(0).toUpperCase() + rawEndDate.slice(1);
           const endTimeText = timeFormatter.format(endDate);
 
-          if (startDateText === endDateText) {
-            return startDateText + ', ' + startTimeText + ' - ' + endTimeText + ' h';
+          if (rawStartDate === rawEndDate) {
+            return startDateText + ' · ' + startTimeText + ' - ' + endTimeText + ' h';
           }
-          return startDateText + ', ' + startTimeText + ' h - ' + endDateText + ', ' + endTimeText + ' h';
+          return startDateText + ' · ' + startTimeText + ' h - ' + endDateText + ' · ' + endTimeText + ' h';
         }
       }
 
-      return startDateText + ', ' + startTimeText + ' h';
+      return startDateText + ' · ' + startTimeText + ' h';
     }
 
     function formatConfirmedPrice(source) {
@@ -800,27 +848,56 @@ export function getEventActionsClientScript(): string {
     }
 
     function buildWhatsAppMessage(source) {
-      const lines = [];
+      const sections = [];
+      sections.push('¿Nos apuntamos a este plan?');
+
+      const detailLines = [];
       const title = source.status === 'cancelled'
         ? ('CANCELADO: ' + source.title)
         : source.title;
-      lines.push(title.trim());
+      detailLines.push(title.trim());
 
       const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
-      if (dateTime) lines.push(dateTime);
+      if (dateTime) detailLines.push('📅 ' + dateTime);
 
       if (source.venue_name && source.venue_name.trim().length > 0) {
-        lines.push(source.venue_name.trim());
+        detailLines.push('📍 ' + source.venue_name.trim());
       }
 
       const price = formatConfirmedPrice(source);
-      if (price) lines.push(price);
+      if (price) detailLines.push('🎟️ ' + price);
+
+      sections.push(detailLines.join('\\n'));
 
       if (source.canonical_url && source.canonical_url.trim().length > 0) {
-        lines.push(source.canonical_url.trim());
+        sections.push('Más información en VayaPlan:\\n' + source.canonical_url.trim());
       }
 
-      return lines.join('\\n');
+      return sections.join('\\n\\n');
+    }
+
+    function buildShareText(source) {
+      const sections = [];
+      sections.push('¿Nos apuntamos a este plan?');
+
+      const detailLines = [];
+      const title = source.status === 'cancelled'
+        ? ('CANCELADO: ' + source.title)
+        : source.title;
+      detailLines.push(title.trim());
+
+      const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+      if (dateTime) detailLines.push('📅 ' + dateTime);
+
+      if (source.venue_name && source.venue_name.trim().length > 0) {
+        detailLines.push('📍 ' + source.venue_name.trim());
+      }
+
+      const price = formatConfirmedPrice(source);
+      if (price) detailLines.push('🎟️ ' + price);
+
+      sections.push(detailLines.join('\\n'));
+      return sections.join('\\n\\n');
     }
 
     function buildWhatsAppShareUrl(source) {
@@ -968,20 +1045,20 @@ export function getEventActionsClientScript(): string {
       };
     }
 
+    function renderVenueDirectionsHtml(source) {
+      const directionsUrl = buildDirectionsUrl(source);
+      if (!directionsUrl) return '';
+      return '<a href="' + escapeHtml(directionsUrl) + '" target="_blank" rel="noopener noreferrer" class="btn-directions-link" data-action="directions-click" data-metric="map_click" data-event-id="' + source.id + '" aria-label="Cómo llegar a ' + escapeHtml(source.venue_name || 'destino') + '">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>' +
+        '<span>Cómo llegar ↗</span>' +
+        '</a>';
+    }
+
     function renderEventActionsHtml(source, now) {
       const isCancelled = source.status === 'cancelled';
       const waUrl = buildWhatsAppShareUrl(source);
-      const directionsUrl = buildDirectionsUrl(source);
       const calState = computeCalendarState(source, now);
       const shareTitle = isCancelled ? ('[CANCELADO] ' + source.title) : source.title;
-
-      let directionsHtml = '';
-      if (directionsUrl) {
-        directionsHtml = '<a href="' + escapeHtml(directionsUrl) + '" target="_blank" rel="noopener noreferrer" class="event-action-btn btn-directions" data-action="directions-click" data-metric="map_click" data-event-id="' + source.id + '" aria-label="Cómo llegar a ' + escapeHtml(source.venue_name) + '">' +
-          '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.71 11.29l-9-9a.996.996 0 0 0-1.41 0l-9 9a.996.996 0 0 0 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9a.996.996 0 0 0 0-1.41zm-8.71 6.29V14h-4v-4h4V6.41L17.59 11 13 15.58z"/></svg>' +
-          '<span class="action-btn-text">Cómo llegar</span>' +
-          '</a>';
-      }
 
       let calHtml = '';
       if (calState.allowed) {
@@ -1004,7 +1081,7 @@ export function getEventActionsClientScript(): string {
           '</div>';
       }
 
-      return '<div class="event-actions-section" aria-label="Acciones del evento">' +
+      return '<div class="event-actions-section" aria-label="Compartir y guardar evento">' +
         '<div class="event-actions-header">' +
           '<span class="event-actions-title">Compartir y guardar</span>' +
         '</div>' +
@@ -1013,7 +1090,7 @@ export function getEventActionsClientScript(): string {
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm0 18.06c-1.5 0-2.97-.4-4.26-1.16l-.31-.18-3.16.83.84-3.08-.2-.32a8.08 8.08 0 0 1-1.24-4.24c0-4.46 3.63-8.09 8.09-8.09 2.16 0 4.19.84 5.72 2.37 1.53 1.53 2.37 3.56 2.37 5.72 0 4.46-3.63 8.09-8.09 8.09zm4.44-6.07c-.24-.12-1.44-.71-1.66-.79-.22-.08-.39-.12-.55.12-.17.24-.63.79-.77.95-.14.16-.28.18-.52.06-.24-.12-1.03-.38-1.96-1.21-.72-.64-1.21-1.44-1.35-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.37-.43.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.55-1.33-.76-1.82-.2-.48-.41-.41-.56-.42-.14-.01-.31-.01-.48-.01-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.08 0 1.23.89 2.42 1.02 2.58.12.16 1.76 2.69 4.27 3.77.6.26 1.07.41 1.43.53.6.19 1.15.16 1.58.1.48-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28z"/></svg>' +
             '<span class="action-btn-text">WhatsApp</span>' +
           '</a>' +
-          '<button type="button" class="event-action-btn btn-share" data-action="share-event" data-metric="share_click" data-url="' + escapeHtml(source.canonical_url) + '" data-title="' + escapeHtml(shareTitle) + '" data-event-id="' + source.id + '" aria-label="Compartir evento">' +
+          '<button type="button" class="event-action-btn btn-share" data-action="share-event" data-metric="share_click" data-url="' + escapeHtml(source.canonical_url) + '" data-title="' + escapeHtml(shareTitle) + '" data-text="' + escapeHtml(buildShareText(source)) + '" data-event-id="' + source.id + '" aria-label="Compartir evento">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>' +
             '<span class="action-btn-text">Compartir</span>' +
           '</button>' +
@@ -1021,7 +1098,6 @@ export function getEventActionsClientScript(): string {
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>' +
             '<span class="action-btn-text">Copiar enlace</span>' +
           '</button>' +
-          directionsHtml +
           calHtml +
         '</div>' +
         noticeHtml +
@@ -1095,12 +1171,16 @@ export function getEventActionsClientScript(): string {
     }
 
     // Gestor de Compartir con fallback y captura de AbortError
-    async function executeEventShare(url, title, triggerBtn) {
+    async function executeEventShare(url, title, text, triggerBtn) {
+      if (typeof text === 'object' && !triggerBtn) {
+        triggerBtn = text;
+        text = undefined;
+      }
       if (navigator.share) {
         try {
           await navigator.share({
             title: title || document.title,
-            text: title || document.title,
+            text: text || title || document.title,
             url: url,
           });
           // Éxito: no necesita más acciones
@@ -1121,6 +1201,7 @@ export function getEventActionsClientScript(): string {
 
     window.extractEventActionSource = extractEventActionSource;
     window.renderEventActionsHtml = renderEventActionsHtml;
+    window.renderVenueDirectionsHtml = renderVenueDirectionsHtml;
     window.executeEventLinkCopy = executeEventLinkCopy;
     window.executeEventShare = executeEventShare;
   `;
