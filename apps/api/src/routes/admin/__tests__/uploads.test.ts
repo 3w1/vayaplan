@@ -4,6 +4,20 @@ import * as path from 'path';
 import { app } from '../../../index';
 import { setCustomR2S3Client, resetCustomR2S3Client } from '../../../services/r2-client';
 
+import sharp from 'sharp';
+
+async function makeJpegBuffer(w = 100, h = 100) {
+  return await sharp({
+    create: { width: w, height: h, channels: 3, background: { r: 200, g: 50, b: 50 } },
+  }).jpeg().toBuffer();
+}
+
+async function makeWebpBuffer(w = 100, h = 100) {
+  return await sharp({
+    create: { width: w, height: h, channels: 3, background: { r: 50, g: 200, b: 50 } },
+  }).webp().toBuffer();
+}
+
 describe('Uploads API Routes (POST /api/v1/admin/uploads & GET /api/v1/uploads/:filename)', () => {
   const originalEnv = { ...process.env };
   const testUploadsDir = path.join(process.cwd(), 'test-uploads-api-' + Date.now());
@@ -78,9 +92,7 @@ describe('Uploads API Routes (POST /api/v1/admin/uploads & GET /api/v1/uploads/:
   });
 
   it('2. Sube correctamente un archivo JPEG auténtico a Cloudflare R2 y devuelve la URL canónica', async () => {
-    const validJpegBytes = Buffer.from([
-      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48,
-    ]);
+    const validJpegBytes = await makeJpegBuffer(120, 160);
     const formData = new FormData();
     const file = new Blob([validJpegBytes], { type: 'image/jpeg' });
     formData.append('file', file, 'concierto.jpg');
@@ -94,23 +106,35 @@ describe('Uploads API Routes (POST /api/v1/admin/uploads & GET /api/v1/uploads/:
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.status).toBe('ok');
-    expect(data.key).toMatch(/^events\/[a-f0-9-]{36}\.jpg$/);
+    expect(data.key).toMatch(/^events\/[a-f0-9-]{36}-detail\.webp$/);
     expect(data.url).toBe(`https://media.vayaplan.com/${data.key}`);
+    expect(data.thumb_url).toBe(`https://media.vayaplan.com/${data.variants.thumb.key}`);
+    expect(data.original_url).toMatch(/^\/api\/v1\/admin\/uploads\/originals\/[a-f0-9-]{36}-original\.jpg$/);
     expect(data.provider).toBe('cloudflare_r2');
-    expect(data.mime_type).toBe('image/jpeg');
-    expect(data.size_bytes).toBe(validJpegBytes.length);
+    expect(data.mime_type).toBe('image/webp');
+    expect(data.variants).toBeDefined();
 
-    // Verificar que el objeto fue transferido a R2
-    expect(mockUploadedObjects.has(data.key)).toBe(true);
-    const stored = mockUploadedObjects.get(data.key)!;
-    expect(stored.contentType).toBe('image/jpeg');
-    expect(stored.body.equals(validJpegBytes)).toBe(true);
+    // Verificar que las variantes públicas fueron transferidas a R2
+    expect(mockUploadedObjects.has(data.variants.detail.key)).toBe(true);
+    expect(mockUploadedObjects.has(data.variants.thumb.key)).toBe(true);
+    // El original no se sube al bucket público de R2
+    expect(mockUploadedObjects.has(data.variants.original.key)).toBe(false);
+
+    // Acceso anónimo al original: denegado (401)
+    const anonRes = await app.request(data.original_url);
+    expect(anonRes.status).toBe(401);
+
+    // Recuperación administrativa: permitida con autorización (200)
+    const authRes = await app.request(data.original_url, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(authRes.status).toBe(200);
+    const downloadedOrig = Buffer.from(await authRes.arrayBuffer());
+    expect(downloadedOrig.equals(validJpegBytes)).toBe(true);
   });
 
   it('3. Sube correctamente un archivo WebP auténtico a Cloudflare R2', async () => {
-    const validWebpBytes = Buffer.from([
-      0x52, 0x49, 0x46, 0x46, 0x14, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
-    ]);
+    const validWebpBytes = await makeWebpBuffer(100, 100);
     const formData = new FormData();
     const file = new Blob([validWebpBytes], { type: 'image/webp' });
     formData.append('file', file, 'teatro.webp');
@@ -124,9 +148,11 @@ describe('Uploads API Routes (POST /api/v1/admin/uploads & GET /api/v1/uploads/:
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.status).toBe('ok');
-    expect(data.key).toMatch(/^events\/[a-f0-9-]{36}\.webp$/);
+    expect(data.key).toMatch(/^events\/[a-f0-9-]{36}-detail\.webp$/);
     expect(data.url).toBe(`https://media.vayaplan.com/${data.key}`);
     expect(data.mime_type).toBe('image/webp');
+    expect(data.variants.original.key).toMatch(/^originals\/[a-f0-9-]{36}-original\.webp$/);
+    expect(data.original_url).toMatch(/^\/api\/v1\/admin\/uploads\/originals\/[a-f0-9-]{36}-original\.webp$/);
   });
 
   it('4. Retorna error 503 si Cloudflare R2 no está configurado (sin fallback silencioso a disco)', async () => {
@@ -135,7 +161,7 @@ describe('Uploads API Routes (POST /api/v1/admin/uploads & GET /api/v1/uploads/:
     delete process.env.R2_SECRET_ACCESS_KEY;
     resetCustomR2S3Client();
 
-    const validJpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+    const validJpegBytes = await makeJpegBuffer(50, 50);
     const formData = new FormData();
     const file = new Blob([validJpegBytes], { type: 'image/jpeg' });
     formData.append('file', file, 'prueba.jpg');
@@ -148,7 +174,7 @@ describe('Uploads API Routes (POST /api/v1/admin/uploads & GET /api/v1/uploads/:
 
     expect(res.status).toBe(503);
     const data = await res.json();
-    expect(data.error).toBe('storage_error');
+    expect(data.error).toBe('storage_unconfigured');
     expect(data.message).toContain('Almacenamiento Cloudflare R2 no configurado');
   });
 
@@ -160,7 +186,7 @@ describe('Uploads API Routes (POST /api/v1/admin/uploads & GET /api/v1/uploads/:
     };
     setCustomR2S3Client(failingMockS3);
 
-    const validJpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+    const validJpegBytes = await makeJpegBuffer(50, 50);
     const formData = new FormData();
     const file = new Blob([validJpegBytes], { type: 'image/jpeg' });
     formData.append('file', file, 'prueba.jpg');

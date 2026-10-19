@@ -2651,6 +2651,8 @@ export function renderAdminHtml(): string {
 
             <input type="file" id="ev-image-file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleEventImageFileSelect(event)">
             <input type="hidden" id="ev-image-url">
+            <input type="hidden" id="ev-image-thumb-url">
+            <input type="hidden" id="ev-image-original-url">
 
             <!-- Caja de subida / Drag & Drop -->
             <div id="ev-image-upload-box" class="poster-upload-box" onclick="triggerEventImageUpload()" ondragover="handleEventImageDragOver(event)" ondragleave="handleEventImageDragLeave(event)" ondrop="handleEventImageDrop(event)">
@@ -4838,6 +4840,11 @@ export function renderAdminHtml(): string {
         }
 
         document.getElementById('ev-image-url').value = data.url;
+        const thumbInput = document.getElementById('ev-image-thumb-url');
+        if (thumbInput) thumbInput.value = data.thumb_url || data.variants?.thumb?.url || '';
+        const origInput = document.getElementById('ev-image-original-url');
+        if (origInput) origInput.value = data.original_url || data.variants?.original?.url || '';
+
         const manualInput = document.getElementById('ev-image-url-manual');
         if (manualInput) manualInput.value = data.url;
 
@@ -4877,6 +4884,10 @@ export function renderAdminHtml(): string {
     window.removeEventImage = function() {
       const urlInput = document.getElementById('ev-image-url');
       if (urlInput) urlInput.value = '';
+      const thumbInput = document.getElementById('ev-image-thumb-url');
+      if (thumbInput) thumbInput.value = '';
+      const origInput = document.getElementById('ev-image-original-url');
+      if (origInput) origInput.value = '';
       const manualInput = document.getElementById('ev-image-url-manual');
       if (manualInput) manualInput.value = '';
 
@@ -5067,6 +5078,10 @@ export function renderAdminHtml(): string {
 
         // Cartel / imagen
         document.getElementById('ev-image-url').value = ev.image_url || '';
+        const thumbInput = document.getElementById('ev-image-thumb-url');
+        if (thumbInput) thumbInput.value = ev.image_thumb_url || '';
+        const origInput = document.getElementById('ev-image-original-url');
+        if (origInput) origInput.value = ev.image_original_url || '';
         const manualInput = document.getElementById('ev-image-url-manual');
         if (manualInput) manualInput.value = ev.image_url || '';
         const manualWrap = document.getElementById('ev-image-manual-wrap');
@@ -5160,6 +5175,8 @@ export function renderAdminHtml(): string {
       const description = document.getElementById('ev-description').value.trim() || null;
       const sourceUrl = document.getElementById('ev-source-url').value.trim() || null;
       const imageUrl = document.getElementById('ev-image-url').value.trim() || null;
+      const imageThumbUrl = document.getElementById('ev-image-thumb-url')?.value.trim() || null;
+      const imageOriginalUrl = document.getElementById('ev-image-original-url')?.value.trim() || null;
 
       // Determinar estado objetivo
       let targetStatus = statusOverride;
@@ -5252,6 +5269,8 @@ export function renderAdminHtml(): string {
         description,
         source_url: sourceUrl,
         image_url: imageUrl,
+        image_thumb_url: imageThumbUrl,
+        image_original_url: imageOriginalUrl,
       };
 
       if (venueId && Number(venueId) !== 9999) {
