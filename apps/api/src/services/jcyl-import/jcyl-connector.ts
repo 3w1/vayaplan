@@ -1,0 +1,214 @@
+import { query } from '@vayaplan/db';
+import type { JcylApiResponse, JcylRecordRaw, NormalizedJcylEvent } from './jcyl-types';
+import { normalizeJcylRecord } from './jcyl-normalizer';
+
+const JCYL_API_BASE =
+  'https://analisis.datosabiertos.jcyl.es/api/explore/v2.1/catalog/datasets/eventos-de-la-agenda-cultural-categorizados-y-geolocalizados/records';
+
+export interface SyncOptions {
+  dryRun?: boolean;
+  cityId?: number;
+  limit?: number;
+  fetchFn?: typeof fetch;
+}
+
+export interface SyncResult {
+  dryRun: boolean;
+  timestamp: string;
+  totalApiRecords: number;
+  libraryCandidates: number;
+  inserted: number;
+  updated: number;
+  preservedEditorial: number;
+  events: NormalizedJcylEvent[];
+  errors: string[];
+}
+
+/**
+ * Consulta registros oficiales desde la API de Datos Abiertos de la JCyL
+ */
+export async function fetchJcylPalenciaRecords(
+  limit = 50,
+  customFetch: typeof fetch = fetch
+): Promise<JcylRecordRaw[]> {
+  const url = `${JCYL_API_BASE}?where=nombre_localidad%3D%27Palencia%27&order_by=fecha_inicio%20asc&limit=${limit}`;
+
+  const response = await customFetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'VayaPlan-Agenda-Sync/1.0 (https://vayaplan.com)',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Error en API Datos Abiertos JCyL: ${response.status} ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as JcylApiResponse;
+  return data.results || [];
+}
+
+/**
+ * Obtiene o crea de forma idempotente el venue de la Biblioteca Pública de Palencia
+ */
+export async function ensureLibraryVenue(cityId: number): Promise<number> {
+  const findRes = await query<{ id: number }>(
+    `SELECT id FROM venues WHERE city_id = $1 AND (slug = 'biblioteca-publica-de-palencia' OR name ILIKE '%biblioteca p%blica%') LIMIT 1;`,
+    [cityId]
+  );
+
+  if (findRes.rows.length > 0) {
+    return findRes.rows[0].id;
+  }
+
+  const insertRes = await query<{ id: number }>(
+    `INSERT INTO venues (city_id, name, slug, address, latitude, longitude, is_active, created_at, updated_at)
+     VALUES ($1, 'Biblioteca Pública de Palencia', 'biblioteca-publica-de-palencia', 'C/ Eduardo Dato, 4, 34005 Palencia', 42.01339959, -4.53478396, true, now(), now())
+     RETURNING id;`,
+    [cityId]
+  );
+
+  return insertRes.rows[0].id;
+}
+
+/**
+ * Sincroniza actividades culturales de la Biblioteca Pública de Palencia hacia borradores
+ */
+export async function syncJcylLibraryActivities(options: SyncOptions = {}): Promise<SyncResult> {
+  const dryRun = options.dryRun ?? true;
+  const cityId = options.cityId || 1;
+  const limit = options.limit || 50;
+  const customFetch = options.fetchFn || fetch;
+
+  const result: SyncResult = {
+    dryRun,
+    timestamp: new Date().toISOString(),
+    totalApiRecords: 0,
+    libraryCandidates: 0,
+    inserted: 0,
+    updated: 0,
+    preservedEditorial: 0,
+    events: [],
+    errors: [],
+  };
+
+  let rawRecords: JcylRecordRaw[] = [];
+  try {
+    rawRecords = await fetchJcylPalenciaRecords(limit, customFetch);
+    result.totalApiRecords = rawRecords.length;
+  } catch (err: any) {
+    result.errors.push(`Fallo al consultar la API de JCyL: ${err.message}`);
+    return result;
+  }
+
+  // Filtrar estrictamente actividades de la Biblioteca Pública de Palencia
+  const normalizedList = rawRecords
+    .map(normalizeJcylRecord)
+    .filter((e) => e.isLibrary);
+
+  result.libraryCandidates = normalizedList.length;
+  result.events = normalizedList;
+
+  if (dryRun) {
+    return result;
+  }
+
+  // Si no es dry-run, ejecutar inserción/actualización en la base de datos local
+  const libraryVenueId = await ensureLibraryVenue(cityId);
+
+  for (const item of normalizedList) {
+    try {
+      // 1. Comprobar si ya existe por su dedupeKey estable
+      const existingRes = await query<{
+        id: number;
+        status: string;
+        verified_at: string | null;
+      }>(
+        `SELECT id, status, verified_at FROM events WHERE city_id = $1 AND dedupe_key = $2 LIMIT 1;`,
+        [cityId, item.dedupeKey]
+      );
+
+      if (existingRes.rows.length === 0) {
+        // Insertar nuevo borrador (status = 'tentative')
+        await query(
+          `INSERT INTO events (
+             city_id, venue_id, title, description, category,
+             time_status, start_time, end_time, editorial_date, end_date,
+             schedule_text, price_cents, is_free, status,
+             source_type, source_url, dedupe_key, created_at, updated_at
+           ) VALUES (
+             $1, $2, $3, $4, $5,
+             $6, $7, $8, $9, $10,
+             $11, $12, $13, 'tentative',
+             'api', $14, $15, now(), now()
+           );`,
+          [
+            cityId,
+            libraryVenueId,
+            item.title,
+            item.description,
+            item.category,
+            item.timeStatus,
+            item.startTimeIso,
+            item.endTimeIso,
+            item.editorialDate,
+            item.endDate,
+            item.scheduleText,
+            item.priceCents,
+            item.isFree,
+            item.sourceUrl,
+            item.dedupeKey,
+          ]
+        );
+        result.inserted++;
+      } else {
+        const existing = existingRes.rows[0];
+        // Protección editorial: si el evento ya fue verificado o no está en borrador,
+        // no sobrescribir el trabajo de curación humana
+        if (existing.verified_at !== null || existing.status !== 'tentative') {
+          result.preservedEditorial++;
+          continue;
+        }
+
+        // Si sigue en borrador tentativo sin verificar, actualizar datos técnicos
+        await query(
+          `UPDATE events SET
+             title = $1,
+             description = $2,
+             category = $3,
+             time_status = $4,
+             start_time = $5,
+             end_time = $6,
+             editorial_date = $7,
+             end_date = $8,
+             schedule_text = $9,
+             price_cents = $10,
+             is_free = $11,
+             source_url = $12,
+             updated_at = now()
+           WHERE id = $13;`,
+          [
+            item.title,
+            item.description,
+            item.category,
+            item.timeStatus,
+            item.startTimeIso,
+            item.endTimeIso,
+            item.editorialDate,
+            item.endDate,
+            item.scheduleText,
+            item.priceCents,
+            item.isFree,
+            item.sourceUrl,
+            existing.id,
+          ]
+        );
+        result.updated++;
+      }
+    } catch (dbErr: any) {
+      result.errors.push(`Error al sincronizar evento ${item.dedupeKey}: ${dbErr.message}`);
+    }
+  }
+
+  return result;
+}
