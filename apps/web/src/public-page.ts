@@ -2732,6 +2732,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         }
         renderEventDetail(ev, sheet);
         document.title = (ev.status === 'cancelled' ? '[Cancelado] ' : '') + ev.title + ' — ' + ev.venue.name + ' | VayaPlan';
+        const canonicalTagInitial = document.querySelector('link[rel="canonical"]');
+        if (canonicalTagInitial) {
+          canonicalTagInitial.href = window.location.origin + '/events/' + ev.id;
+        }
         return;
       }
 
@@ -2775,6 +2779,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
         renderEventDetail(ev, sheet);
         document.title = (ev.status === 'cancelled' ? '[Cancelado] ' : '') + ev.title + ' — ' + ev.venue.name + ' | VayaPlan';
+        const canonicalTagLoaded = document.querySelector('link[rel="canonical"]');
+        if (canonicalTagLoaded) {
+          canonicalTagLoaded.href = window.location.origin + '/events/' + ev.id;
+        }
       } catch (err) {
         if (reqId !== activeDetailRequestId) return;
         if (abortCtrl.signal.aborted) return;
@@ -2952,6 +2960,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       activeModalEventId = null;
       window.scrollTo(0, savedScrollY);
       document.title = 'VayaPlan — ¿Qué hacer hoy en Palencia? Agenda Hiperlocal';
+      const canonicalTagClosed = document.querySelector('link[rel="canonical"]');
+      if (canonicalTagClosed) {
+        canonicalTagClosed.href = window.location.origin + '/';
+      }
 
       if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
         lastFocusedElement.focus();
@@ -3140,7 +3152,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       } else if (action === 'close-modal' || action === 'navigate-home') {
         closeModal();
       } else if (action === 'share-event') {
-        executeEventShare(trigger.dataset.url, trigger.dataset.title, trigger);
+        executeEventShare(trigger.dataset.url, trigger.dataset.title, trigger.dataset.text, trigger);
       } else if (action === 'copy-event-link') {
         executeEventLinkCopy(trigger.dataset.url, trigger);
       } else if (action === 'open-full-poster') {

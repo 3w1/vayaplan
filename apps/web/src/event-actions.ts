@@ -27,6 +27,11 @@ export interface EventActionSource {
  */
 export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: string): EventActionSource {
   const venue = ev.venue as any;
+  const publicOrigin = (typeof window !== 'undefined' && window.location && window.location.origin)
+    ? window.location.origin
+    : (process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '');
+  const eventCanonical = (ev && ev.id) ? `${publicOrigin}/events/${ev.id}` : '';
+
   return {
     id: ev.id,
     title: ev.title,
@@ -42,7 +47,7 @@ export function extractEventActionSource(ev: PublicEventItem, canonicalUrl?: str
     price_is_free: ev.price?.is_free,
     price_amount_cents: ev.price?.amount_cents !== undefined ? ev.price.amount_cents : null,
     price_label: ev.price?.label || null,
-    canonical_url: canonicalUrl || `https://vayaplan.com/events/${ev.id}`,
+    canonical_url: canonicalUrl || eventCanonical,
   };
 }
 
@@ -68,23 +73,25 @@ export function formatEventDateTimeInMadrid(startTimeIso: string, endTimeIso?: s
     hour12: false,
   });
 
-  const startDateText = dateFormatter.format(startDate);
+  const rawStartDate = dateFormatter.format(startDate);
+  const startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
   const startTimeText = timeFormatter.format(startDate);
 
   if (endTimeIso) {
     const endDate = new Date(endTimeIso);
     if (!Number.isNaN(endDate.getTime())) {
-      const endDateText = dateFormatter.format(endDate);
+      const rawEndDate = dateFormatter.format(endDate);
+      const endDateText = rawEndDate.charAt(0).toUpperCase() + rawEndDate.slice(1);
       const endTimeText = timeFormatter.format(endDate);
 
-      if (startDateText === endDateText) {
-        return `${startDateText}, ${startTimeText} - ${endTimeText} h`;
+      if (rawStartDate === rawEndDate) {
+        return `${startDateText} · ${startTimeText} - ${endTimeText} h`;
       }
-      return `${startDateText}, ${startTimeText} h - ${endDateText}, ${endTimeText} h`;
+      return `${startDateText} · ${startTimeText} h - ${endDateText} · ${endTimeText} h`;
     }
   }
 
-  return `${startDateText}, ${startTimeText} h`;
+  return `${startDateText} · ${startTimeText} h`;
 }
 
 /**
@@ -104,44 +111,84 @@ export function formatConfirmedPrice(source: EventActionSource): string | null {
 
 /**
  * Genera el mensaje de texto para compartir por WhatsApp conforme a especificaciones:
- * [CANCELADO: ]Título
- * Fecha y hora reales en Europe/Madrid
- * Nombre del local
- * [Precio sólo si está confirmado]
- * URL canónica /events/:id
+ * ¿Nos apuntamos a este plan?
+ *
+ * ${título}
+ * 📅 ${fecha} · ${hora} h
+ * 📍 ${local}
+ * 🎟️ ${precio_confirmado}
+ *
+ * Más información en VayaPlan:
+ * ${url_canónica}
  */
 export function buildWhatsAppMessage(source: EventActionSource): string {
-  const lines: string[] = [];
+  const sections: string[] = [];
 
-  // 1. Título con prefijo de cancelación si aplica
+  // 1. Invitación
+  sections.push('¿Nos apuntamos a este plan?');
+
+  // 2. Ficha editorial
+  const detailLines: string[] = [];
+
   const title = source.status === 'cancelled'
     ? `CANCELADO: ${source.title}`
     : source.title;
-  lines.push(title.trim());
+  detailLines.push(title.trim());
 
-  // 2. Fecha y hora reales en Europe/Madrid
   const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
   if (dateTime) {
-    lines.push(dateTime);
+    detailLines.push(`📅 ${dateTime}`);
   }
 
-  // 3. Nombre del local
   if (source.venue_name && source.venue_name.trim().length > 0) {
-    lines.push(source.venue_name.trim());
+    detailLines.push(`📍 ${source.venue_name.trim()}`);
   }
 
-  // 4. Precio sólo si está confirmado
   const price = formatConfirmedPrice(source);
   if (price) {
-    lines.push(price);
+    detailLines.push(`🎟️ ${price}`);
   }
 
-  // 5. URL canónica
+  sections.push(detailLines.join('\n'));
+
+  // 3. Llamada a la acción y enlace canónico
   if (source.canonical_url && source.canonical_url.trim().length > 0) {
-    lines.push(source.canonical_url.trim());
+    sections.push(`Más información en VayaPlan:\n${source.canonical_url.trim()}`);
   }
 
-  return lines.join('\n');
+  return sections.join('\n\n');
+}
+
+/**
+ * Genera el cuerpo de texto para el diálogo nativo de compartir (navigator.share)
+ * Conserva el mismo criterio editorial sin duplicar innecesariamente la URL en text.
+ */
+export function buildShareText(source: EventActionSource): string {
+  const sections: string[] = [];
+  sections.push('¿Nos apuntamos a este plan?');
+
+  const detailLines: string[] = [];
+  const title = source.status === 'cancelled'
+    ? `CANCELADO: ${source.title}`
+    : source.title;
+  detailLines.push(title.trim());
+
+  const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+  if (dateTime) {
+    detailLines.push(`📅 ${dateTime}`);
+  }
+
+  if (source.venue_name && source.venue_name.trim().length > 0) {
+    detailLines.push(`📍 ${source.venue_name.trim()}`);
+  }
+
+  const price = formatConfirmedPrice(source);
+  if (price) {
+    detailLines.push(`🎟️ ${price}`);
+  }
+
+  sections.push(detailLines.join('\n'));
+  return sections.join('\n\n');
 }
 
 /**
@@ -534,7 +581,7 @@ export function renderEventActionsHtml(source: EventActionSource, now: Date = ne
         </a>
 
         <!-- 2. Compartir -->
-        <button type="button" class="event-action-btn btn-share" data-action="share-event" data-url="${escapeHtml(source.canonical_url)}" data-title="${escapeHtml(shareTitle)}" data-event-id="${source.id}" aria-label="Compartir evento">
+        <button type="button" class="event-action-btn btn-share" data-action="share-event" data-url="${escapeHtml(source.canonical_url)}" data-title="${escapeHtml(shareTitle)}" data-text="${escapeHtml(buildShareText(source))}" data-event-id="${source.id}" aria-label="Compartir evento">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
           <span class="action-btn-text">Compartir</span>
         </button>
@@ -727,10 +774,8 @@ export function getEventActionsStyles(): string {
 export function getEventActionsClientScript(): string {
   return `
     function extractEventActionSource(ev, canonicalUrl) {
-      const canonicalTag = document.querySelector('link[rel="canonical"]');
-      const defaultCanonical = canonicalTag && canonicalTag.href
-        ? canonicalTag.href
-        : (window.location.origin + '/events/' + ev.id);
+      const origin = (window.location && window.location.origin) ? window.location.origin : 'https://vayaplan.com';
+      const eventCanonical = (ev && ev.id) ? (origin + '/events/' + ev.id) : '';
       return {
         id: ev.id,
         title: ev.title,
@@ -746,7 +791,7 @@ export function getEventActionsClientScript(): string {
         price_is_free: ev.price ? ev.price.is_free : false,
         price_amount_cents: ev.price && ev.price.amount_cents !== undefined ? ev.price.amount_cents : null,
         price_label: ev.price ? ev.price.label : null,
-        canonical_url: canonicalUrl || defaultCanonical,
+        canonical_url: canonicalUrl || eventCanonical,
       };
     }
 
@@ -769,23 +814,25 @@ export function getEventActionsClientScript(): string {
         hour12: false,
       });
 
-      const startDateText = dateFormatter.format(startDate);
+      const rawStartDate = dateFormatter.format(startDate);
+      const startDateText = rawStartDate.charAt(0).toUpperCase() + rawStartDate.slice(1);
       const startTimeText = timeFormatter.format(startDate);
 
       if (endTimeIso) {
         const endDate = new Date(endTimeIso);
         if (!Number.isNaN(endDate.getTime())) {
-          const endDateText = dateFormatter.format(endDate);
+          const rawEndDate = dateFormatter.format(endDate);
+          const endDateText = rawEndDate.charAt(0).toUpperCase() + rawEndDate.slice(1);
           const endTimeText = timeFormatter.format(endDate);
 
-          if (startDateText === endDateText) {
-            return startDateText + ', ' + startTimeText + ' - ' + endTimeText + ' h';
+          if (rawStartDate === rawEndDate) {
+            return startDateText + ' · ' + startTimeText + ' - ' + endTimeText + ' h';
           }
-          return startDateText + ', ' + startTimeText + ' h - ' + endDateText + ', ' + endTimeText + ' h';
+          return startDateText + ' · ' + startTimeText + ' h - ' + endDateText + ' · ' + endTimeText + ' h';
         }
       }
 
-      return startDateText + ', ' + startTimeText + ' h';
+      return startDateText + ' · ' + startTimeText + ' h';
     }
 
     function formatConfirmedPrice(source) {
@@ -800,27 +847,56 @@ export function getEventActionsClientScript(): string {
     }
 
     function buildWhatsAppMessage(source) {
-      const lines = [];
+      const sections = [];
+      sections.push('¿Nos apuntamos a este plan?');
+
+      const detailLines = [];
       const title = source.status === 'cancelled'
         ? ('CANCELADO: ' + source.title)
         : source.title;
-      lines.push(title.trim());
+      detailLines.push(title.trim());
 
       const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
-      if (dateTime) lines.push(dateTime);
+      if (dateTime) detailLines.push('📅 ' + dateTime);
 
       if (source.venue_name && source.venue_name.trim().length > 0) {
-        lines.push(source.venue_name.trim());
+        detailLines.push('📍 ' + source.venue_name.trim());
       }
 
       const price = formatConfirmedPrice(source);
-      if (price) lines.push(price);
+      if (price) detailLines.push('🎟️ ' + price);
+
+      sections.push(detailLines.join('\\n'));
 
       if (source.canonical_url && source.canonical_url.trim().length > 0) {
-        lines.push(source.canonical_url.trim());
+        sections.push('Más información en VayaPlan:\\n' + source.canonical_url.trim());
       }
 
-      return lines.join('\\n');
+      return sections.join('\\n\\n');
+    }
+
+    function buildShareText(source) {
+      const sections = [];
+      sections.push('¿Nos apuntamos a este plan?');
+
+      const detailLines = [];
+      const title = source.status === 'cancelled'
+        ? ('CANCELADO: ' + source.title)
+        : source.title;
+      detailLines.push(title.trim());
+
+      const dateTime = formatEventDateTimeInMadrid(source.start_time, source.end_time);
+      if (dateTime) detailLines.push('📅 ' + dateTime);
+
+      if (source.venue_name && source.venue_name.trim().length > 0) {
+        detailLines.push('📍 ' + source.venue_name.trim());
+      }
+
+      const price = formatConfirmedPrice(source);
+      if (price) detailLines.push('🎟️ ' + price);
+
+      sections.push(detailLines.join('\\n'));
+      return sections.join('\\n\\n');
     }
 
     function buildWhatsAppShareUrl(source) {
@@ -1013,7 +1089,7 @@ export function getEventActionsClientScript(): string {
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2zm0 18.06c-1.5 0-2.97-.4-4.26-1.16l-.31-.18-3.16.83.84-3.08-.2-.32a8.08 8.08 0 0 1-1.24-4.24c0-4.46 3.63-8.09 8.09-8.09 2.16 0 4.19.84 5.72 2.37 1.53 1.53 2.37 3.56 2.37 5.72 0 4.46-3.63 8.09-8.09 8.09zm4.44-6.07c-.24-.12-1.44-.71-1.66-.79-.22-.08-.39-.12-.55.12-.17.24-.63.79-.77.95-.14.16-.28.18-.52.06-.24-.12-1.03-.38-1.96-1.21-.72-.64-1.21-1.44-1.35-1.68-.14-.24-.02-.37.1-.49.11-.11.24-.28.37-.43.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.55-1.33-.76-1.82-.2-.48-.41-.41-.56-.42-.14-.01-.31-.01-.48-.01-.17 0-.44.06-.67.31-.23.25-.87.85-.87 2.08 0 1.23.89 2.42 1.02 2.58.12.16 1.76 2.69 4.27 3.77.6.26 1.07.41 1.43.53.6.19 1.15.16 1.58.1.48-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28z"/></svg>' +
             '<span class="action-btn-text">WhatsApp</span>' +
           '</a>' +
-          '<button type="button" class="event-action-btn btn-share" data-action="share-event" data-metric="share_click" data-url="' + escapeHtml(source.canonical_url) + '" data-title="' + escapeHtml(shareTitle) + '" data-event-id="' + source.id + '" aria-label="Compartir evento">' +
+          '<button type="button" class="event-action-btn btn-share" data-action="share-event" data-metric="share_click" data-url="' + escapeHtml(source.canonical_url) + '" data-title="' + escapeHtml(shareTitle) + '" data-text="' + escapeHtml(buildShareText(source)) + '" data-event-id="' + source.id + '" aria-label="Compartir evento">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>' +
             '<span class="action-btn-text">Compartir</span>' +
           '</button>' +
@@ -1095,12 +1171,16 @@ export function getEventActionsClientScript(): string {
     }
 
     // Gestor de Compartir con fallback y captura de AbortError
-    async function executeEventShare(url, title, triggerBtn) {
+    async function executeEventShare(url, title, text, triggerBtn) {
+      if (typeof text === 'object' && !triggerBtn) {
+        triggerBtn = text;
+        text = undefined;
+      }
       if (navigator.share) {
         try {
           await navigator.share({
             title: title || document.title,
-            text: title || document.title,
+            text: text || title || document.title,
             url: url,
           });
           // Éxito: no necesita más acciones

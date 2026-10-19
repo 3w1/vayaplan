@@ -5,6 +5,7 @@ import {
   formatConfirmedPrice,
   buildWhatsAppMessage,
   buildWhatsAppShareUrl,
+  buildShareText,
   isValidCoordinate,
   isValidExternalMapUrl,
   buildDirectionsUrl,
@@ -38,24 +39,24 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
   };
 
   describe('1. Formateo de Fechas en Europe/Madrid', () => {
-    test('formatea correctamente fecha y hora reales diurnas en Europe/Madrid', () => {
+    test('formatea correctamente fecha y hora reales diurnas en Europe/Madrid con mayúscula inicial', () => {
       // 18:00 UTC en horario de verano (CEST) = 20:00
       const formatted = formatEventDateTimeInMadrid('2026-10-19T18:00:00.000Z');
-      expect(formatted).toBe('lunes, 19 de octubre, 20:00 h');
+      expect(formatted).toBe('Lunes, 19 de octubre · 20:00 h');
     });
 
-    test('formatea rango de inicio y fin en el mismo día', () => {
+    test('formatea rango de inicio y fin en el mismo día con separador de punto medio', () => {
       const formatted = formatEventDateTimeInMadrid(
         '2026-10-19T18:00:00.000Z',
         '2026-10-19T20:30:00.000Z'
       );
-      expect(formatted).toBe('lunes, 19 de octubre, 20:00 - 22:30 h');
+      expect(formatted).toBe('Lunes, 19 de octubre · 20:00 - 22:30 h');
     });
 
     test('gestiona eventos de madrugada con cambio de día real en Europe/Madrid', () => {
       // 2026-10-19T23:30:00.000Z en UTC = 2026-10-20 01:30 CEST en Madrid (martes)
       const formatted = formatEventDateTimeInMadrid('2026-10-19T23:30:00.000Z');
-      expect(formatted).toBe('martes, 20 de octubre, 01:30 h');
+      expect(formatted).toBe('Martes, 20 de octubre · 01:30 h');
     });
 
     test('gestiona eventos que cruzan la medianoche entre dos días diferentes', () => {
@@ -64,8 +65,8 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
         '2026-10-24T21:00:00.000Z',
         '2026-10-25T01:00:00.000Z'
       );
-      expect(formatted).toContain('sábado, 24 de octubre, 23:00 h');
-      expect(formatted).toContain('domingo, 25 de octubre, 02:00 h');
+      expect(formatted).toContain('Sábado, 24 de octubre · 23:00 h');
+      expect(formatted).toContain('Domingo, 25 de octubre · 02:00 h');
     });
   });
 
@@ -93,23 +94,20 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
   });
 
   describe('3. WhatsApp: Mensaje y URL Codificada', () => {
-    test('mensaje estándar con datos completos, tildes y emojis', () => {
+    test('mensaje estándar con datos completos, tildes y emojis conforme al formato aprobado', () => {
       const msg = buildWhatsAppMessage(baseSyntheticEvent);
-      const lines = msg.split('\n');
-
-      expect(lines.length).toBe(5);
-      expect(lines[0]).toBe('Concierto de Jazz & Blues 🎷');
-      expect(lines[1]).toBe('lunes, 19 de octubre, 20:00 - 22:30 h');
-      expect(lines[2]).toBe('Teatro Principal de Palencia');
-      expect(lines[3]).toBe('15,00 €');
-      expect(lines[4]).toBe('https://vayaplan.com/events/42');
+      expect(msg).toContain('¿Nos apuntamos a este plan?');
+      expect(msg).toContain('Concierto de Jazz & Blues 🎷');
+      expect(msg).toContain('📅 Lunes, 19 de octubre · 20:00 - 22:30 h');
+      expect(msg).toContain('📍 Teatro Principal de Palencia');
+      expect(msg).toContain('🎟️ 15,00 €');
+      expect(msg).toContain('Más información en VayaPlan:\nhttps://vayaplan.com/events/42');
     });
 
     test('evento cancelado incluye el prefijo CANCELADO: en la primera línea', () => {
       const msg = buildWhatsAppMessage({ ...baseSyntheticEvent, status: 'cancelled' });
-      const lines = msg.split('\n');
-
-      expect(lines[0]).toBe('CANCELADO: Concierto de Jazz & Blues 🎷');
+      expect(msg).toContain('¿Nos apuntamos a este plan?');
+      expect(msg).toContain('CANCELADO: Concierto de Jazz & Blues 🎷');
     });
 
     test('omite datos ausentes sin inventarlos (sin precio confirmado y sin fin)', () => {
@@ -119,13 +117,22 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
         price_amount_cents: null,
         price_is_free: false,
       });
-      const lines = msg.split('\n');
+      expect(msg).toContain('¿Nos apuntamos a este plan?');
+      expect(msg).toContain('Concierto de Jazz & Blues 🎷');
+      expect(msg).toContain('📅 Lunes, 19 de octubre · 20:00 h');
+      expect(msg).toContain('📍 Teatro Principal de Palencia');
+      expect(msg).not.toContain('🎟️');
+      expect(msg).toContain('Más información en VayaPlan:\nhttps://vayaplan.com/events/42');
+    });
 
-      expect(lines.length).toBe(4);
-      expect(lines[0]).toBe('Concierto de Jazz & Blues 🎷');
-      expect(lines[1]).toBe('lunes, 19 de octubre, 20:00 h');
-      expect(lines[2]).toBe('Teatro Principal de Palencia');
-      expect(lines[3]).toBe('https://vayaplan.com/events/42');
+    test('buildShareText genera texto estructurado para el diálogo nativo de compartir', () => {
+      const text = buildShareText(baseSyntheticEvent);
+      expect(text).toContain('¿Nos apuntamos a este plan?');
+      expect(text).toContain('Concierto de Jazz & Blues 🎷');
+      expect(text).toContain('📅 Lunes, 19 de octubre · 20:00 - 22:30 h');
+      expect(text).toContain('📍 Teatro Principal de Palencia');
+      expect(text).toContain('🎟️ 15,00 €');
+      expect(text).not.toContain('https://vayaplan.com/events/42');
     });
 
     test('buildWhatsAppShareUrl codifica completamente el mensaje para wa.me', () => {
@@ -134,6 +141,7 @@ describe('apps/web — Módulo de Acciones de Evento (event-actions.ts)', () => 
 
       const encodedText = url.replace('https://wa.me/?text=', '');
       const decoded = decodeURIComponent(encodedText);
+      expect(decoded).toContain('¿Nos apuntamos a este plan?');
       expect(decoded).toContain('Concierto de Jazz & Blues 🎷');
       expect(decoded).toContain('15,00 €');
       expect(decoded).toContain('https://vayaplan.com/events/42');
