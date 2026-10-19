@@ -143,7 +143,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if (key.startsWith('vayaplan-pwa-') && key !== CACHE_NAME) {
             return caches.delete(key);
           }
         })

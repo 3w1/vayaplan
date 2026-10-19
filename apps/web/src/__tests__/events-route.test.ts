@@ -329,4 +329,71 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     expect(swCode).toContain('caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache))');
     expect(swCode).toContain('Sin conexión a internet');
   });
+
+  test('Service Worker activate: comportamiento de purga selectiva de Cache Storage (solo familia vayaplan-pwa-)', async () => {
+    const fetchFn = (webApp as any).fetch;
+    const res = await fetchFn(new Request('http://localhost/sw.js'));
+    expect(res.status).toBe(200);
+    const swCode = await res.text();
+
+    const deletedCaches: string[] = [];
+    const existingCaches = [
+      'vayaplan-pwa-v1',
+      'vayaplan-pwa-v2',
+      'vayaplan-pwa-v3', // Versión activa actual: DEBE CONSERVARSE
+      'workbox-precache-v1', // Caché ajena: DEBE CONSERVARSE
+      'firebase-installations', // Caché ajena: DEBE CONSERVARSE
+      'vayaplan-analytics-cache', // Otra caché VayaPlan fuera de vayaplan-pwa-: DEBE CONSERVARSE
+      'vayaplan-uploads-cache', // Otra caché VayaPlan fuera de vayaplan-pwa-: DEBE CONSERVARSE
+    ];
+
+    const mockCaches = {
+      keys: async () => [...existingCaches],
+      delete: async (name: string) => {
+        deletedCaches.push(name);
+        return true;
+      },
+    };
+
+    const activateListeners: Function[] = [];
+    const mockSelf = {
+      addEventListener: (type: string, fn: Function) => {
+        if (type === 'activate') activateListeners.push(fn);
+      },
+      clients: {
+        claim: () => {},
+      },
+    };
+
+    // Ejecutar el script del Service Worker con los mocks inyectados
+    const swRunner = new Function('self', 'caches', swCode);
+    swRunner(mockSelf, mockCaches);
+
+    expect(activateListeners.length).toBeGreaterThanOrEqual(1);
+
+    let waitUntilPromise: Promise<any> | null = null;
+    const mockEvent = {
+      waitUntil: (p: Promise<any>) => {
+        waitUntilPromise = p;
+      },
+    };
+
+    activateListeners[0](mockEvent);
+    await waitUntilPromise;
+
+    // 1. Versiones anteriores vayaplan-pwa-* se eliminan:
+    expect(deletedCaches).toContain('vayaplan-pwa-v1');
+    expect(deletedCaches).toContain('vayaplan-pwa-v2');
+
+    // 2. La versión actual vayaplan-pwa-v3 se conserva:
+    expect(deletedCaches).not.toContain('vayaplan-pwa-v3');
+
+    // 3. Cachés ajenas se conservan:
+    expect(deletedCaches).not.toContain('workbox-precache-v1');
+    expect(deletedCaches).not.toContain('firebase-installations');
+
+    // 4. Otras cachés de VayaPlan que no pertenezcan a la familia vayaplan-pwa- se conservan:
+    expect(deletedCaches).not.toContain('vayaplan-analytics-cache');
+    expect(deletedCaches).not.toContain('vayaplan-uploads-cache');
+  });
 });
