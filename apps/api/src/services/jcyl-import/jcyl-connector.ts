@@ -1,9 +1,44 @@
+import { createHash } from 'crypto';
 import { query } from '@vayaplan/db';
 import type { JcylApiResponse, JcylRecordRaw, NormalizedJcylEvent } from './jcyl-types';
 import { normalizeJcylRecord } from './jcyl-normalizer';
 
 const JCYL_API_BASE =
   'https://analisis.datosabiertos.jcyl.es/api/explore/v2.1/catalog/datasets/eventos-de-la-agenda-cultural-categorizados-y-geolocalizados/records';
+
+/**
+ * Calcula un hash criptográfico determinista del contenido normalizado de un evento.
+ * Se utiliza para detectar con precisión si un borrador ha recibido modificaciones
+ * manuales de un editor humano o si permanece idéntico a la versión importada.
+ */
+export function computeEventContentHash(fields: {
+  title: string;
+  description?: string | null;
+  category: string;
+  timeStatus: string;
+  startTimeIso?: string | null;
+  endTimeIso?: string | null;
+  editorialDate: string;
+  endDate?: string | null;
+  scheduleText?: string | null;
+  priceCents: number;
+  isFree: boolean;
+}): string {
+  const normalized = {
+    title: (fields.title || '').trim(),
+    description: (fields.description || '').trim(),
+    category: fields.category,
+    timeStatus: fields.timeStatus,
+    startTimeIso: fields.startTimeIso || null,
+    endTimeIso: fields.endTimeIso || null,
+    editorialDate: fields.editorialDate,
+    endDate: fields.endDate || null,
+    scheduleText: fields.scheduleText || null,
+    priceCents: fields.priceCents,
+    isFree: fields.isFree,
+  };
+  return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
 
 export interface SyncOptions {
   dryRun?: boolean;
@@ -121,28 +156,45 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
       // 1. Comprobar si ya existe por su dedupeKey estable
       const existingRes = await query<{
         id: number;
+        title: string;
+        description: string | null;
+        category: string;
+        time_status: string;
+        start_time: string | null;
+        end_time: string | null;
+        editorial_date: string;
+        end_date: string | null;
+        schedule_text: string | null;
+        price_cents: number;
+        is_free: boolean;
         status: string;
         verified_at: string | null;
-        created_at: string;
-        updated_at: string;
+        source_hash: string | null;
       }>(
-        `SELECT id, status, verified_at, created_at, updated_at FROM events WHERE city_id = $1 AND dedupe_key = $2 LIMIT 1;`,
+        `SELECT id, title, description, category, time_status, start_time, end_time,
+                editorial_date, end_date, schedule_text, price_cents, is_free,
+                status, verified_at, source_hash
+         FROM events
+         WHERE city_id = $1 AND dedupe_key = $2
+         LIMIT 1;`,
         [cityId, item.dedupeKey]
       );
 
+      const incomingHash = computeEventContentHash(item);
+
       if (existingRes.rows.length === 0) {
-        // Insertar nuevo borrador (status = 'tentative')
+        // Insertar nuevo borrador (status = 'tentative') registrando su source_hash
         await query(
           `INSERT INTO events (
              city_id, venue_id, title, description, category,
              time_status, start_time, end_time, editorial_date, end_date,
              schedule_text, price_cents, is_free, status,
-             source_type, source_url, dedupe_key, created_at, updated_at
+             source_type, source_url, source_hash, dedupe_key, created_at, updated_at
            ) VALUES (
              $1, $2, $3, $4, $5,
              $6, $7, $8, $9, $10,
              $11, $12, $13, 'tentative',
-             'api', $14, $15, now(), now()
+             'api', $14, $15, $16, now(), now()
            );`,
           [
             cityId,
@@ -159,27 +211,50 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
             item.priceCents,
             item.isFree,
             item.sourceUrl,
+            incomingHash,
             item.dedupeKey,
           ]
         );
         result.inserted++;
       } else {
         const existing = existingRes.rows[0];
-        // Protección editorial: si el evento ya fue verificado, publicado o editado manualmente en borrador,
-        // no sobrescribir el trabajo de curación humana
-        const isManuallyTouched =
-          existing.verified_at !== null ||
-          existing.status !== 'tentative' ||
-          (existing.updated_at &&
-            existing.created_at &&
-            new Date(existing.updated_at).getTime() - new Date(existing.created_at).getTime() > 1000);
 
-        if (isManuallyTouched) {
+        // Regla 1: Si ya fue verificado o publicado, jamás se sobrescribe
+        if (existing.verified_at !== null || existing.status !== 'tentative') {
           result.preservedEditorial++;
           continue;
         }
 
-        // Si sigue en borrador tentativo sin verificar, actualizar datos técnicos
+        // Regla 2: Comprobar si el borrador fue modificado manualmente por un editor humano.
+        // Se calcula el hash del contenido actual en base de datos.
+        const currentDbHash = computeEventContentHash({
+          title: existing.title,
+          description: existing.description,
+          category: existing.category,
+          timeStatus: existing.time_status,
+          startTimeIso: existing.start_time ? new Date(existing.start_time).toISOString() : null,
+          endTimeIso: existing.end_time ? new Date(existing.end_time).toISOString() : null,
+          editorialDate: existing.editorial_date,
+          endDate: existing.end_date,
+          scheduleText: existing.schedule_text,
+          priceCents: existing.price_cents,
+          isFree: existing.is_free,
+        });
+
+        // Si existe un source_hash anterior y difiere del contenido actual de la BD,
+        // significa que un humano editó el borrador. Se preserva y no se altera.
+        const isHumanEdited = Boolean(existing.source_hash && existing.source_hash !== currentDbHash);
+        if (isHumanEdited) {
+          result.preservedEditorial++;
+          continue;
+        }
+
+        // Regla 3: Si no ha sido editado por humanos y el feed entrante es idéntico, es idempotente (no-op)
+        if (currentDbHash === incomingHash) {
+          continue;
+        }
+
+        // Regla 4: Si no fue editado por humanos y el feed oficial actualizó datos, se actualiza el borrador
         await query(
           `UPDATE events SET
              title = $1,
@@ -194,8 +269,9 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
              price_cents = $10,
              is_free = $11,
              source_url = $12,
+             source_hash = $13,
              updated_at = now()
-           WHERE id = $13;`,
+           WHERE id = $14;`,
           [
             item.title,
             item.description,
@@ -209,6 +285,7 @@ export async function syncJcylLibraryActivities(options: SyncOptions = {}): Prom
             item.priceCents,
             item.isFree,
             item.sourceUrl,
+            incomingHash,
             existing.id,
           ]
         );

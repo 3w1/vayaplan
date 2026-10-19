@@ -194,7 +194,7 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     expect(row2.start_time).toBeNull(); // Sin horas inventadas
   });
 
-  test('Sincronización repetida es idempotente y no duplica filas', async () => {
+  test('Sincronización repetida con datos idénticos es idempotente: no inserta ni actualiza filas innecesariamente', async () => {
     const result = await syncJcylLibraryActivities({
       dryRun: false,
       cityId: 1,
@@ -202,10 +202,41 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     });
 
     expect(result.inserted).toBe(0);
-    expect(result.updated).toBe(2);
+    expect(result.updated).toBe(0); // Idempotente: 0 updates porque el contenido ya está al día
 
     const check = await testPool.query("SELECT COUNT(*) FROM events WHERE dedupe_key LIKE 'jcyl:99990%'");
     expect(Number(check.rows[0].count)).toBe(2);
+  });
+
+  test('Borrador no intervenido: se actualiza si el feed remoto publica cambios', async () => {
+    // Simular que el feed oficial actualiza la descripción del evento 999902
+    const updatedRecords = [
+      mockRecords[0],
+      {
+        ...mockRecords[1],
+        descripcion: 'Descripción actualizada por la biblioteca oficial',
+      },
+    ];
+
+    const updatedFetch = async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ total_count: 2, results: updatedRecords }),
+    } as any);
+
+    const result = await syncJcylLibraryActivities({
+      dryRun: false,
+      cityId: 1,
+      fetchFn: updatedFetch,
+    });
+
+    expect(result.inserted).toBe(0);
+    expect(result.updated).toBe(1); // Se actualiza el borrador no intervenido
+
+    const check = await testPool.query("SELECT description, status FROM events WHERE dedupe_key = 'jcyl:999902'");
+    expect(check.rows[0].description).toBe('Descripción actualizada por la biblioteca oficial');
+    expect(check.rows[0].status).toBe('tentative');
   });
 
   test('Protección editorial: no sobrescribe eventos verificados o publicados', async () => {
@@ -231,12 +262,12 @@ describe('Conector JCyL — Ingesta a Borradores (Entorno Aislado)', () => {
     expect(check.rows[0].status).toBe('published');
   });
 
-  test('Protección de borradores editados: conserva cambios manuales en eventos que siguen en status tentative', async () => {
-    // Simular que un editor corrigió el texto de un borrador tentativa tras su importación inicial
+  test('Protección de borradores editados: conserva cambios manuales en eventos que siguen en status tentative (hash mismatch)', async () => {
+    // Simular que un editor corrigió el texto de un borrador tentativa en BD
+    // (el contenido ya no coincide con el source_hash del conector)
     await testPool.query(`
       UPDATE events 
-      SET title = 'Borrador Retocado por Editor',
-          created_at = now() - interval '1 hour'
+      SET title = 'Borrador Retocado por Editor'
       WHERE dedupe_key = 'jcyl:999902'
     `);
 

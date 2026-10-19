@@ -1,3 +1,4 @@
+import { parseMadridWallClockToUtc } from '@vayaplan/shared';
 import type { JcylRecordRaw, NormalizedJcylEvent } from './jcyl-types';
 
 /**
@@ -64,7 +65,7 @@ export function sanitizeHtml(htmlStr?: string | null): string | null {
 export function normalizeJcylTime(
   rawTime?: string | null,
   dateStr?: string
-): { timeStatus: 'confirmed' | 'pending_time'; startTimeIso: string | null } {
+): { timeStatus: 'confirmed' | 'pending_time'; startTimeIso: string | null; warning?: string } {
   if (!rawTime || typeof rawTime !== 'string' || !dateStr) {
     return { timeStatus: 'pending_time', startTimeIso: null };
   }
@@ -78,23 +79,23 @@ export function normalizeJcylTime(
   const minutes = Number(match[2]);
 
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return { timeStatus: 'pending_time', startTimeIso: null };
+    return { timeStatus: 'pending_time', startTimeIso: null, warning: 'Hora fuera de rango' };
   }
 
   const padH = String(hours).padStart(2, '0');
   const padM = String(minutes).padStart(2, '0');
+  const timeFormatted = `${padH}:${padM}`;
 
-  // En la península española (Europe/Madrid) el desfase es +01:00 (CET) o +02:00 (CEST)
-  // Determinamos el offset dinámicamente según la fecha
-  const testDate = new Date(`${dateStr}T12:00:00Z`);
-  const month = testDate.getUTCMonth(); // 0=Ene ... 9=Oct, 10=Nov
-  // Verano (CEST, UTC+2): de último domingo de marzo a último domingo de octubre
-  // Invierno (CET, UTC+1): de noviembre a febrero
-  const isSummer = month >= 3 && month <= 9;
-  const offsetStr = isSummer ? '+02:00' : '+01:00';
+  const converted = parseMadridWallClockToUtc(dateStr, timeFormatted);
+  if (!converted.valid || !converted.utcIso) {
+    return {
+      timeStatus: 'pending_time',
+      startTimeIso: null,
+      warning: converted.message || 'Hora ambigua o inexistente por cambio estacional',
+    };
+  }
 
-  const iso = new Date(`${dateStr}T${padH}:${padM}:00${offsetStr}`).toISOString();
-  return { timeStatus: 'confirmed', startTimeIso: iso };
+  return { timeStatus: 'confirmed', startTimeIso: converted.utcIso };
 }
 
 /**
@@ -213,7 +214,7 @@ export function normalizeJcylRecord(record: JcylRecordRaw): NormalizedJcylEvent 
     timeStatus = 'continuous';
     startTimeIso = null;
   } else if (timeStatus === 'pending_time') {
-    warnings.push('Hora de inicio no confirmada o no parseable');
+    warnings.push(normalizedTime.warning || 'Hora de inicio no confirmada o no parseable');
   }
 
   const { isFree, priceCents, priceKnown, rawPrice } = normalizeJcylPrice(record.precio);

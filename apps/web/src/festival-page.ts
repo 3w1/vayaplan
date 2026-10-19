@@ -39,9 +39,13 @@ function formatTimeBadge(ev: PublicEventItem): string {
   if (ev.start_time) {
     try {
       const d = new Date(ev.start_time);
-      const hours = String(d.getUTCHours() + 2).padStart(2, '0'); // CET/CEST approx or local
-      const mins = String(d.getUTCMinutes()).padStart(2, '0');
-      return `${hours}:${mins} h`;
+      const timeFormatted = d.toLocaleTimeString('es-ES', {
+        timeZone: 'Europe/Madrid',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      return `${timeFormatted} h`;
     } catch {}
   }
   return 'Horario fijado';
