@@ -318,6 +318,75 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       font-weight: 800;
     }
 
+    /* Barra de Filtros Secundarios (Modificador Gratis) */
+    .secondary-filters-bar {
+      padding: 0 1rem 0.5rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-filter-free {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: var(--color-bg-app);
+      color: var(--color-text-main);
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius-pill);
+      padding: 0.35rem 0.8rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-filter-free:hover {
+      border-color: var(--color-border-subtle);
+      background: var(--color-bg-subtle);
+    }
+
+    .btn-filter-free:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .btn-filter-free[aria-pressed="true"],
+    .btn-filter-free.active {
+      background: var(--color-free-green-bg);
+      color: #047857;
+      border-color: var(--color-free-green);
+      font-weight: 800;
+      box-shadow: 0 2px 6px rgba(5, 150, 105, 0.2);
+    }
+
+    .btn-filter-free-svg {
+      width: 14px;
+      height: 14px;
+      fill: var(--color-text-muted);
+      transition: fill 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .btn-filter-free[aria-pressed="true"] .btn-filter-free-svg,
+    .btn-filter-free.active .btn-filter-free-svg {
+      fill: #047857;
+    }
+
+    .btn-filter-free-status {
+      display: none;
+      margin-left: 0.15rem;
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+
+    .btn-filter-free[aria-pressed="true"] .btn-filter-free-status,
+    .btn-filter-free.active .btn-filter-free-status {
+      display: inline;
+    }
+
     /* Barra de Filtros Activos */
     .active-filters-bar {
       display: none;
@@ -1709,6 +1778,15 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       </button>
     </section>
 
+    <!-- Barra de Filtros Secundarios (Modificador Gratis) -->
+    <div class="secondary-filters-bar" aria-label="Filtros adicionales">
+      <button type="button" class="btn-filter-free" id="btn-filter-free" data-action="toggle-free" aria-pressed="false" aria-label="Filtrar solo planes gratis">
+        <svg class="btn-filter-free-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+        <span class="btn-filter-free-label">Gratis</span>
+        <span class="btn-filter-free-status" aria-hidden="true">✓</span>
+      </button>
+    </div>
+
     <!-- Barra de Filtros Activos (Visible solo con filtros aplicados) -->
     <div class="active-filters-bar" id="active-filters-bar">
       <div class="active-chips-wrap" id="active-chips-wrap">
@@ -1784,6 +1862,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     let currentCity = 'palencia';
     let currentView = 'today';
     let currentFilter = 'all';
+    let isFreeFilterActive = false;
     let selectedDate = getTodayDateString();
     let currentData = null; // Almacena respuesta de API
     let activeModalEventId = null; // Previene impresiones duplicadas accidentales
@@ -2275,42 +2354,72 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     window.loadData = loadData;
 
     // ==============================================================================
-    // Filtrado estricto por contratos de categoría
+    // Filtrado estricto por contratos de categoría y precio
     // ==============================================================================
+    function isEventFree(ev) {
+      if (!ev) return false;
+      // Contrato canónico de PublicEventItem: la gratuidad autoritativa reside en ev.price.is_free
+      if (ev.price && typeof ev.price === 'object' && ev.price.is_free !== undefined) {
+        return ev.price.is_free === true;
+      }
+      // Representación secundaria o fallback para modelos planos
+      return ev.is_free === true;
+    }
+    window.isEventFree = isEventFree;
+
+    function isRecurrenceFree(r) {
+      if (!r) return false;
+      // Contrato canónico de RecurrenceItem: is_free a nivel de raíz
+      if (r.is_free !== undefined) {
+        return r.is_free === true;
+      }
+      if (r.price && typeof r.price === 'object' && r.price.is_free !== undefined) {
+        return r.price.is_free === true;
+      }
+      return false;
+    }
+    window.isRecurrenceFree = isRecurrenceFree;
+
     function filterEvents(events) {
       if (!events || events.length === 0) return [];
-      if (currentFilter === 'all') return events;
+      let result = events;
+
       if (currentFilter === 'musica') {
-        return events.filter((ev) => ev.category === 'musica_directo');
+        result = result.filter((ev) => ev.category === 'musica_directo');
+      } else if (currentFilter === 'tardeo') {
+        result = result.filter((ev) => ev.category === 'dj_tardeo');
+      } else if (currentFilter === 'cine') {
+        result = result.filter((ev) => ev.category === 'cine');
+      } else if (currentFilter === 'cultura') {
+        result = result.filter((ev) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(ev.category));
       }
-      if (currentFilter === 'tardeo') {
-        return events.filter((ev) => ev.category === 'dj_tardeo');
+
+      if (isFreeFilterActive) {
+        result = result.filter((ev) => isEventFree(ev));
       }
-      if (currentFilter === 'cine') {
-        return events.filter((ev) => ev.category === 'cine');
-      }
-      if (currentFilter === 'cultura') {
-        return events.filter((ev) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(ev.category));
-      }
-      return events;
+
+      return result;
     }
 
     function filterRecurrences(recurrences) {
       if (!recurrences || recurrences.length === 0) return [];
-      if (currentFilter === 'all') return recurrences;
+      let result = recurrences;
+
       if (currentFilter === 'musica') {
-        return recurrences.filter((r) => r.category === 'musica_directo');
+        result = result.filter((r) => r.category === 'musica_directo');
+      } else if (currentFilter === 'tardeo') {
+        result = result.filter((r) => r.category === 'dj_tardeo');
+      } else if (currentFilter === 'cine') {
+        result = result.filter((r) => r.category === 'cine');
+      } else if (currentFilter === 'cultura') {
+        result = result.filter((r) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(r.category));
       }
-      if (currentFilter === 'tardeo') {
-        return recurrences.filter((r) => r.category === 'dj_tardeo');
+
+      if (isFreeFilterActive) {
+        result = result.filter((r) => isRecurrenceFree(r));
       }
-      if (currentFilter === 'cine') {
-        return recurrences.filter((r) => r.category === 'cine');
-      }
-      if (currentFilter === 'cultura') {
-        return recurrences.filter((r) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(r.category));
-      }
-      return recurrences;
+
+      return result;
     }
 
     // ==============================================================================
@@ -2332,6 +2441,14 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         chipsHtml += \`
           <button class="filter-chip-removable" data-action="remove-cat-filter" aria-label="Eliminar filtro \${catNames[currentFilter]}">
             \${catNames[currentFilter] || currentFilter} ✕
+          </button>
+        \`;
+      }
+
+      if (isFreeFilterActive) {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="remove-free-filter" aria-label="Eliminar filtro Gratis">
+            Gratis ✕
           </button>
         \`;
       }
@@ -2364,11 +2481,40 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
     }
 
+    function syncFreeFilterUi() {
+      const btn = document.getElementById('btn-filter-free');
+      if (btn) {
+        btn.setAttribute('aria-pressed', isFreeFilterActive ? 'true' : 'false');
+        btn.classList.toggle('active', isFreeFilterActive);
+      }
+    }
+    window.syncFreeFilterUi = syncFreeFilterUi;
+
+    function toggleFreeFilter(forceVal) {
+      const nextVal = typeof forceVal === 'boolean' ? forceVal : !isFreeFilterActive;
+      isFreeFilterActive = nextVal;
+
+      syncFreeFilterUi();
+      updateListingUrl();
+
+      if (currentData) {
+        if (currentView === 'weekend') {
+          renderWeekendAgenda();
+        } else {
+          renderDayAgenda();
+        }
+      }
+    }
+    window.toggleFreeFilter = toggleFreeFilter;
+
     function clearAllFilters() {
       currentFilter = 'all';
+      isFreeFilterActive = false;
+      syncFreeFilterUi();
       document.querySelectorAll('.cat-btn').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.cat === 'all');
       });
+      updateListingUrl();
       switchView('today');
     }
     window.clearAllFilters = clearAllFilters;
@@ -2432,6 +2578,14 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         el.classList.toggle('active', el.dataset.cat === currentFilter);
       });
 
+      const freeParam = params.get('free');
+      const targetFree = freeParam === 'true';
+      if (targetFree !== isFreeFilterActive) {
+        isFreeFilterActive = targetFree;
+        changed = true;
+      }
+      syncFreeFilterUi();
+
       return changed;
     }
     window.applyFiltersFromUrl = applyFiltersFromUrl;
@@ -2462,6 +2616,12 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         params.set('view', 'weekend');
       } else {
         params.delete('view');
+      }
+
+      if (isFreeFilterActive) {
+        params.set('free', 'true');
+      } else {
+        params.delete('free');
       }
 
       const qs = params.toString();
@@ -2511,7 +2671,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
       const filteredEvents = filterEvents(currentData.events || []);
       const recurrences = filterRecurrences(currentData.recurrences || []);
-      const places = currentFilter === 'all' ? (currentData.places || []) : [];
+      const places = (currentFilter === 'all' && !isFreeFilterActive) ? (currentData.places || []) : [];
 
       const totalItems = filteredEvents.length + recurrences.length + places.length;
       countEl.innerText = \`\${totalItems} \${totalItems === 1 ? 'plan' : 'planes'}\`;
@@ -2548,7 +2708,16 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         let emptyDesc = '';
         let emptyActions = '';
 
-        if (currentFilter !== 'all') {
+        if (isFreeFilterActive) {
+          emptyTitle = 'No hay planes gratuitos con estos filtros';
+          emptyDesc = currentFilter !== 'all'
+            ? \`No encontramos eventos gratuitos en \${getCategoryTitle(currentFilter)} para la fecha seleccionada.\`
+            : 'No encontramos eventos gratuitos para esta fecha en Palencia.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="remove-free-filter">Ver todos los planes (quitar Gratis)</button>
+            \${currentFilter !== 'all' ? '<button type="button" class="btn-secondary-link" data-action="remove-cat-filter">Quitar categoría</button>' : ''}
+          \`;
+        } else if (currentFilter !== 'all') {
           emptyTitle = \`Sin planes en \${getCategoryTitle(currentFilter)}\`;
           emptyDesc = 'No encontramos eventos en esta categoría para la fecha seleccionada.';
           emptyActions = \`
@@ -2710,9 +2879,16 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         \`;
 
         if (filteredEvents.length === 0 && recurrences.length === 0) {
+          const noPlansMsg = isFreeFilterActive
+            ? (currentFilter !== 'all'
+                ? \`Sin planes gratuitos en \${getCategoryTitle(currentFilter)} para este día.\`
+                : 'Sin planes gratuitos para este día.')
+            : (currentFilter !== 'all'
+                ? 'Sin planes registrados en esta categoría para este día.'
+                : 'Sin planes registrados para este día.');
           html += \`
             <div style="padding: 0.875rem; text-align: center; color: var(--color-text-muted); font-size: 0.8125rem;">
-              Sin planes registrados en esta categoría para este día.
+              \${escapeHtml(noPlansMsg)}
             </div>
           \`;
         }
@@ -2765,7 +2941,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
 
       // Planes permanentes al final del fin de semana
-      if (currentFilter === 'all' && currentData.places && currentData.places.length > 0) {
+      if (currentFilter === 'all' && !isFreeFilterActive && currentData.places && currentData.places.length > 0) {
         html += \`
           <div class="weekend-day-group">
             <div class="weekend-day-header">
@@ -2795,18 +2971,38 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         html += '</div></div>';
       }
 
-      const displayedPlacesCount = (currentFilter === 'all' && currentData.places) ? currentData.places.length : 0;
+      const displayedPlacesCount = (currentFilter === 'all' && !isFreeFilterActive && currentData.places) ? currentData.places.length : 0;
       const totalWeekendItems = totalWeekendEvents + displayedPlacesCount;
       countEl.innerText = \`\${totalWeekendItems} \${totalWeekendItems === 1 ? 'plan' : 'planes'}\`;
 
       if (totalWeekendItems === 0) {
-        let emptyTitle = currentFilter === 'all' ? 'Sin planes para este fin de semana' : \`Sin planes en \${getCategoryTitle(currentFilter)}\`;
-        let emptyDesc = currentFilter === 'all'
-          ? 'No hay actividades registradas para este fin de semana en Palencia.'
-          : 'No encontramos eventos en esta categoría para el fin de semana.';
-        let emptyActions = currentFilter !== 'all'
-          ? '<button type="button" class="btn-primary-action" data-action="remove-cat-filter">Quitar filtros</button> <button type="button" class="btn-secondary-link" data-action="switch-view" data-view="today">Volver a hoy</button>'
-          : '<button type="button" class="btn-primary-action" data-action="switch-view" data-view="today">Volver a hoy</button>';
+        let emptyTitle = '';
+        let emptyDesc = '';
+        let emptyActions = '';
+
+        if (isFreeFilterActive) {
+          emptyTitle = 'No hay planes gratuitos con estos filtros';
+          emptyDesc = currentFilter !== 'all'
+            ? \`No encontramos planes gratuitos en \${getCategoryTitle(currentFilter)} para este fin de semana.\`
+            : 'No hay planes gratuitos registrados para este fin de semana en Palencia.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="remove-free-filter">Ver todos los planes (quitar Gratis)</button>
+            \${currentFilter !== 'all' ? '<button type="button" class="btn-secondary-link" data-action="remove-cat-filter">Quitar categoría</button>' : ''}
+          \`;
+        } else if (currentFilter !== 'all') {
+          emptyTitle = \`Sin planes en \${getCategoryTitle(currentFilter)}\`;
+          emptyDesc = 'No encontramos eventos en esta categoría para el fin de semana.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="remove-cat-filter">Quitar filtros</button>
+            <button type="button" class="btn-secondary-link" data-action="switch-view" data-view="today">Volver a hoy</button>
+          \`;
+        } else {
+          emptyTitle = 'Sin planes para este fin de semana';
+          emptyDesc = 'No hay actividades registradas para este fin de semana en Palencia.';
+          emptyActions = \`
+            <button type="button" class="btn-primary-action" data-action="switch-view" data-view="today">Volver a hoy</button>
+          \`;
+        }
 
         container.innerHTML = \`
           <div class="empty-state">
@@ -3535,6 +3731,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         clearAllFilters();
       } else if (action === 'remove-cat-filter') {
         setFilter('all');
+      } else if (action === 'toggle-free') {
+        toggleFreeFilter();
+      } else if (action === 'remove-free-filter') {
+        toggleFreeFilter(false);
       } else if (action === 'prev-hero') {
         if (window.__heroCarouselStep) window.__heroCarouselStep(-1);
       } else if (action === 'next-hero') {
