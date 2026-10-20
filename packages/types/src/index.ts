@@ -99,7 +99,9 @@ export type VenueCategory =
   | 'pub'
   | 'discoteca'
   | 'teatro'
-  | 'cine';
+  | 'cine'
+  | 'restaurante'
+  | 'cultura';
 
 export interface Venue {
   id: number;

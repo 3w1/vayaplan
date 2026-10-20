@@ -1,4 +1,39 @@
-import type { EventCategory, EventStatus, EventSourceType } from '@vayaplan/types';
+import type { EventCategory, EventStatus, EventSourceType, VenueCategory } from '@vayaplan/types';
+
+/**
+ * Categorías válidas de venues en VayaPlan.
+ * El orden determina el orden de aparición en los desplegables del administrador.
+ */
+export const VALID_VENUE_CATEGORIES: readonly VenueCategory[] = [
+  'bar',
+  'bar_musical',
+  'cine',
+  'cultura',
+  'disco_bar',
+  'discoteca',
+  'general',
+  'pub',
+  'restaurante',
+  'sala_conciertos',
+  'teatro',
+] as const;
+
+/**
+ * Etiquetas visibles para las categorías de venues, en español.
+ */
+export const VENUE_CATEGORY_LABELS: Readonly<Record<VenueCategory, string>> = {
+  bar: 'Bar',
+  bar_musical: 'Bar Musical',
+  cine: 'Cine',
+  cultura: 'Cultura',
+  disco_bar: 'Disco Bar',
+  discoteca: 'Discoteca',
+  general: 'General',
+  pub: 'Pub',
+  restaurante: 'Restaurante',
+  sala_conciertos: 'Sala de Conciertos',
+  teatro: 'Teatro',
+};
 
 /**
  * Categorías válidas en VayaPlan
