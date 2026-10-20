@@ -3,6 +3,7 @@ import { query, getClient } from '@vayaplan/db';
 import type { PoolClient, QueryResultRow } from 'pg';
 import { requireAdminAuth } from '../../middleware/auth';
 import type { Venue, AdminUser } from '@vayaplan/types';
+import { VALID_VENUE_CATEGORIES } from '@vayaplan/shared';
 
 export const adminVenuesRoutes = new Hono<{
   Variables: {
@@ -497,6 +498,34 @@ export function validateIsActive(input: unknown): boolean {
 }
 
 /**
+ * Valida la categoría de un venue.
+ *
+ * Semántica:
+ * - Si el valor es null, undefined o cadena vacía, se permite (campo opcional).
+ * - Si el valor está en VALID_VENUE_CATEGORIES, se acepta.
+ * - Si el valor es un valor heredado reconocido (currentCategory igual al enviado),
+ *   el caller puede pasar `allowedLegacy` con el valor del registro existente para
+ *   permitir conservarlo sin validación estricta.
+ * - Cualquier otro valor arbitrario se rechaza.
+ *
+ * @param input          Valor enviado por el cliente.
+ * @param allowedLegacy  Categoría actual del registro (para edición). Si coincide, se permite.
+ */
+export function validateVenueCategory(
+  input: unknown,
+  allowedLegacy?: string | null
+): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input !== 'string') throw new Error('invalid_venue_category');
+  const val = input.trim();
+  if (val === '') return null;
+  if ((VALID_VENUE_CATEGORIES as readonly string[]).includes(val)) return val;
+  // Conservar valor heredado del propio registro
+  if (allowedLegacy !== undefined && allowedLegacy !== null && val === allowedLegacy) return val;
+  throw new Error('invalid_venue_category');
+}
+
+/**
  * POST /api/v1/admin/venues
  * Crear un nuevo local
  */
@@ -520,7 +549,20 @@ adminVenuesRoutes.post('/venues', async (c) => {
   const googleMapsUrl = typeof body.google_maps_url === 'string' ? body.google_maps_url.trim() || null : null;
   const whatsappContact = typeof body.whatsapp_contact === 'string' ? body.whatsapp_contact.trim() || null : null;
   const zone = typeof body.zone === 'string' ? body.zone.trim() || null : null;
-  const category = typeof body.category === 'string' ? body.category.trim() || 'general' : 'general';
+  const rawCategory = typeof body.category === 'string' ? body.category.trim() : null;
+  let category: string | null;
+  try {
+    category = validateVenueCategory(rawCategory);
+    if (category === null) category = 'general'; // valor por defecto al crear
+  } catch {
+    return c.json(
+      {
+        error: 'invalid_venue_category',
+        message: `Categoría de local inválida. Valores permitidos: ${VALID_VENUE_CATEGORIES.join(', ')}`,
+      },
+      400
+    );
+  }
   const phone = typeof body.phone === 'string' ? body.phone.trim() || null : null;
 
   let latitude: number | null = null;
@@ -612,6 +654,13 @@ adminVenuesRoutes.patch('/venues/:id', async (c) => {
     return c.json({ error: 'invalid_json', message: 'Cuerpo de petición inválido.' }, 400);
   }
 
+  // Leer el registro actual para permitir conservar valores de categoría heredados
+  const currentRes = await query<{ category: string | null }>(`SELECT category FROM venues WHERE id = $1`, [id]);
+  if (currentRes.rows.length === 0) {
+    return c.json({ error: 'venue_not_found', message: `Local ${id} no encontrado.` }, 404);
+  }
+  const currentCategory = currentRes.rows[0].category ?? null;
+
   const allowedFields = [
     'name',
     'slug',
@@ -648,6 +697,18 @@ adminVenuesRoutes.patch('/venues/:id', async (c) => {
           return c.json({ error: 'invalid_parameter', message: 'El slug no puede estar vacío.' }, 400);
         }
         normalizedValue = trimmed;
+      } else if (field === 'category') {
+        try {
+          normalizedValue = validateVenueCategory(body.category, currentCategory);
+        } catch {
+          return c.json(
+            {
+              error: 'invalid_venue_category',
+              message: `Categoría de local inválida. Valores permitidos: ${VALID_VENUE_CATEGORIES.join(', ')}`,
+            },
+            400
+          );
+        }
       } else if (field === 'website_url') {
         try {
           normalizedValue = normalizeWebsiteUrl(body.website_url);

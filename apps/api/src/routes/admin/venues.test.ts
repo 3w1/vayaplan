@@ -174,7 +174,7 @@ describe('4. Creación y Edición de Local (CRUD)', () => {
       address: 'Calle Ficticia 123',
       city_id: 1,
       phone: '+34 979 99 88 77',
-      category: 'cafeteria',
+      category: 'bar',
       zone: 'centro',
       whatsapp_contact: '+34600998877',
       is_active: true,
@@ -639,6 +639,257 @@ describe('8. Migración y Rollback DML (transition_facebook_urls.sql y rollback)
     );
     expect(checkOwn.rows[0].website_url).toBe(originalOwnUrl);
     expect(checkOwn.rows[0].facebook_url).toBeNull();
+  });
+});
+
+// ==============================================================================
+// 9. Categorías de Venues — Restaurante y Catálogo Controlado
+// ==============================================================================
+describe('9. Categorías de Venues', () => {
+  let catTestVenueId: number | null = null;
+
+  afterAll(async () => {
+    if (catTestVenueId) {
+      await pool.query(`DELETE FROM venues WHERE id = $1`, [catTestVenueId]);
+    }
+  });
+
+  test('POST crea un venue con categoría "restaurante"', async () => {
+    const res = await app.request('/api/v1/admin/venues', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Restaurante Sintético Test',
+        city_id: 1,
+        category: 'restaurante',
+      }),
+    });
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.status).toBe('ok');
+    expect(data.venue.category).toBe('restaurante');
+    catTestVenueId = data.venue.id;
+  });
+
+  test('POST crea un venue sin categoría y recibe "general" por defecto', async () => {
+    const res = await app.request('/api/v1/admin/venues', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Venue Sin Categoría Test',
+        city_id: 1,
+      }),
+    });
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.status).toBe('ok');
+    expect(data.venue.category).toBe('general');
+    // Limpieza inmediata
+    await pool.query(`DELETE FROM venues WHERE id = $1`, [data.venue.id]);
+  });
+
+  test('POST rechaza una categoría arbitraria nueva (ej: "cafeteria" no catalogada)', async () => {
+    const res = await app.request('/api/v1/admin/venues', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Venue Categoría Arbitraria Test',
+        city_id: 1,
+        category: 'cafeteria',
+      }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('invalid_venue_category');
+  });
+
+  test('PATCH cambia la categoría de un venue a "restaurante"', async () => {
+    expect(catTestVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${catTestVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ category: 'bar' }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.venue.category).toBe('bar');
+
+    // Volver a restaurante
+    const res2 = await app.request(`/api/v1/admin/venues/${catTestVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ category: 'restaurante' }),
+    });
+    expect(res2.status).toBe(200);
+    const data2 = await res2.json();
+    expect(data2.venue.category).toBe('restaurante');
+  });
+
+  test('PATCH sin campo category conserva la categoría actual sin alterarla', async () => {
+    expect(catTestVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${catTestVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'Restaurante Nombre Editado Sin Tocar Categoria' }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.venue.name).toBe('Restaurante Nombre Editado Sin Tocar Categoria');
+    expect(data.venue.category).toBe('restaurante');
+  });
+
+  test('PATCH con category=null o vacía establece la categoría en NULL sin error', async () => {
+    expect(catTestVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${catTestVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ category: null }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.venue.category).toBeNull();
+
+    // Restaurar a restaurante para siguientes tests
+    await app.request(`/api/v1/admin/venues/${catTestVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ category: 'restaurante' }),
+    });
+  });
+
+  test('Maneja correctamente un venue existente con category NULL (edición conserva NULL si no se envía)', async () => {
+    const nullVenueRes = await pool.query<{ id: number }>(
+      `INSERT INTO venues (city_id, name, slug, category, is_active)
+       VALUES (1, 'Venue Inicialmente Sin Categoria', 'venue-sin-cat-test', NULL, true)
+       RETURNING id;`
+    );
+    const nullVenueId = nullVenueRes.rows[0].id;
+
+    try {
+      // Editar otro campo sin enviar category
+      const res = await app.request(`/api/v1/admin/venues/${nullVenueId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone: '+34 979 12 34 56' }),
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.venue.category).toBeNull();
+      expect(data.venue.phone).toBe('+34 979 12 34 56');
+    } finally {
+      await pool.query(`DELETE FROM venues WHERE id = $1`, [nullVenueId]);
+    }
+  });
+
+  test('PATCH rechaza una categoría arbitraria nueva al editar (ej: "ovni_bar")', async () => {
+    expect(catTestVenueId).not.toBeNull();
+    const res = await app.request(`/api/v1/admin/venues/${catTestVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ category: 'ovni_flying_bar' }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('invalid_venue_category');
+  });
+
+  test('PATCH permite conservar "cafeteria" como categoría heredada de un venue preexistente', async () => {
+    // Insertar un venue preexistente que ya tenía 'cafeteria' en base de datos
+    const legacyRes = await pool.query<{ id: number }>(
+      `INSERT INTO venues (city_id, name, slug, category, is_active)
+       VALUES (1, 'Cafeteria Heredada Palencia', 'cafeteria-heredada-palencia', 'cafeteria', true)
+       RETURNING id;`
+    );
+    const legacyId = legacyRes.rows[0].id;
+
+    try {
+      // 1. Modificar otros campos enviando la misma categoría heredada: permitido
+      const res1 = await app.request(`/api/v1/admin/venues/${legacyId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'Cafeteria Heredada Renombrada', category: 'cafeteria' }),
+      });
+      expect(res1.status).toBe(200);
+      const data1 = await res1.json();
+      expect(data1.venue.category).toBe('cafeteria');
+      expect(data1.venue.name).toBe('Cafeteria Heredada Renombrada');
+
+      // 2. Modificar otros campos sin enviar category: permitido y conserva 'cafeteria'
+      const res2 = await app.request(`/api/v1/admin/venues/${legacyId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phone: '+34 979 55 44 33' }),
+      });
+      expect(res2.status).toBe(200);
+      const data2 = await res2.json();
+      expect(data2.venue.category).toBe('cafeteria');
+      expect(data2.venue.phone).toBe('+34 979 55 44 33');
+    } finally {
+      await pool.query(`DELETE FROM venues WHERE id = $1`, [legacyId]);
+    }
+  });
+
+  test('PATCH rechaza asignar la categoría heredada "cafeteria" a otro venue que no la tenía', async () => {
+    expect(catTestVenueId).not.toBeNull();
+    // catTestVenueId tiene categoría 'restaurante', no 'cafeteria'. Debe rechazarse.
+    const res = await app.request(`/api/v1/admin/venues/${catTestVenueId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ category: 'cafeteria' }),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('invalid_venue_category');
+  });
+
+  test('Los VALID_VENUE_CATEGORIES importados contienen "restaurante" y no contienen categorías de eventos', async () => {
+    const { VALID_VENUE_CATEGORIES } = await import('@vayaplan/shared');
+    expect(VALID_VENUE_CATEGORIES).toContain('restaurante');
+    expect(VALID_VENUE_CATEGORIES).toContain('general');
+    expect(VALID_VENUE_CATEGORIES).toContain('bar');
+    // Debe NOT contener categorías de eventos
+    expect(VALID_VENUE_CATEGORIES).not.toContain('musica_directo');
+    expect(VALID_VENUE_CATEGORIES).not.toContain('conferencia');
+    expect(VALID_VENUE_CATEGORIES).not.toContain('exposicion');
   });
 });
 

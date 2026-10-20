@@ -1,3 +1,21 @@
+import { VALID_VENUE_CATEGORIES, VENUE_CATEGORY_LABELS } from '@vayaplan/shared';
+
+/**
+ * Genera las opciones HTML para un desplegable de categorías de locales
+ * utilizando como única fuente de verdad el catálogo de @vayaplan/shared.
+ */
+export function renderVenueCategorySelectOptions(placeholder?: string): string {
+  const options: string[] = [];
+  if (placeholder !== undefined) {
+    options.push(`<option value="">${placeholder}</option>`);
+  }
+  for (const cat of VALID_VENUE_CATEGORIES) {
+    const label = VENUE_CATEGORY_LABELS[cat] || cat;
+    options.push(`<option value="${cat}">${label}</option>`);
+  }
+  return options.join('\n                ');
+}
+
 /**
  * Renderizador de la interfaz del Panel de Curación Administrativo (/admin)
  * Mobile-first, responsive, protegida por token JWT con soporte para gestión integral de eventos,
@@ -3019,16 +3037,7 @@ export function renderAdminHtml(): string {
           <div class="form-group">
             <label style="color:var(--text-muted); font-weight:700;">Filtrar por Categoría</label>
             <select id="reassign-filter-category" onchange="filterReassignVenues()">
-              <option value="">Todas las categorías</option>
-              <option value="bar">Bar</option>
-              <option value="bar_musical">Bar Musical</option>
-              <option value="disco_bar">Disco Bar</option>
-              <option value="discoteca">Discoteca</option>
-              <option value="pub">Pub</option>
-              <option value="sala_conciertos">Sala de conciertos</option>
-              <option value="teatro">Teatro</option>
-              <option value="cine">Cine</option>
-              <option value="general">General</option>
+              ${renderVenueCategorySelectOptions('Todas las categorías')}
             </select>
           </div>
         </div>
@@ -3088,7 +3097,9 @@ export function renderAdminHtml(): string {
             </div>
             <div class="form-group">
               <label for="venue-category" style="font-weight:700; color:var(--text-main);">Categoría</label>
-              <input type="text" id="venue-category" placeholder="Ej: bar, restaurante, café">
+              <select id="venue-category" aria-label="Categoría del local">
+                ${renderVenueCategorySelectOptions('— Selecciona una categoría —')}
+              </select>
             </div>
           </div>
 
@@ -6237,6 +6248,15 @@ export function renderAdminHtml(): string {
         errBanner.textContent = '';
       }
 
+      // Eliminar opciones heredadas temporales que pudiera haber dejado una edición anterior
+      const catEl = document.getElementById('venue-category') as HTMLSelectElement | null;
+      if (catEl) {
+        Array.from(catEl.options).forEach(opt => {
+          if ((opt as any).dataset?.legacy === 'true') catEl.removeChild(opt);
+        });
+        catEl.value = '';
+      }
+
       const activeCheckbox = document.getElementById('venue-is-active');
       if (activeCheckbox) activeCheckbox.checked = true;
 
@@ -6268,8 +6288,21 @@ export function renderAdminHtml(): string {
       document.getElementById('venue-name').value = v.name || '';
       const slugEl = document.getElementById('venue-slug');
       if (slugEl) slugEl.value = v.slug || '';
-      const catEl = document.getElementById('venue-category');
-      if (catEl) catEl.value = v.category || '';
+      const catEl = document.getElementById('venue-category') as HTMLSelectElement | null;
+      if (catEl) {
+        const currentCat = v.category || '';
+        // Si la categoría del registro existe pero no está en las opciones del select
+        // (valor heredado), la añadimos como opción temporal para no perderla.
+        const existingOpts = Array.from(catEl.options).map(o => o.value);
+        if (currentCat && !existingOpts.includes(currentCat)) {
+          const legacyOpt = document.createElement('option');
+          legacyOpt.value = currentCat;
+          legacyOpt.textContent = currentCat + ' (heredado)';
+          legacyOpt.dataset.legacy = 'true';
+          catEl.insertBefore(legacyOpt, catEl.options[1]); // tras el placeholder
+        }
+        catEl.value = currentCat;
+      }
       const zoneEl = document.getElementById('venue-zone');
       if (zoneEl) zoneEl.value = v.zone || '';
       const activeCheckbox = document.getElementById('venue-is-active');
