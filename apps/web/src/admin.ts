@@ -6249,10 +6249,10 @@ export function renderAdminHtml(): string {
       }
 
       // Eliminar opciones heredadas temporales que pudiera haber dejado una edición anterior
-      const catEl = document.getElementById('venue-category') as HTMLSelectElement | null;
+      const catEl = document.getElementById('venue-category');
       if (catEl) {
         Array.from(catEl.options).forEach(opt => {
-          if ((opt as any).dataset?.legacy === 'true') catEl.removeChild(opt);
+          if (opt.dataset && opt.dataset.legacy === 'true') catEl.removeChild(opt);
         });
         catEl.value = '';
       }
@@ -6288,7 +6288,7 @@ export function renderAdminHtml(): string {
       document.getElementById('venue-name').value = v.name || '';
       const slugEl = document.getElementById('venue-slug');
       if (slugEl) slugEl.value = v.slug || '';
-      const catEl = document.getElementById('venue-category') as HTMLSelectElement | null;
+      const catEl = document.getElementById('venue-category');
       if (catEl) {
         const currentCat = v.category || '';
         // Si la categoría del registro existe pero no está en las opciones del select
