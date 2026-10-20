@@ -44,4 +44,20 @@ describe('apps/web — Catálogo de Categorías de Venues en Admin (admin.ts)', 
     // 4. 'restaurante' está presente en ambos selects
     expect(adminHtml).toContain('<option value="restaurante">Restaurante</option>');
   });
+
+  test('renderAdminHtml estructura el modal de venues con zona única de scroll y bloqueo de fondo', () => {
+    const adminHtml = renderAdminHtml();
+
+    // 1. Ausencia del estilo inline de scroll anidado en el modal-body de venues
+    expect(adminHtml).not.toContain('style="max-height: 75vh; overflow-y: auto; padding-right: 0.5rem;"');
+
+    // 2. Presencia de reglas CSS para modal de venues con contención y zona única
+    expect(adminHtml).toContain('#modal-venue .modal-card');
+    expect(adminHtml).toContain('#modal-venue #form-venue');
+    expect(adminHtml).toContain('#modal-venue .modal-body');
+
+    // 3. Bloqueo de desplazamiento del fondo
+    expect(adminHtml).toContain('body.modal-open');
+    expect(adminHtml).toContain('body:has(.modal-overlay.active)');
+  });
 });
