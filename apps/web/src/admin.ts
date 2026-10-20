@@ -1516,6 +1516,67 @@ export function renderAdminHtml(): string {
     }
     .two-cols { grid-template-columns: 1fr 1fr; }
 
+    /* Bloqueo de scroll de fondo y contención de modales */
+    html {
+      scrollbar-gutter: stable;
+    }
+    body.modal-open,
+    body:has(.modal-overlay.active) {
+      overflow: hidden;
+      overscroll-behavior: contain;
+    }
+
+    /* Modal de Locales (Nuevo / Editar): Zona única de scroll vertical */
+    #modal-venue {
+      overscroll-behavior: contain;
+    }
+    #modal-venue .modal-card {
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden; /* Elimina la barra de scroll exterior del contenedor */
+    }
+    #modal-venue .modal-header {
+      flex-shrink: 0;
+    }
+    #modal-venue #form-venue {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden; /* Confinamiento estricto para evitar desbordes */
+    }
+    #modal-venue .modal-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto; /* ÚNICA zona desplazable del modal */
+      overscroll-behavior: contain;
+      padding: 1.25rem;
+      padding-right: 0.75rem;
+    }
+    #modal-venue .modal-footer {
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 640px) {
+      #modal-venue {
+        padding: 0.5rem;
+      }
+      #modal-venue .modal-card {
+        max-height: 96vh;
+        border-radius: 12px;
+      }
+      #modal-venue .modal-header {
+        padding: 1rem;
+      }
+      #modal-venue .modal-body {
+        padding: 1rem 0.75rem;
+      }
+      #modal-venue .modal-footer {
+        padding: 0.85rem 1rem;
+      }
+    }
+
     /* =========================================================================
        NUEVO EDITOR DE CREACIÓN Y EDICIÓN DE EVENTOS (DESKTOP & MÓVIL)
        ========================================================================= */
@@ -3076,7 +3137,7 @@ export function renderAdminHtml(): string {
         <button class="modal-close" onclick="closeModal('modal-venue')" aria-label="Cerrar modal">✕</button>
       </div>
       <form id="form-venue" onsubmit="saveVenue(event)">
-        <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding-right: 0.5rem;">
+        <div class="modal-body">
           <input type="hidden" id="venue-id">
 
           <!-- Banner de error accesible -->
@@ -8019,6 +8080,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const el = document.getElementById(id);
       if (el) {
         el.classList.add('active');
+        document.body.classList.add('modal-open');
         // Foco en el primer campo interactivo visible
         const focusables = getModalFocusables(el);
         if (focusables.length > 0) focusables[0].focus();
@@ -8038,6 +8100,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (id === 'modal-qr' && modalQrSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
+      const activeModals = document.querySelectorAll('.modal-overlay.active');
+      if (activeModals.length === 0) {
+        document.body.classList.remove('modal-open');
+      }
       const target = lastActiveElementBeforeModal;
       if (target && typeof target.focus === 'function' && document.body.contains(target)) {
         target.focus();
