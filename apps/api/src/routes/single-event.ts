@@ -180,7 +180,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
       : null,
     // festival representa la primera entrada según orden alfabético (f.name ASC) como fallback legado, no un festival principal editorial.
     festival: festivalsList[0] || null,
-    festivals: festivalsList.length > 0 ? festivalsList : undefined,
+    festivals: festivalsList,
   };
 
   const response: SingleEventResponseContract = {

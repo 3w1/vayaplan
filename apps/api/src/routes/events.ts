@@ -201,6 +201,7 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
           }
         : null,
       festival: null,
+      festivals: [],
     };
   });
 

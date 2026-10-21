@@ -253,6 +253,7 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
           }
         : null,
       festival: null,
+      festivals: [],
     };
 
     const targetList = eventsByDate.get(editorialDateStr);
