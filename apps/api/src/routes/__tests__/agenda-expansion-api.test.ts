@@ -258,6 +258,38 @@ describe('API — Piloto de Ampliación de Agenda (Contratos y Consultas)', () =
     expect(res.status).toBe(404);
   });
 
+  test('contrato plural consistente: eventos sin vínculos devuelven festival: null y festivals: [] en evento individual, agenda diaria y fin de semana', async () => {
+    // 1. GET /api/v1/events/:id para evento sin festivales (ev1)
+    const resSingle = await app.request(`/api/v1/events/${createdEventIds[0]}`);
+    expect(resSingle.status).toBe(200);
+    const bodySingle = await resSingle.json();
+    expect(bodySingle.event.festival).toBeNull();
+    expect(Array.isArray(bodySingle.event.festivals)).toBe(true);
+    expect(bodySingle.event.festivals).toEqual([]);
+
+    // 2. GET /api/v1/cities/:citySlug/events para agenda diaria (ev1 en 2026-11-10)
+    const resDaily = await app.request('/api/v1/cities/palencia/events?date=2026-11-10');
+    expect(resDaily.status).toBe(200);
+    const bodyDaily = await resDaily.json();
+    const ev1Daily = bodyDaily.events.find((e: any) => e.id === createdEventIds[0]);
+    expect(ev1Daily).toBeDefined();
+    expect(ev1Daily.festival).toBeNull();
+    expect(Array.isArray(ev1Daily.festivals)).toBe(true);
+    expect(ev1Daily.festivals).toEqual([]);
+
+    // 3. GET /api/v1/cities/:citySlug/weekend para fin de semana (start=2026-11-10)
+    const resWeekend = await app.request('/api/v1/cities/palencia/weekend?start=2026-11-10');
+    expect(resWeekend.status).toBe(200);
+    const bodyWeekend = await resWeekend.json();
+    const day0 = bodyWeekend.days.find((d: any) => d.editorial_date === '2026-11-10');
+    expect(day0).toBeDefined();
+    const ev1Weekend = day0.events.find((e: any) => e.id === createdEventIds[0]);
+    expect(ev1Weekend).toBeDefined();
+    expect(ev1Weekend.festival).toBeNull();
+    expect(Array.isArray(ev1Weekend.festivals)).toBe(true);
+    expect(ev1Weekend.festivals).toEqual([]);
+  });
+
   test('Validaciones defensivas de BD: transiciones y restricciones CHECK', async () => {
     // A. Transición confirmed -> pending_time: exige start_time NULL
     await testPool.query(`
