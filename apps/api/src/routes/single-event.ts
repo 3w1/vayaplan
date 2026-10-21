@@ -113,7 +113,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
       `SELECT f.id, f.name, f.edition, f.slug, f.official_url
        FROM event_festivals ef
        INNER JOIN festivals f ON ef.festival_id = f.id
-       WHERE ef.event_id = $1
+       WHERE ef.event_id = $1 AND f.is_active = true
        ORDER BY f.name ASC`,
       [eventId]
     );
@@ -178,6 +178,7 @@ singleEventRoutes.get('/events/:id', async (c) => {
           status: row.promotion_status,
         }
       : null,
+    // festival representa la primera entrada según orden alfabético (f.name ASC) como fallback legado, no un festival principal editorial.
     festival: festivalsList[0] || null,
     festivals: festivalsList.length > 0 ? festivalsList : undefined,
   };

@@ -391,7 +391,7 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     expect(res.status).toBe(200);
 
     const swCode = await res.text();
-    expect(swCode).toContain("const CACHE_NAME = 'vayaplan-pwa-v3'");
+    expect(swCode).toContain("const CACHE_NAME = 'vayaplan-pwa-v4'");
     expect(swCode).toContain('response.status === 200');
     expect(swCode).toContain("!url.pathname.startsWith('/events/')");
     expect(swCode).toContain('caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache))');
@@ -408,7 +408,8 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     const existingCaches = [
       'vayaplan-pwa-v1',
       'vayaplan-pwa-v2',
-      'vayaplan-pwa-v3', // Versión activa actual: DEBE CONSERVARSE
+      'vayaplan-pwa-v3', // Versión anterior: se elimina al activarse v4
+      'vayaplan-pwa-v4', // Versión activa actual: DEBE CONSERVARSE
       'workbox-precache-v1', // Caché ajena: DEBE CONSERVARSE
       'firebase-installations', // Caché ajena: DEBE CONSERVARSE
       'vayaplan-analytics-cache', // Otra caché VayaPlan fuera de vayaplan-pwa-: DEBE CONSERVARSE
@@ -452,9 +453,10 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     // 1. Versiones anteriores vayaplan-pwa-* se eliminan:
     expect(deletedCaches).toContain('vayaplan-pwa-v1');
     expect(deletedCaches).toContain('vayaplan-pwa-v2');
+    expect(deletedCaches).toContain('vayaplan-pwa-v3');
 
-    // 2. La versión actual vayaplan-pwa-v3 se conserva:
-    expect(deletedCaches).not.toContain('vayaplan-pwa-v3');
+    // 2. La versión actual vayaplan-pwa-v4 se conserva:
+    expect(deletedCaches).not.toContain('vayaplan-pwa-v4');
 
     // 3. Cachés ajenas se conservan:
     expect(deletedCaches).not.toContain('workbox-precache-v1');
