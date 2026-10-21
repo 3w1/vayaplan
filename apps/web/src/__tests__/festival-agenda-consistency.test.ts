@@ -583,16 +583,24 @@ describe('apps/web — Consistencia de Festivales en la Agenda (festival-agenda-
   // 7. Accesibilidad, Semántica y Manejo Estricto de Teclado
   // ==============================================================================
   describe('7. Accesibilidad, Semántica y Manejo Estricto de Teclado', () => {
-    test('la tarjeta de evento usa role="article", tabindex="0" y un aria-label descriptivo', () => {
+    test('la tarjeta de evento usa un contenedor no interactivo <article> y un botón real con nombre accesible', () => {
       const html = renderPublicHtml();
-      expect(html).toContain('role="article"');
-      expect(html).toContain('tabindex="0"');
-      expect(html).toContain('aria-label="Ver detalles:');
-      // No debe contener role="button" en la tarjeta
+      // Contenedor semántico no interactivo (sin tabindex para evitar foco redundante)
+      expect(html).toContain('<article class="card-compact');
+      expect(html).not.toMatch(/<article[^>]*tabindex=/);
       expect(html).not.toMatch(/class="card-compact[^"]*"\s+role="button"/);
+
+      // Botón real nativo para abrir el evento con nombre accesible
+      expect(html).toContain('class="card-title-btn"');
+      expect(html).toContain('type="button"');
+      expect(html).toContain('aria-label="Ver detalles:');
+
+      // Enlaces a festival son controles independientes fuera del botón
+      expect(html).toContain('class="card-festival-pill"');
+      expect(html).not.toMatch(/<button[^>]*>[\s\S]*<a\s+class="card-festival-pill"/);
     });
 
-    test('manejador de teclado: Enter o Espacio en la tarjeta activa el modal y previene scroll', () => {
+    test('recorrido de teclado: el botón nativo del evento activa el modal y previene desplazamiento con Espacio', () => {
       const ctx = vm.createContext({
         lastFocusedElement: null,
         openedModalId: null,
@@ -601,7 +609,9 @@ describe('apps/web — Consistencia de Festivales en la Agenda (festival-agenda-
 
       const code = `
         function handleKey(e) {
-          if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('card-compact') && e.target.dataset.action === 'open-event') {
+          // Si el control es un botón nativo, el navegador emite 'click' estándar;
+          // para cualquier otro disparador delegado, el keydown previene scroll y abre modal.
+          if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.dataset && e.target.dataset.action === 'open-event') {
             e.preventDefault();
             lastFocusedElement = e.target;
             openEventModal(Number(e.target.dataset.id));
@@ -610,18 +620,18 @@ describe('apps/web — Consistencia de Festivales en la Agenda (festival-agenda-
           return false;
         }
 
-        // Caso 1: Enter en la tarjeta
-        var cardEl = {
-          classList: { contains: function(c) { return c === 'card-compact'; } },
+        // Caso 1: Enter en el botón nativo del título
+        var titleBtn = {
+          tagName: 'BUTTON',
           dataset: { action: 'open-event', id: '201' },
         };
-        var enterEv = { key: 'Enter', target: cardEl, defaultPrevented: false, preventDefault: function() { this.defaultPrevented = true; } };
+        var enterEv = { key: 'Enter', target: titleBtn, defaultPrevented: false, preventDefault: function() { this.defaultPrevented = true; } };
         resEnter = handleKey(enterEv);
         idEnter = openedModalId;
         preventEnter = enterEv.defaultPrevented;
 
-        // Caso 2: Espacio en la tarjeta (previene desplazamiento)
-        var spaceEv = { key: ' ', target: cardEl, defaultPrevented: false, preventDefault: function() { this.defaultPrevented = true; } };
+        // Caso 2: Espacio en el botón nativo del título (previene desplazamiento de página)
+        var spaceEv = { key: ' ', target: titleBtn, defaultPrevented: false, preventDefault: function() { this.defaultPrevented = true; } };
         resSpace = handleKey(spaceEv);
         preventSpace = spaceEv.defaultPrevented;
       `;
@@ -641,7 +651,7 @@ describe('apps/web — Consistencia de Festivales en la Agenda (festival-agenda-
 
       const code = `
         function handleKey(e) {
-          if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('card-compact') && e.target.dataset.action === 'open-event') {
+          if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.dataset && e.target.dataset.action === 'open-event') {
             e.preventDefault();
             openEventModal(Number(e.target.dataset.id));
             return true;
@@ -651,6 +661,7 @@ describe('apps/web — Consistencia de Festivales en la Agenda (festival-agenda-
 
         // Enter sobre enlace de festival 1
         var link1 = {
+          tagName: 'A',
           classList: { contains: function(c) { return c === 'card-festival-pill'; } },
           dataset: { action: 'open-festival-program', slug: 'jazz-palencia-2026' },
         };
@@ -660,6 +671,7 @@ describe('apps/web — Consistencia de Festivales en la Agenda (festival-agenda-
 
         // Enter sobre enlace de festival 2
         var link2 = {
+          tagName: 'A',
           classList: { contains: function(c) { return c === 'card-festival-pill'; } },
           dataset: { action: 'open-festival-program', slug: 'otono-cultural-2026' },
         };
@@ -731,6 +743,170 @@ describe('apps/web — Consistencia de Festivales en la Agenda (festival-agenda-
       expect(swText).toContain('caches.delete(key)');
       expect(swText).toContain('self.clients.claim()');
       expect(swText).toContain('self.skipWaiting()');
+    });
+  });
+
+  // ==============================================================================
+  // 9. Ficha Individual Pública (GET /events/:id y renderEventDetail)
+  // ==============================================================================
+  describe('9. Ficha Individual Pública (GET /events/:id y renderEventDetail)', () => {
+    test('renderPublicHtml con initialEvent inyecta bootstrapData y metadatos específicos', () => {
+      const evWithTwoFests: PublicEventItem = {
+        ...baseEvent,
+        id: 701,
+        festivals: [mockFestJazz, mockFestOtono],
+        festival: mockFestJazz,
+      };
+
+      const html = renderPublicHtml({
+        title: 'Marco Mezquida en Concierto — Teatro Principal | VayaPlan',
+        description: 'Marco Mezquida en concierto en Palencia',
+        initialEvent: evWithTwoFests,
+      });
+
+      // El bootstrap incluye el evento completo con su array de festivales
+      const bootstrapMatch = html.match(/<script id="__VAYAPLAN_BOOTSTRAP__" type="application\/json">([\s\S]*?)<\/script>/);
+      expect(bootstrapMatch).not.toBeNull();
+      const bootstrapData = JSON.parse(bootstrapMatch![1]);
+      expect(bootstrapData.event).toBeDefined();
+      expect(bootstrapData.event.id).toBe(701);
+      expect(bootstrapData.event.festivals.length).toBe(2);
+      expect(bootstrapData.event.festivals[0].name).toBe('XIII Jazz Palencia Festival');
+      expect(bootstrapData.event.festivals[1].name).toBe('Otoño Cultural 2026');
+    });
+
+    test('presentación real de la ficha individual para 0 vinculaciones (festivals: [] es autoritativo)', () => {
+      const evZero = {
+        ...baseEvent,
+        festival: { id: 99, name: 'Festival Residuo Obsoleto', slug: 'obsoleto' },
+        festivals: [], // autoritativo
+      };
+
+      const ctx = vm.createContext({
+        escapeHtml: (s: string) => s,
+        encodeURIComponent: (s: string) => encodeURIComponent(s),
+      });
+
+      const code = `
+        function renderFichaFestivalSection(ev) {
+          const hasFestivals = Array.isArray(ev.festivals);
+          const list = hasFestivals ? ev.festivals : (ev.festival ? [ev.festival] : []);
+          if (!list || list.length === 0) return '';
+          return '<div class="event-festival-banner">' +
+            '<div class="festival-banner-tag">' + (list.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo') + '</div>' +
+            '<div class="festival-banner-name">Forma parte de ' +
+              list.map(function(f) { return '<a href="/festivals/' + encodeURIComponent(f.slug) + '"><strong>' + escapeHtml(f.name) + '</strong></a>'; }).join(' · ') +
+            '</div>' +
+          '</div>';
+        }
+        res = renderFichaFestivalSection(${JSON.stringify(evZero)});
+      `;
+      vm.runInContext(code, ctx);
+      expect(ctx.res).toBe('');
+      expect(ctx.res).not.toContain('event-festival-banner');
+      expect(ctx.res).not.toContain('Festival Residuo Obsoleto');
+    });
+
+    test('presentación real de la ficha individual para 1 vinculación (enlace accesible y singular)', () => {
+      const evOne = {
+        ...baseEvent,
+        festivals: [mockFestJazz],
+        festival: mockFestJazz,
+      };
+
+      const ctx = vm.createContext({
+        escapeHtml: (s: string) => s,
+        encodeURIComponent: (s: string) => encodeURIComponent(s),
+      });
+
+      const code = `
+        function renderFichaFestivalSection(ev) {
+          const hasFestivals = Array.isArray(ev.festivals);
+          const list = hasFestivals ? ev.festivals : (ev.festival ? [ev.festival] : []);
+          if (!list || list.length === 0) return '';
+          return '<div class="event-festival-banner">' +
+            '<div class="festival-banner-tag">' + (list.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo') + '</div>' +
+            '<div class="festival-banner-name">Forma parte de ' +
+              list.map(function(f) { return '<a href="/festivals/' + encodeURIComponent(f.slug) + '"><strong>' + escapeHtml(f.name) + '</strong></a>'; }).join(' · ') +
+            '</div>' +
+          '</div>';
+        }
+        res = renderFichaFestivalSection(${JSON.stringify(evOne)});
+      `;
+      vm.runInContext(code, ctx);
+      expect(ctx.res).toContain('class="event-festival-banner"');
+      expect(ctx.res).toContain('Festival / Ciclo');
+      expect(ctx.res).not.toContain('Festivales / Ciclos');
+      expect(ctx.res).toContain('href="/festivals/jazz-palencia-2026"');
+      expect(ctx.res).toContain('<strong>XIII Jazz Palencia Festival</strong>');
+    });
+
+    test('presentación real de la ficha individual para 2 vinculaciones (ambos programas enlazados y accesibles)', () => {
+      const evTwo = {
+        ...baseEvent,
+        festivals: [mockFestJazz, mockFestOtono],
+        festival: mockFestJazz,
+      };
+
+      const ctx = vm.createContext({
+        escapeHtml: (s: string) => s,
+        encodeURIComponent: (s: string) => encodeURIComponent(s),
+      });
+
+      const code = `
+        function renderFichaFestivalSection(ev) {
+          const hasFestivals = Array.isArray(ev.festivals);
+          const list = hasFestivals ? ev.festivals : (ev.festival ? [ev.festival] : []);
+          if (!list || list.length === 0) return '';
+          return '<div class="event-festival-banner">' +
+            '<div class="festival-banner-tag">' + (list.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo') + '</div>' +
+            '<div class="festival-banner-name">Forma parte de ' +
+              list.map(function(f) { return '<a href="/festivals/' + encodeURIComponent(f.slug) + '"><strong>' + escapeHtml(f.name) + '</strong></a>'; }).join(' · ') +
+            '</div>' +
+          '</div>';
+        }
+        res = renderFichaFestivalSection(${JSON.stringify(evTwo)});
+      `;
+      vm.runInContext(code, ctx);
+      expect(ctx.res).toContain('class="event-festival-banner"');
+      expect(ctx.res).toContain('Festivales / Ciclos');
+      expect(ctx.res).toContain('href="/festivals/jazz-palencia-2026"');
+      expect(ctx.res).toContain('<strong>XIII Jazz Palencia Festival</strong>');
+      expect(ctx.res).toContain('href="/festivals/otono-cultural-2026"');
+      expect(ctx.res).toContain('<strong>Otoño Cultural 2026</strong>');
+    });
+
+    test('presentación real de la ficha individual con fallback compatible si festivals es undefined', () => {
+      const evLegacy = {
+        ...baseEvent,
+        festival: mockFestJazz,
+        // festivals es undefined
+      };
+
+      const ctx = vm.createContext({
+        escapeHtml: (s: string) => s,
+        encodeURIComponent: (s: string) => encodeURIComponent(s),
+      });
+
+      const code = `
+        function renderFichaFestivalSection(ev) {
+          const hasFestivals = Array.isArray(ev.festivals);
+          const list = hasFestivals ? ev.festivals : (ev.festival ? [ev.festival] : []);
+          if (!list || list.length === 0) return '';
+          return '<div class="event-festival-banner">' +
+            '<div class="festival-banner-tag">' + (list.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo') + '</div>' +
+            '<div class="festival-banner-name">Forma parte de ' +
+              list.map(function(f) { return '<a href="/festivals/' + encodeURIComponent(f.slug) + '"><strong>' + escapeHtml(f.name) + '</strong></a>'; }).join(' · ') +
+            '</div>' +
+          '</div>';
+        }
+        res = renderFichaFestivalSection(${JSON.stringify(evLegacy)});
+      `;
+      vm.runInContext(code, ctx);
+      expect(ctx.res).toContain('class="event-festival-banner"');
+      expect(ctx.res).toContain('Festival / Ciclo');
+      expect(ctx.res).toContain('href="/festivals/jazz-palencia-2026"');
+      expect(ctx.res).toContain('<strong>XIII Jazz Palencia Festival</strong>');
     });
   });
 });

@@ -924,6 +924,38 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       outline-offset: 2px;
     }
 
+    .card-compact:focus-within {
+      border-color: rgba(108, 59, 255, 0.45);
+      box-shadow: 0 2px 10px rgba(108, 59, 255, 0.08);
+    }
+
+    .card-title-btn {
+      appearance: none;
+      -webkit-appearance: none;
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      font: inherit;
+      color: inherit;
+      text-align: inherit;
+      cursor: pointer;
+      display: inline;
+      text-decoration: none;
+    }
+
+    .card-title-btn:hover {
+      color: var(--color-primary);
+      text-decoration: underline;
+    }
+
+    .card-title-btn:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+      border-radius: var(--radius-xs, 4px);
+      text-decoration: underline;
+    }
+
     .cancelled-tag {
       display: inline-block;
       background: var(--color-red-bg);
@@ -2843,13 +2875,17 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         const isCancelled = ev.status === 'cancelled';
         const isPromoted = Boolean(ev.promotion) && !isCancelled;
         html += \`
-          <div class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" role="article" tabindex="0" data-action="open-event" data-id="\${ev.id}" aria-label="Ver detalles: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+          <article class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}">
             \${renderEventThumbnail(ev.image_thumb_url || ev.image_url, ev.title)}
             <div class="card-info">
               <div>
                 \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
                 \${renderCardFestivalsHtml(ev)}
-                <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
+                <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">
+                  <button type="button" class="card-title-btn" data-action="open-event" data-id="\${ev.id}" aria-label="Ver detalles: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+                    \${escapeHtml(ev.title)}
+                  </button>
+                </h3>
                 <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
               </div>
               <div class="card-bottom-row">
@@ -2857,7 +2893,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                 <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
               </div>
             </div>
-          </div>
+          </article>
         \`;
       }
 
@@ -2979,13 +3015,17 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           const isCancelled = ev.status === 'cancelled';
           const isPromoted = Boolean(ev.promotion) && !isCancelled;
           html += \`
-            <div class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" role="article" tabindex="0" data-action="open-event" data-id="\${ev.id}" aria-label="Ver detalles: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+            <article class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}">
               \${renderEventThumbnail(ev.image_thumb_url || ev.image_url, ev.title)}
               <div class="card-info">
                 <div>
                   \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
                   \${renderCardFestivalsHtml(ev)}
-                  <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
+                  <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">
+                    <button type="button" class="card-title-btn" data-action="open-event" data-id="\${ev.id}" aria-label="Ver detalles: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+                      \${escapeHtml(ev.title)}
+                    </button>
+                  </h3>
                   <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
                 </div>
                 <div class="card-bottom-row">
@@ -2993,7 +3033,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                   <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
                 </div>
               </div>
-            </div>
+            </article>
           \`;
         }
 
@@ -3950,8 +3990,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         }
       }
 
-      // Soporte teclado (Enter o Espacio) para tarjetas de eventos (solo si el foco está en la propia tarjeta)
-      if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('card-compact') && e.target.dataset.action === 'open-event') {
+      // Soporte teclado (Enter o Espacio) para disparadores no-botón de apertura de evento (nunca intercepta enlaces ni botones nativos)
+      if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.dataset && e.target.dataset.action === 'open-event' && e.target.tagName !== 'BUTTON') {
         e.preventDefault();
         lastFocusedElement = e.target;
         openEventModal(Number(e.target.dataset.id), { pushHistory: true });
