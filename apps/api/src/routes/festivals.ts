@@ -132,6 +132,7 @@ festivalsRoutes.get('/cities/:citySlug/festivals/:festivalSlug', async (c) => {
     WHERE e.city_id = $1 
       AND EXISTS (SELECT 1 FROM event_festivals ef WHERE ef.event_id = e.id AND ef.festival_id = $2)
       AND e.status = 'published'
+      AND v.is_active = true
     ORDER BY 
       e.editorial_date ASC,
       (CASE WHEN COALESCE(e.time_status, 'confirmed') = 'confirmed' THEN 0 ELSE 1 END) ASC,

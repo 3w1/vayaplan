@@ -202,6 +202,57 @@ describe('API — Piloto de Ampliación de Agenda (Contratos y Consultas)', () =
     expect(body2.events.some((e: any) => e.id === createdEventIds[3])).toBe(true);
   });
 
+  test('GET /api/v1/cities/palencia/events?date=YYYY-MM-DD devuelve festivales consistentes sin duplicar eventos', async () => {
+    const res = await app.request('/api/v1/cities/palencia/events?date=2026-11-12');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    const ev4List = body.events.filter((e: any) => e.id === createdEventIds[3]);
+    // Ausencia estricta de duplicados por JOIN N:M
+    expect(ev4List.length).toBe(1);
+
+    const ev = ev4List[0];
+    expect(ev.festivals).toBeDefined();
+    expect(ev.festivals.length).toBe(2);
+    expect(ev.festival).toBeDefined();
+    expect(ev.festival.name).toBe(ev.festivals[0].name);
+  });
+
+  test('festivales inactivos (is_active = false) quedan excluidos de las respuestas públicas', async () => {
+    // Crear festival inactivo
+    const inactRes = await testPool.query(`
+      INSERT INTO festivals (
+        city_id, name, edition, slug, description, start_date, end_date, official_url, is_active, created_at, updated_at
+      ) VALUES (
+        1, 'Festival Inactivo Oculto', '1ª Ed', 'festival-inactivo-oculto',
+        'Festival borrador no publicado', '2026-11-01', '2026-11-30', NULL, false, now(), now()
+      )
+      RETURNING id;
+    `);
+    const inactiveFestId = inactRes.rows[0].id;
+    createdFestivalIds.push(inactiveFestId);
+
+    // Asociar a ev4
+    await testPool.query(`
+      INSERT INTO event_festivals (event_id, festival_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;
+    `, [createdEventIds[3], inactiveFestId]);
+
+    // Consultar evento individual: no debe incluir el festival inactivo
+    const resSingle = await app.request(`/api/v1/events/${createdEventIds[3]}`);
+    expect(resSingle.status).toBe(200);
+    const bodySingle = await resSingle.json();
+    const festIdsSingle = (bodySingle.event.festivals || []).map((f: any) => f.id);
+    expect(festIdsSingle).not.toContain(inactiveFestId);
+
+    // Consultar agenda diaria: no debe incluir el festival inactivo
+    const resDaily = await app.request('/api/v1/cities/palencia/events?date=2026-11-12');
+    expect(resDaily.status).toBe(200);
+    const bodyDaily = await resDaily.json();
+    const evDaily = bodyDaily.events.find((e: any) => e.id === createdEventIds[3]);
+    const festIdsDaily = (evDaily?.festivals || []).map((f: any) => f.id);
+    expect(festIdsDaily).not.toContain(inactiveFestId);
+  });
+
   test('GET /api/v1/cities/palencia/festivals/inexistente devuelve 404', async () => {
     const res = await app.request('/api/v1/cities/palencia/festivals/no-existe-este-festival');
     expect(res.status).toBe(404);

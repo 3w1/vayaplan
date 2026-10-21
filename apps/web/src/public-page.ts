@@ -883,6 +883,47 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       margin-bottom: 0.25rem;
     }
 
+    .card-festivals-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .card-festival-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background-color: var(--color-primary-soft, #F0EBFF);
+      color: var(--color-primary, #6C3BFF);
+      border: 1px solid rgba(108, 59, 255, 0.25);
+      border-radius: var(--radius-pill, 9999px);
+      padding: 0.15rem 0.5rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-decoration: none;
+      line-height: 1.2;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .card-festival-pill:hover,
+    .card-festival-pill:focus-visible {
+      background-color: #E6DCFF;
+      border-color: var(--color-primary, #6C3BFF);
+      color: #4C1D95;
+      text-decoration: underline;
+    }
+
+    .card-compact:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
     .cancelled-tag {
       display: inline-block;
       background: var(--color-red-bg);
@@ -2085,6 +2126,23 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       return \`<span class="card-time">⏰ \${formatTime(ev.start_time)}\${realDateTime.isMadrugada ? ' <span class="card-madrugada-badge">Madrugada</span>' : ''}</span>\`;
     }
 
+    function renderCardFestivalsHtml(ev) {
+      const hasFestivals = Array.isArray(ev.festivals);
+      const fests = hasFestivals
+        ? ev.festivals
+        : (ev.festival ? [ev.festival] : []);
+      if (!fests || fests.length === 0) return '';
+      return \`
+        <div class="card-festivals-row">
+          \${fests.map(function(f) {
+            const safeSlug = encodeURIComponent(f.slug || '');
+            const safeName = escapeHtml(f.name || '');
+            return '<a href="/festivals/' + safeSlug + '" class="card-festival-pill" data-action="open-festival-program" data-slug="' + safeSlug + '" onclick="event.stopPropagation();" aria-label="Ver programa de ' + safeName + '" title="Ver programa de ' + safeName + '">🎪 ' + safeName + '</a>';
+          }).join('')}
+        </div>
+      \`;
+    }
+
     function cleanupCarousel() {
       if (carouselCleanupFn) {
         try { carouselCleanupFn(); } catch (e) {}
@@ -2785,11 +2843,12 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         const isCancelled = ev.status === 'cancelled';
         const isPromoted = Boolean(ev.promotion) && !isCancelled;
         html += \`
-          <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+          <div class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" role="article" tabindex="0" data-action="open-event" data-id="\${ev.id}" aria-label="Ver detalles: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
             \${renderEventThumbnail(ev.image_thumb_url || ev.image_url, ev.title)}
             <div class="card-info">
               <div>
                 \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
+                \${renderCardFestivalsHtml(ev)}
                 <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
                 <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
               </div>
@@ -2798,7 +2857,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                 <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
               </div>
             </div>
-          </button>
+          </div>
         \`;
       }
 
@@ -2920,11 +2979,12 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           const isCancelled = ev.status === 'cancelled';
           const isPromoted = Boolean(ev.promotion) && !isCancelled;
           html += \`
-            <button type="button" class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" data-action="open-event" data-id="\${ev.id}" aria-label="\${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
+            <div class="card-compact \${isCancelled ? 'is-cancelled' : ''} \${isPromoted ? 'is-promoted' : ''}" role="article" tabindex="0" data-action="open-event" data-id="\${ev.id}" aria-label="Ver detalles: \${escapeHtml(ev.title)} en \${escapeHtml(ev.venue.name)}">
               \${renderEventThumbnail(ev.image_thumb_url || ev.image_url, ev.title)}
               <div class="card-info">
                 <div>
                   \${isCancelled ? '<span class="cancelled-tag">Cancelado</span>' : (isPromoted ? '<span class="badge-destacado">Destacado</span>' : '')}
+                  \${renderCardFestivalsHtml(ev)}
                   <h3 class="card-title \${isCancelled ? 'title-cancelled' : ''}">\${escapeHtml(ev.title)}</h3>
                   <div class="card-venue">📍 \${escapeHtml(ev.venue.name)}</div>
                 </div>
@@ -2933,7 +2993,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                   <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
                 </div>
               </div>
-            </button>
+            </div>
           \`;
         }
 
@@ -3087,7 +3147,11 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       const realDateTime = formatEventRealDateTime(ev.start_time);
       const temporal = computeTemporalState(ev.start_time, ev.end_time, ev.time_status);
 
-      const officialLink = (ev.actions && (ev.actions.tickets_url || ev.actions.booking_url)) || (ev.festival && ev.festival.official_url) || null;
+      const hasFestivalsList = Array.isArray(ev.festivals);
+      const festForOfficial = hasFestivalsList
+        ? (ev.festivals[0] || null)
+        : (ev.festival || null);
+      const officialLink = (ev.actions && (ev.actions.tickets_url || ev.actions.booking_url)) || (festForOfficial && festForOfficial.official_url) || null;
 
       let priceLabel = ev.price.label;
       if (ev.price.amount_cents === 0 || ev.price.is_free) {
@@ -3228,18 +3292,18 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           </div>
 
           <!-- Festival / Ciclo si pertenece a uno o varios -->
-          \${(ev.festivals && ev.festivals.length > 0) ? \`
-            <div class="event-festival-banner">
-              <div class="festival-banner-tag">\${ev.festivals.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo'}</div>
-              <div class="festival-banner-name">Forma parte de \${ev.festivals.map((f) => \`<a href="/festivals/\${encodeURIComponent(f.slug)}" style="color:var(--color-primary);text-decoration:underline;"><strong>\${escapeHtml(f.name)}</strong></a>\`).join(' · ')}</div>
-            </div>
-          \` : (ev.festival ? \`
-            <div class="event-festival-banner">
-              <div class="festival-banner-tag">Festival / Ciclo</div>
-              <div class="festival-banner-name">Forma parte de <a href="/festivals/\${encodeURIComponent(ev.festival.slug)}" style="color:var(--color-primary);text-decoration:underline;"><strong>\${escapeHtml(ev.festival.name)}</strong></a></div>
-              \${ev.festival.description ? \`<div class="festival-banner-desc">\${escapeHtml(ev.festival.description)}</div>\` : ''}
-            </div>
-          \` : '')}
+          \${(() => {
+            const hasFestivals = Array.isArray(ev.festivals);
+            const list = hasFestivals ? ev.festivals : (ev.festival ? [ev.festival] : []);
+            if (!list || list.length === 0) return '';
+            return \`
+              <div class="event-festival-banner">
+                <div class="festival-banner-tag">\${list.length > 1 ? 'Festivales / Ciclos' : 'Festival / Ciclo'}</div>
+                <div class="festival-banner-name">Forma parte de \${list.map((f) => \`<a href="/festivals/\${encodeURIComponent(f.slug)}" style="color:var(--color-primary);text-decoration:underline;"><strong>\${escapeHtml(f.name)}</strong></a>\`).join(' · ')}</div>
+                \${list.length === 1 && list[0].description ? \`<div class="festival-banner-desc">\${escapeHtml(list[0].description)}</div>\` : ''}
+              </div>
+            \`;
+          })()}
 
           <!-- Bloque de Entradas si tickets_url está disponible -->
           \${(!isCancelled && ev.actions.tickets_url) ? \`
@@ -3720,6 +3784,11 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
       const action = trigger.dataset.action;
 
+      if (action === 'open-festival-program') {
+        // Permitir navegación normal al programa del festival
+        return;
+      }
+
       if (action === 'open-event') {
         lastFocusedElement = trigger;
         openEventModal(Number(trigger.dataset.id), { pushHistory: true });
@@ -3879,6 +3948,14 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           openPosterLightbox(trigger.dataset.posterUrl, trigger.dataset.posterTitle, trigger);
           return;
         }
+      }
+
+      // Soporte teclado (Enter o Espacio) para tarjetas de eventos (solo si el foco está en la propia tarjeta)
+      if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.classList && e.target.classList.contains('card-compact') && e.target.dataset.action === 'open-event') {
+        e.preventDefault();
+        lastFocusedElement = e.target;
+        openEventModal(Number(e.target.dataset.id), { pushHistory: true });
+        return;
       }
 
       // Prioridad 2: Ficha modal de evento/lugar

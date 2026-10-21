@@ -211,7 +211,7 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
         `SELECT ef.event_id, f.id, f.name, f.edition, f.slug, f.official_url
          FROM event_festivals ef
          INNER JOIN festivals f ON ef.festival_id = f.id
-         WHERE ef.event_id = ANY($1::int[])
+         WHERE ef.event_id = ANY($1::int[]) AND f.is_active = true
          ORDER BY f.name ASC`,
         [eventIds]
       );
@@ -231,6 +231,8 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
         const linked = festMap.get(ev.id);
         if (linked && linked.length > 0) {
           ev.festivals = linked;
+          // ev.festival representa la primera entrada según el orden alfabético definido (f.name ASC)
+          // como fallback compatible para consumidores legados, no un festival principal editorial.
           ev.festival = linked[0];
         }
       }

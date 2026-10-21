@@ -123,8 +123,8 @@ app.get('/manifest.json', (c) => {
 // Service Worker (Shell Offline & Cache)
 // ==============================================================================
 app.get('/sw.js', (c) => {
-  const swCode = `// VayaPlan Service Worker v1.5
-const CACHE_NAME = 'vayaplan-pwa-v3';
+  const swCode = `// VayaPlan Service Worker v1.6
+const CACHE_NAME = 'vayaplan-pwa-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -175,8 +175,8 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then((response) => {
         // Solo cachear respuestas 200 OK para evitar enmascarar errores (404, 5xx)
-        // y excluir expresamente rutas dinámicas de eventos /events/
-        if (response && response.status === 200 && !url.pathname.startsWith('/events/')) {
+        // y excluir expresamente rutas dinámicas de eventos /events/, festivales /festivals/ y ciudades /ciudades/
+        if (response && response.status === 200 && !url.pathname.startsWith('/events/') && !url.pathname.startsWith('/festivals/') && !url.pathname.startsWith('/ciudades/')) {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         }
@@ -185,8 +185,8 @@ self.addEventListener('fetch', (event) => {
       .catch(() => {
         return caches.match(event.request).then((cached) => {
           if (cached) return cached;
-          // No disfrazar rutas de eventos /events/ como la página principal '/'
-          if (event.request.mode === 'navigate' && !url.pathname.startsWith('/events/')) {
+          // No disfrazar rutas de eventos /events/, festivales /festivals/ ni ciudades /ciudades/ como la página principal '/'
+          if (event.request.mode === 'navigate' && !url.pathname.startsWith('/events/') && !url.pathname.startsWith('/festivals/') && !url.pathname.startsWith('/ciudades/')) {
             return caches.match('/');
           }
           return new Response('Sin conexión a internet', {
