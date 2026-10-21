@@ -267,6 +267,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       justify-content: space-between;
       align-items: flex-start;
       gap: 0.25rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .categories-row::-webkit-scrollbar {
+      display: none;
     }
 
     .cat-btn {
@@ -277,8 +284,9 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       background: none;
       border: none;
       cursor: pointer;
-      min-width: 52px;
+      min-width: 50px;
       padding: 0.25rem;
+      flex-shrink: 0;
     }
 
     .cat-circle {
@@ -1776,6 +1784,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         </div>
         <span class="cat-label">Cultura</span>
       </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="deporte" aria-label="Categoría Deporte">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.76 2.7 3.19 3.32V19H8v2h8v-2h-2.58v-2.74c1.43-.62 2.56-1.82 3.19-3.32C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>
+        </div>
+        <span class="cat-label">Deporte</span>
+      </button>
     </section>
 
     <!-- Barra de Filtros Secundarios (Modificador Gratis) -->
@@ -1858,6 +1873,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     // ==============================================================================
     const CITY_TIMEZONE = 'Europe/Madrid';
     const EDITORIAL_CUTOFF_HOUR = 6; // Eventos antes de las 06:00 pertenecen a la noche anterior
+    const SPORTS_CATEGORIES = ['baloncesto', 'futbol', 'rugby'];
+    const CULTURE_CATEGORIES = ['cultura', 'teatro', 'exposicion', 'monologo'];
 
     let currentCity = 'palencia';
     let currentView = 'today';
@@ -2391,7 +2408,9 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       } else if (currentFilter === 'cine') {
         result = result.filter((ev) => ev.category === 'cine');
       } else if (currentFilter === 'cultura') {
-        result = result.filter((ev) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(ev.category));
+        result = result.filter((ev) => CULTURE_CATEGORIES.includes(ev.category));
+      } else if (currentFilter === 'deporte') {
+        result = result.filter((ev) => SPORTS_CATEGORIES.includes(ev.category));
       }
 
       if (isFreeFilterActive) {
@@ -2412,7 +2431,9 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       } else if (currentFilter === 'cine') {
         result = result.filter((r) => r.category === 'cine');
       } else if (currentFilter === 'cultura') {
-        result = result.filter((r) => ['cultura', 'teatro', 'exposicion', 'monologo'].includes(r.category));
+        result = result.filter((r) => CULTURE_CATEGORIES.includes(r.category));
+      } else if (currentFilter === 'deporte') {
+        result = result.filter((r) => SPORTS_CATEGORIES.includes(r.category));
       }
 
       if (isFreeFilterActive) {
@@ -2435,6 +2456,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         tardeo: 'Tardeo',
         cine: 'Cine',
         cultura: 'Cultura',
+        deporte: 'Deporte',
       };
 
       if (currentFilter !== 'all') {
@@ -2559,7 +2581,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
 
       const catParam = (params.get('cat') || params.get('category'));
-      const validCategories = ['musica', 'tardeo', 'cine', 'cultura'];
+      const validCategories = ['musica', 'tardeo', 'cine', 'cultura', 'deporte'];
       const targetFilter = (catParam && validCategories.includes(catParam.trim().toLowerCase())) ? catParam.trim().toLowerCase() : 'all';
       if (targetFilter !== currentFilter) {
         currentFilter = targetFilter;
