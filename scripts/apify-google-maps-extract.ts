@@ -186,11 +186,10 @@ export function evaluateCandidate(
 // ==============================================================================
 // EJECUCIÓN DEL ACTOR APIFY
 // ==============================================================================
-async function fetchApifyVenue(
+async function callApifyActor(
   client: ApifyClient,
-  venue: VenueInput
+  query: string
 ): Promise<{ runId: string | null; items: any[]; error?: string }> {
-  const query = `${venue.official_name} ${venue.official_address} ${venue.city}`.trim();
   const actorInput = {
     query: [query],
     num: 10,
@@ -214,7 +213,7 @@ async function fetchApifyVenue(
     } catch (err: any) {
       lastError = err;
       if (attempt <= maxRetries) {
-        console.warn(`[Intento ${attempt}] Error de conexión con Apify para "${venue.official_name}": ${err.message}. Reintentando en 2s...`);
+        console.warn(`[Intento ${attempt}] Error de conexión con Apify para "${query}": ${err.message}. Reintentando en 2s...`);
         await new Promise(r => setTimeout(r, 2000));
       }
     }
@@ -225,6 +224,40 @@ async function fetchApifyVenue(
     items: [],
     error: lastError ? (lastError.message || String(lastError)) : 'Error desconocido al invocar actor Apify'
   };
+}
+
+async function fetchApifyVenue(
+  client: ApifyClient,
+  venue: VenueInput
+): Promise<{ runId: string | null; queryUsed: string; items: any[]; error?: string }> {
+  const primaryQuery = `${venue.official_name} ${venue.official_address} ${venue.city}`.trim();
+  const res = await callApifyActor(client, primaryQuery);
+
+  if (res.error) {
+    return { runId: res.runId, queryUsed: primaryQuery, items: [], error: res.error };
+  }
+
+  if (res.items && res.items.length > 0) {
+    return { runId: res.runId, queryUsed: primaryQuery, items: res.items };
+  }
+
+  // Fallback: Si no devuelve resultados con dirección completa, reintentar con nombre y ciudad
+  const fallbackQuery = `${venue.official_name} ${venue.city}`.trim();
+  if (fallbackQuery !== primaryQuery) {
+    console.log(`  -> 0 resultados con dirección completa. Reintentando fallback con "${fallbackQuery}"...`);
+    const fallbackRes = await callApifyActor(client, fallbackQuery);
+    if (fallbackRes.items && fallbackRes.items.length > 0) {
+      return { runId: fallbackRes.runId, queryUsed: fallbackQuery, items: fallbackRes.items };
+    }
+    return {
+      runId: fallbackRes.runId || res.runId,
+      queryUsed: primaryQuery,
+      items: [],
+      error: fallbackRes.error
+    };
+  }
+
+  return { runId: res.runId, queryUsed: primaryQuery, items: [] };
 }
 
 // ==============================================================================
@@ -324,10 +357,10 @@ export async function runExtraction(inputFilePath: string, outputJsonPath: strin
 
   for (let i = 0; i < venues.length; i++) {
     const venue = venues[i];
-    const searchQuery = `${venue.official_name} ${venue.official_address} ${venue.city}`.trim();
     console.log(`[${i + 1}/${venues.length}] Procesando: "${venue.official_name}" (${venue.official_address})...`);
 
-    const { runId, items, error } = await fetchApifyVenue(client, venue);
+    const { runId, queryUsed, items, error } = await fetchApifyVenue(client, venue);
+    const searchQuery = queryUsed;
 
     if (error) {
       console.error(`  -> ERROR técnico en Apify: ${error}`);
@@ -471,9 +504,10 @@ export async function runExtraction(inputFilePath: string, outputJsonPath: strin
 // Ejecución vía CLI si se invoca directamente
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  let inputPath = 'scripts/data/pucherito-2025-input.json';
+  let inputPath = '';
   let outputPath = 'output/apify-google-maps-results.json';
 
+  const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--input' && args[i + 1]) {
       inputPath = args[i + 1];
@@ -481,7 +515,20 @@ if (import.meta.main) {
     } else if (args[i] === '--output' && args[i + 1]) {
       outputPath = args[i + 1];
       i++;
+    } else if (!args[i].startsWith('-')) {
+      positional.push(args[i]);
     }
+  }
+
+  if (!inputPath && positional.length > 0) {
+    inputPath = positional[0];
+  }
+  if (positional.length > 1) {
+    outputPath = positional[1];
+  }
+
+  if (!inputPath) {
+    inputPath = 'scripts/data/pucherito-2025-input.json';
   }
 
   runExtraction(inputPath, outputPath).catch(err => {
