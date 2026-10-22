@@ -727,7 +727,7 @@ export interface SingleGastronomicRouteResponseContract {
     summary: string;
     description: string | null;
     category: GastronomicRouteCategory;
-    status: 'published';
+    status: GastronomicRouteStatus;
     badge_label: string | null;
     start_date: string | null;
     end_date: string | null;
