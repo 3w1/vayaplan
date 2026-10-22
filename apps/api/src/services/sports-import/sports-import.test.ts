@@ -28,10 +28,21 @@ describe('Servicio de Importación Deportiva de Palencia (sports-import)', () =>
       expect(match.venueAddress).toBe('Calle Lola de la Fuente, s/n, 34004 Palencia');
     });
 
-    test('Identifica Campos de Rugby como VENUE_NUEVO_PROPUESTO', () => {
+    test('Asocia rugby en Balastera con el Estadio Municipal Nueva Balastera', () => {
       const match = matchSportsVenue('Campos de Rugby Balastera', mockExistingVenues);
       expect(match.venueClassification).toBe('VENUE_NUEVO_PROPUESTO');
-      expect(match.venueName).toBe('Campos de Rugby de la Nueva Balastera');
+      expect(match.venueName).toBe('Estadio Municipal Nueva Balastera');
+    });
+
+    test('Asocia rugby en Balastera como VENUE_EXISTENTE cuando Estadio Municipal Nueva Balastera está en el catálogo', () => {
+      const venuesWithBalastera = [
+        ...mockExistingVenues,
+        { id: 10158, name: 'Estadio Municipal Nueva Balastera', slug: 'estadio-municipal-nueva-balastera' },
+      ];
+      const match = matchSportsVenue('Campos de Rugby Balastera', venuesWithBalastera);
+      expect(match.venueClassification).toBe('VENUE_EXISTENTE');
+      expect(match.matchedVenueId).toBe(10158);
+      expect(match.venueName).toBe('Estadio Municipal Nueva Balastera');
     });
 
     test('Clasifica recinto ya existente en el catálogo como VENUE_EXISTENTE', () => {

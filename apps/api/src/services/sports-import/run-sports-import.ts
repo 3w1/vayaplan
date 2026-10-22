@@ -92,7 +92,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     imageUrl: null,
     status: 'confirmed',
   },
-  // 5. RUGBY — Liga Senior Masculina CyL — Campos de Rugby Nueva Balastera
+  // 5. RUGBY — Liga Senior Masculina CyL — Estadio Municipal Nueva Balastera
   {
     sourceId: 'palencia_rugby_club',
     externalId: '2026-11-08-silicius-palencia-rugby-club-salamanca-rugby-club',
@@ -104,8 +104,8 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     awayTeam: 'Salamanca Rugby Club',
     rawDate: '2026-11-08',
     rawTime: '12:00',
-    venueName: 'Campos de Rugby de la Nueva Balastera',
-    venueAddress: 'Paseo de la Julia / C/ San Antonio, 34004 Palencia',
+    venueName: 'Estadio Municipal Nueva Balastera',
+    venueAddress: 'Calle Lola de la Fuente, s/n, 34004 Palencia',
     city: 'Palencia',
     isFree: true,
     priceCents: 0,

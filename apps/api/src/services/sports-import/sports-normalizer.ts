@@ -24,12 +24,6 @@ export const SPORTS_KNOWN_VENUES: Record<
     address: 'Calle Lola de la Fuente, s/n, 34004 Palencia',
     defaultCategory: 'general',
   },
-  'campos-rugby-balastera': {
-    name: 'Campos de Rugby de la Nueva Balastera',
-    slug: 'campos-rugby-nueva-balastera',
-    address: 'Paseo de la Julia / C/ San Antonio, 34004 Palencia',
-    defaultCategory: 'general',
-  },
   'pabellon-mariano-haro': {
     name: 'Pabellón Mariano Haro',
     slug: 'pabellon-mariano-haro',
@@ -92,18 +86,28 @@ export function matchSportsVenue(
   }
 
   // 2. Comprobar catálogo de recintos deportivos oficiales conocidos
-  if (norm.includes('balastera') && (norm.includes('rugby') || norm.includes('campo'))) {
-    const def = SPORTS_KNOWN_VENUES['campos-rugby-balastera'];
-    return {
-      matchedVenueId: null,
-      venueName: def.name,
-      venueAddress: def.address,
-      venueClassification: 'VENUE_NUEVO_PROPUESTO',
-      proposedVenueSlug: def.slug,
-    };
-  }
+  // Estadio Municipal Nueva Balastera (recinto único que alberga fútbol y rugby)
+  if (
+    norm.includes('balastera') ||
+    norm.includes('estadio') ||
+    (norm.includes('rugby') && (norm.includes('balastera') || norm.includes('campo')))
+  ) {
+    // Si ya existe en DB (ej: ID 10158 Estadio Municipal Nueva Balastera), asociarlo directamente como VENUE_EXISTENTE
+    const existingBalastera = existingVenues.find(
+      (ev) =>
+        ev.slug === 'estadio-municipal-nueva-balastera' ||
+        ev.name.toLowerCase().includes('nueva balastera')
+    );
+    if (existingBalastera) {
+      return {
+        matchedVenueId: existingBalastera.id,
+        venueName: existingBalastera.name,
+        venueAddress: null,
+        venueClassification: 'VENUE_EXISTENTE',
+        proposedVenueSlug: existingBalastera.slug,
+      };
+    }
 
-  if (norm.includes('balastera') || norm.includes('estadio')) {
     const def = SPORTS_KNOWN_VENUES['nueva-balastera'];
     return {
       matchedVenueId: null,
