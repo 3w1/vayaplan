@@ -14,14 +14,43 @@ export interface VenueInput {
   city: string;
 }
 
-export interface ExtractionResult {
-  source: string;
+export interface RawExtractionData {
+  extraction_date: string;
+  apify_run_id: string | null;
+  queries: string[];
+  actor_name: string;
+  total_results_returned: number;
+  results: any[];
+  metadata?: {
+    status?: string;
+    usage_total_usd?: number;
+  };
+}
+
+export interface NormalizedVenue {
+  place_id: string;
+  google_maps_name: string;
+  google_maps_address: string;
+  latitude: number | null;
+  longitude: number | null;
+  google_maps_url: string;
+  phone: string | null;
+  website: string | null;
+  category: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+  found_in_queries: string[];
+  extraction_run_id: string | null;
+  extraction_date: string;
+  raw_result: any;
+}
+
+export interface MatchResult {
   official_name: string;
   official_address: string;
-  search_query: string;
-  match_status: MatchStatus;
-  apify_run_id: string | null;
-  apify_place_id: string | null;
+  match_status: 'MATCHED' | 'NEEDS_MANUAL_REVIEW' | 'NOT_FOUND';
+  match_score: number;
+  matched_place_id: string | null;
   google_maps_name: string | null;
   google_maps_address: string | null;
   latitude: number | null;
@@ -32,16 +61,16 @@ export interface ExtractionResult {
   category: string | null;
   rating: number | null;
   reviews_count: number | null;
-  match_score: number | null;
-  error_message: string | null;
+  found_in_queries: string[];
+  extraction_run_id: string | null;
+  extraction_date: string | null;
   raw_result: any | null;
 }
 
 // ==============================================================================
 // REGLAS DE SEGURIDAD DEL TOKEN
 // ==============================================================================
-function getAndValidateApifyToken(): string {
-  // 1. Prohibir argumentos CLI con token
+export function getAndValidateApifyToken(): string {
   const cliArgs = process.argv.slice(2);
   for (const arg of cliArgs) {
     if (/^--?token(=.*)?$/i.test(arg) || /^--?api-?key(=.*)?$/i.test(arg)) {
@@ -50,7 +79,6 @@ function getAndValidateApifyToken(): string {
     }
   }
 
-  // 2. Comprobar variable de entorno
   const token = process.env.APIFY_TOKEN;
   if (!token || !token.trim()) {
     console.error('APIFY_TOKEN no está configurado. Configúralo como variable de entorno antes de ejecutar la extracción.');
@@ -58,6 +86,32 @@ function getAndValidateApifyToken(): string {
   }
 
   return token.trim();
+}
+
+// ==============================================================================
+// REGLA DE COORDENADAS
+// ==============================================================================
+export function validateCoordinates(lat: any, lng: any): { latitude: number | null; longitude: number | null } {
+  if (lat === null || lat === undefined || lng === null || lng === undefined) {
+    return { latitude: null, longitude: null };
+  }
+  const numLat = typeof lat === 'number' ? lat : parseFloat(String(lat));
+  const numLng = typeof lng === 'number' ? lng : parseFloat(String(lng));
+
+  if (isNaN(numLat) || isNaN(numLng)) {
+    return { latitude: null, longitude: null };
+  }
+
+  // Palencia y área circundante (margen geográfico razonable):
+  // Latitud: 41.5 a 42.5 | Longitud: -5.2 a -4.0
+  if (numLat >= 41.5 && numLat <= 42.5 && numLng >= -5.2 && numLng <= -4.0) {
+    return {
+      latitude: Math.round(numLat * 1e7) / 1e7,
+      longitude: Math.round(numLng * 1e7) / 1e7
+    };
+  }
+
+  return { latitude: null, longitude: null };
 }
 
 // ==============================================================================
@@ -121,7 +175,6 @@ export function calculateTokenSimilarity(s1: string, s2: string): number {
     if (tokens2.has(t)) {
       intersection++;
     } else {
-      // Coincidencia parcial si una contiene a otra (ej. 'braseria' vs 'braseria-')
       for (const t2 of tokens2) {
         if ((t.length > 3 && t2.length > 3) && (t.includes(t2) || t2.includes(t))) {
           intersection += 0.8;
@@ -139,8 +192,8 @@ export function evaluateCandidate(
   venue: VenueInput,
   candidate: any
 ): { score: number; status: MatchStatus } {
-  const candName = candidate.title || candidate.name || '';
-  const candAddress = candidate.address || candidate.fullAddress || candidate.street || '';
+  const candName = candidate.title || candidate.google_maps_name || candidate.name || '';
+  const candAddress = candidate.address || candidate.google_maps_address || candidate.fullAddress || candidate.street || '';
 
   const normOffName = normalizeName(venue.official_name);
   const normCandName = normalizeName(candName);
@@ -157,20 +210,19 @@ export function evaluateCandidate(
   // 3. Coincidencia de número de calle
   const offNum = extractStreetNumber(venue.official_address);
   const candNum = extractStreetNumber(candAddress);
-  const numberMatch = (offNum && candNum && offNum === candNum);
-  const numberMismatch = (offNum && candNum && offNum !== candNum);
+  const numberMatch = (offNum !== null && candNum !== null && offNum === candNum);
+  const numberMismatch = (offNum !== null && candNum !== null && offNum !== candNum);
 
   let addressScore = addrTokensScore;
   if (numberMatch) {
-    addressScore = Math.min(1, addressScore + 0.2);
+    addressScore = Math.min(1, addressScore + 0.25);
   } else if (numberMismatch) {
-    addressScore = Math.max(0, addressScore - 0.25);
+    addressScore = Math.max(0, addressScore - 0.30);
   }
 
-  // 4. Puntuación ponderada: 60% nombre, 40% dirección
+  // Ponderación: 60% nombre, 40% dirección
   let combinedScore = Math.round((nameScore * 0.6 + addressScore * 0.4) * 100) / 100;
 
-  // Regla fundamental: NO dar por encontrado solo por nombre si la dirección no acompaña
   let status: MatchStatus = 'NOT_FOUND';
   if (combinedScore >= 0.80 && (addressScore >= 0.35 || numberMatch)) {
     status = 'MATCHED';
@@ -184,80 +236,177 @@ export function evaluateCandidate(
 }
 
 // ==============================================================================
-// EJECUCIÓN DEL ACTOR APIFY
+// REGLA DE DEDUPLICACIÓN Y NORMALIZACIÓN
 // ==============================================================================
-async function callApifyActor(
-  client: ApifyClient,
-  query: string
-): Promise<{ runId: string | null; items: any[]; error?: string }> {
-  const actorInput = {
-    query: [query],
-    num: 10,
-    gl: 'es',
-    hl: 'es',
-    popularTimes: false,
-    reviews: false,
-    maxReviews: 0,
-    maxImages: 0
-  };
+export function deduplicateCatalog(
+  rawItems: any[],
+  defaultQuery: string,
+  extractionRunId: string | null,
+  extractionDate: string,
+  existingCatalog: NormalizedVenue[] = []
+): NormalizedVenue[] {
+  const map = new Map<string, NormalizedVenue>();
 
-  const maxRetries = 2;
-  let lastError: any = null;
+  // 1. Cargar existentes si los hay
+  for (const v of existingCatalog) {
+    map.set(v.place_id, { ...v, found_in_queries: [...v.found_in_queries] });
+  }
 
-  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    try {
-      const run = await client.actor('scraperlink/google-maps-scraper').call(actorInput);
-      const datasetId = run.defaultDatasetId;
-      const { items } = await client.dataset(datasetId).listItems();
-      return { runId: run.id, items: items || [] };
-    } catch (err: any) {
-      lastError = err;
-      if (attempt <= maxRetries) {
-        console.warn(`[Intento ${attempt}] Error de conexión con Apify para "${query}": ${err.message}. Reintentando en 2s...`);
-        await new Promise(r => setTimeout(r, 2000));
+  // 2. Procesar y fusionar nuevos items
+  for (const item of rawItems) {
+    const rawPlaceId = item.placeId || item.place_id || item.dataId || item.cid;
+    if (!rawPlaceId) continue;
+    const placeId = String(rawPlaceId).trim();
+
+    const query = item.query || item.searchString || defaultQuery;
+    const { latitude, longitude } = validateCoordinates(
+      item.location?.lat ?? item.latitude,
+      item.location?.lng ?? item.longitude
+    );
+
+    const reviewsCount = typeof item.reviewsCount === 'number'
+      ? item.reviewsCount
+      : (typeof item.ratingCount === 'number' ? item.ratingCount : null);
+    const rating = typeof item.totalScore === 'number'
+      ? item.totalScore
+      : (typeof item.rating === 'number' ? item.rating : null);
+    const gmapsUrl = item.googleMapsUrl || item.url || (placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : '');
+
+    const candidate: NormalizedVenue = {
+      place_id: placeId,
+      google_maps_name: item.title || item.name || '',
+      google_maps_address: item.address || item.fullAddress || item.street || '',
+      latitude,
+      longitude,
+      google_maps_url: gmapsUrl,
+      phone: item.phone || item.phoneNumber || null,
+      website: item.website || null,
+      category: item.categoryName || item.type || (Array.isArray(item.categories) ? item.categories[0] : null) || null,
+      rating,
+      reviews_count: reviewsCount,
+      found_in_queries: query ? [query] : [],
+      extraction_run_id: extractionRunId,
+      extraction_date: extractionDate,
+      raw_result: item
+    };
+
+    if (map.has(placeId)) {
+      const existing = map.get(placeId)!;
+      if (query && !existing.found_in_queries.includes(query)) {
+        existing.found_in_queries.push(query);
       }
+
+      // Combinar campos no nulos para enriquecer el registro canónico
+      if (!existing.phone && candidate.phone) existing.phone = candidate.phone;
+      if (!existing.website && candidate.website) existing.website = candidate.website;
+      if (existing.latitude === null && candidate.latitude !== null) {
+        existing.latitude = candidate.latitude;
+        existing.longitude = candidate.longitude;
+      }
+      if (existing.rating === null && candidate.rating !== null) existing.rating = candidate.rating;
+      if (existing.reviews_count === null && candidate.reviews_count !== null) existing.reviews_count = candidate.reviews_count;
+      if (!existing.category && candidate.category) existing.category = candidate.category;
+      if (!existing.google_maps_address && candidate.google_maps_address) existing.google_maps_address = candidate.google_maps_address;
+    } else {
+      map.set(placeId, candidate);
     }
   }
 
-  return {
-    runId: null,
-    items: [],
-    error: lastError ? (lastError.message || String(lastError)) : 'Error desconocido al invocar actor Apify'
-  };
+  return Array.from(map.values());
 }
 
-async function fetchApifyVenue(
-  client: ApifyClient,
-  venue: VenueInput
-): Promise<{ runId: string | null; queryUsed: string; items: any[]; error?: string }> {
-  const primaryQuery = `${venue.official_name} ${venue.official_address} ${venue.city}`.trim();
-  const res = await callApifyActor(client, primaryQuery);
+// ==============================================================================
+// LÓGICA DE CRUCE CON LOCALES OFICIALES
+// ==============================================================================
+export function matchCatalogWithOfficialVenues(
+  catalog: NormalizedVenue[],
+  officialVenues: VenueInput[]
+): MatchResult[] {
+  const matches: MatchResult[] = [];
 
-  if (res.error) {
-    return { runId: res.runId, queryUsed: primaryQuery, items: [], error: res.error };
-  }
+  for (const official of officialVenues) {
+    let bestCandidate: NormalizedVenue | null = null;
+    let bestScore = 0;
+    let secondBestScore = 0;
+    let evaluatedCandidates: Array<{ candidate: NormalizedVenue; score: number; status: MatchStatus }> = [];
 
-  if (res.items && res.items.length > 0) {
-    return { runId: res.runId, queryUsed: primaryQuery, items: res.items };
-  }
-
-  // Fallback: Si no devuelve resultados con dirección completa, reintentar con nombre y ciudad
-  const fallbackQuery = `${venue.official_name} ${venue.city}`.trim();
-  if (fallbackQuery !== primaryQuery) {
-    console.log(`  -> 0 resultados con dirección completa. Reintentando fallback con "${fallbackQuery}"...`);
-    const fallbackRes = await callApifyActor(client, fallbackQuery);
-    if (fallbackRes.items && fallbackRes.items.length > 0) {
-      return { runId: fallbackRes.runId, queryUsed: fallbackQuery, items: fallbackRes.items };
+    for (const item of catalog) {
+      const { score, status } = evaluateCandidate(official, item);
+      if (score >= 0.40) {
+        evaluatedCandidates.push({ candidate: item, score, status });
+      }
+      if (score > bestScore) {
+        secondBestScore = bestScore;
+        bestScore = score;
+        bestCandidate = item;
+      } else if (score > secondBestScore) {
+        secondBestScore = score;
+      }
     }
-    return {
-      runId: fallbackRes.runId || res.runId,
-      queryUsed: primaryQuery,
-      items: [],
-      error: fallbackRes.error
-    };
+
+    let finalStatus: 'MATCHED' | 'NEEDS_MANUAL_REVIEW' | 'NOT_FOUND' = 'NOT_FOUND';
+
+    if (bestCandidate && bestScore >= 0.80) {
+      // Si hay varios candidatos muy cercanos con alta puntuación, forzar revisión manual
+      if (evaluatedCandidates.filter(c => c.score >= 0.75).length > 1 && (bestScore - secondBestScore) < 0.10) {
+        finalStatus = 'NEEDS_MANUAL_REVIEW';
+      } else {
+        finalStatus = 'MATCHED';
+      }
+    } else if (bestCandidate && bestScore >= 0.50) {
+      finalStatus = 'NEEDS_MANUAL_REVIEW';
+    } else {
+      finalStatus = 'NOT_FOUND';
+    }
+
+    if (finalStatus === 'NOT_FOUND' || !bestCandidate) {
+      matches.push({
+        official_name: official.official_name,
+        official_address: official.official_address,
+        match_status: 'NOT_FOUND',
+        match_score: 0,
+        matched_place_id: null,
+        google_maps_name: null,
+        google_maps_address: null,
+        latitude: null,
+        longitude: null,
+        google_maps_url: null,
+        phone: null,
+        website: null,
+        category: null,
+        rating: null,
+        reviews_count: null,
+        found_in_queries: [],
+        extraction_run_id: null,
+        extraction_date: null,
+        raw_result: null
+      });
+    } else {
+      matches.push({
+        official_name: official.official_name,
+        official_address: official.official_address,
+        match_status: finalStatus,
+        match_score: bestScore,
+        matched_place_id: bestCandidate.place_id,
+        google_maps_name: bestCandidate.google_maps_name,
+        google_maps_address: bestCandidate.google_maps_address,
+        latitude: bestCandidate.latitude,
+        longitude: bestCandidate.longitude,
+        google_maps_url: bestCandidate.google_maps_url,
+        phone: bestCandidate.phone,
+        website: bestCandidate.website,
+        category: bestCandidate.category,
+        rating: bestCandidate.rating,
+        reviews_count: bestCandidate.reviews_count,
+        found_in_queries: bestCandidate.found_in_queries,
+        extraction_run_id: bestCandidate.extraction_run_id,
+        extraction_date: bestCandidate.extraction_date,
+        raw_result: bestCandidate.raw_result
+      });
+    }
   }
 
-  return { runId: res.runId, queryUsed: primaryQuery, items: [] };
+  return matches;
 }
 
 // ==============================================================================
@@ -265,22 +414,16 @@ async function fetchApifyVenue(
 // ==============================================================================
 function escapeCsvValue(val: any): string {
   if (val === null || val === undefined) return '';
-  const str = String(val);
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return '"' + str.replace(/"/g, '""') + '"';
+  const str = Array.isArray(val) ? val.join('; ') : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 }
 
-export function exportToCsv(results: ExtractionResult[]): string {
+export function exportCatalogToCsv(catalog: NormalizedVenue[]): string {
   const headers = [
-    'source',
-    'official_name',
-    'official_address',
-    'search_query',
-    'match_status',
-    'apify_run_id',
-    'apify_place_id',
+    'place_id',
     'google_maps_name',
     'google_maps_address',
     'latitude',
@@ -291,33 +434,78 @@ export function exportToCsv(results: ExtractionResult[]): string {
     'category',
     'rating',
     'reviews_count',
-    'match_score',
-    'error_message'
+    'found_in_queries',
+    'extraction_run_id',
+    'extraction_date'
   ];
 
   const lines = [headers.join(',')];
-
-  for (const r of results) {
+  for (const v of catalog) {
     const row = [
-      escapeCsvValue(r.source),
-      escapeCsvValue(r.official_name),
-      escapeCsvValue(r.official_address),
-      escapeCsvValue(r.search_query),
-      escapeCsvValue(r.match_status),
-      escapeCsvValue(r.apify_run_id),
-      escapeCsvValue(r.apify_place_id),
-      escapeCsvValue(r.google_maps_name),
-      escapeCsvValue(r.google_maps_address),
-      escapeCsvValue(r.latitude),
-      escapeCsvValue(r.longitude),
-      escapeCsvValue(r.google_maps_url),
-      escapeCsvValue(r.phone),
-      escapeCsvValue(r.website),
-      escapeCsvValue(r.category),
-      escapeCsvValue(r.rating),
-      escapeCsvValue(r.reviews_count),
-      escapeCsvValue(r.match_score),
-      escapeCsvValue(r.error_message)
+      escapeCsvValue(v.place_id),
+      escapeCsvValue(v.google_maps_name),
+      escapeCsvValue(v.google_maps_address),
+      escapeCsvValue(v.latitude),
+      escapeCsvValue(v.longitude),
+      escapeCsvValue(v.google_maps_url),
+      escapeCsvValue(v.phone),
+      escapeCsvValue(v.website),
+      escapeCsvValue(v.category),
+      escapeCsvValue(v.rating),
+      escapeCsvValue(v.reviews_count),
+      escapeCsvValue(v.found_in_queries),
+      escapeCsvValue(v.extraction_run_id),
+      escapeCsvValue(v.extraction_date)
+    ];
+    lines.push(row.join(','));
+  }
+
+  return lines.join('\n');
+}
+
+export function exportMatchesToCsv(matches: MatchResult[]): string {
+  const headers = [
+    'official_name',
+    'official_address',
+    'match_status',
+    'match_score',
+    'matched_place_id',
+    'google_maps_name',
+    'google_maps_address',
+    'latitude',
+    'longitude',
+    'google_maps_url',
+    'phone',
+    'website',
+    'category',
+    'rating',
+    'reviews_count',
+    'found_in_queries',
+    'extraction_run_id',
+    'extraction_date'
+  ];
+
+  const lines = [headers.join(',')];
+  for (const m of matches) {
+    const row = [
+      escapeCsvValue(m.official_name),
+      escapeCsvValue(m.official_address),
+      escapeCsvValue(m.match_status),
+      escapeCsvValue(m.match_score),
+      escapeCsvValue(m.matched_place_id),
+      escapeCsvValue(m.google_maps_name),
+      escapeCsvValue(m.google_maps_address),
+      escapeCsvValue(m.latitude),
+      escapeCsvValue(m.longitude),
+      escapeCsvValue(m.google_maps_url),
+      escapeCsvValue(m.phone),
+      escapeCsvValue(m.website),
+      escapeCsvValue(m.category),
+      escapeCsvValue(m.rating),
+      escapeCsvValue(m.reviews_count),
+      escapeCsvValue(m.found_in_queries),
+      escapeCsvValue(m.extraction_run_id),
+      escapeCsvValue(m.extraction_date)
     ];
     lines.push(row.join(','));
   }
@@ -326,213 +514,187 @@ export function exportToCsv(results: ExtractionResult[]): string {
 }
 
 // ==============================================================================
-// CONTROLADOR PRINCIPAL
+// EJECUCIÓN DEL ACTOR APIFY
 // ==============================================================================
-export async function runExtraction(inputFilePath: string, outputJsonPath: string) {
+async function callApifyActorForQueries(
+  client: ApifyClient,
+  queries: string[],
+  num: number = 200
+): Promise<{ runId: string | null; items: any[]; usageTotalUsd?: number }> {
+  const actorInput = {
+    query: queries,
+    num,
+    gl: 'es',
+    hl: 'es',
+    popularTimes: false,
+    reviews: false,
+    maxReviews: 0
+  };
+
+  const maxRetries = 2;
+  let lastError: any = null;
+
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      console.log(`Invocando scraperlink/google-maps-scraper con ${queries.length} búsqueda(s) (num=${num})...`);
+      const run = await client.actor('scraperlink/google-maps-scraper').call(actorInput);
+      const datasetId = run.defaultDatasetId;
+      const { items } = await client.dataset(datasetId).listItems();
+      return { runId: run.id, items: items || [], usageTotalUsd: run.usageTotalUsd };
+    } catch (err: any) {
+      lastError = err;
+      if (attempt <= maxRetries) {
+        console.warn(`[Intento ${attempt}] Error al llamar actor Apify: ${err.message}. Reintentando en 3s...`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+
+  throw new Error(`Fallo tras reintentos al invocar Apify: ${lastError?.message || String(lastError)}`);
+}
+
+// ==============================================================================
+// PIPELINE COMPLETO DE CATÁLOGO Y CRUCE
+// ==============================================================================
+export interface PipelineOptions {
+  queries: string[];
+  num?: number;
+  forceRefresh?: boolean;
+  baseDataDir?: string;
+  officialVenuesInputPath?: string;
+}
+
+export async function runHospitalityPipeline(options: PipelineOptions) {
   const token = getAndValidateApifyToken();
   const client = new ApifyClient({ token });
 
-  if (!fs.existsSync(inputFilePath)) {
-    console.error(`Error: Archivo de entrada no encontrado en "${inputFilePath}".`);
-    process.exit(1);
-  }
+  const num = options.num ?? 200;
+  const baseDataDir = options.baseDataDir || 'data/google-maps/palencia-hospitality';
+  const officialVenuesPath = options.officialVenuesInputPath || 'scripts/data/pucherito-2025-input.json';
 
-  const rawInput = fs.readFileSync(inputFilePath, 'utf8');
-  let venues: VenueInput[] = [];
-  try {
-    venues = JSON.parse(rawInput);
-  } catch (err: any) {
-    console.error(`Error al parsear JSON de entrada: ${err.message}`);
-    process.exit(1);
-  }
+  const rawDir = path.join(baseDataDir, 'raw');
+  const normalizedDir = path.join(baseDataDir, 'normalized');
+  const matchesDir = path.join(baseDataDir, 'matches');
 
-  if (!Array.isArray(venues) || venues.length === 0) {
-    console.error('Error: El archivo de entrada debe contener un array no vacío de locales.');
-    process.exit(1);
-  }
+  fs.mkdirSync(rawDir, { recursive: true });
+  fs.mkdirSync(normalizedDir, { recursive: true });
+  fs.mkdirSync(matchesDir, { recursive: true });
 
-  console.log(`Iniciando extracción con Apify (scraperlink/google-maps-scraper) para ${venues.length} local(es)...`);
+  const normalizedJsonPath = path.join(normalizedDir, 'palencia-hospitality-catalog.json');
+  const normalizedCsvPath = path.join(normalizedDir, 'palencia-hospitality-catalog.csv');
+  const matchesJsonPath = path.join(matchesDir, 'pucherito-2025-match-results.json');
+  const matchesCsvPath = path.join(matchesDir, 'pucherito-2025-match-results.csv');
 
-  const results: ExtractionResult[] = [];
+  let normalizedCatalog: NormalizedVenue[] = [];
+  let rawDataRecord: RawExtractionData | null = null;
+  const extractionDate = new Date().toISOString();
 
-  for (let i = 0; i < venues.length; i++) {
-    const venue = venues[i];
-    console.log(`[${i + 1}/${venues.length}] Procesando: "${venue.official_name}" (${venue.official_address})...`);
+  // 1. Comprobar si ya existe catálogo previo si no se fuerza la recarga
+  if (!options.forceRefresh && fs.existsSync(normalizedJsonPath)) {
+    console.log(`Catálogo canónico existente encontrado en "${normalizedJsonPath}". Reutilizando dataset sin llamadas a Apify...`);
+    normalizedCatalog = JSON.parse(fs.readFileSync(normalizedJsonPath, 'utf8'));
+  } else {
+    // 2. Ejecutar extracción con Apify
+    const { runId, items, usageTotalUsd } = await callApifyActorForQueries(client, options.queries, num);
 
-    const { runId, queryUsed, items, error } = await fetchApifyVenue(client, venue);
-    const searchQuery = queryUsed;
+    const timestampStr = extractionDate.replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
+    const rawFilePath = path.join(rawDir, `apify-raw-results-${timestampStr}.json`);
 
-    if (error) {
-      console.error(`  -> ERROR técnico en Apify: ${error}`);
-      results.push({
-        source: venue.source,
-        official_name: venue.official_name,
-        official_address: venue.official_address,
-        search_query: searchQuery,
-        match_status: 'ERROR',
-        apify_run_id: runId,
-        apify_place_id: null,
-        google_maps_name: null,
-        google_maps_address: null,
-        latitude: null,
-        longitude: null,
-        google_maps_url: null,
-        phone: null,
-        website: null,
-        category: null,
-        rating: null,
-        reviews_count: null,
-        match_score: null,
-        error_message: error,
-        raw_result: null
-      });
-      continue;
-    }
-
-    if (!items || items.length === 0) {
-      console.log('  -> NOT_FOUND (0 resultados devueltos por Google Maps)');
-      results.push({
-        source: venue.source,
-        official_name: venue.official_name,
-        official_address: venue.official_address,
-        search_query: searchQuery,
-        match_status: 'NOT_FOUND',
-        apify_run_id: runId,
-        apify_place_id: null,
-        google_maps_name: null,
-        google_maps_address: null,
-        latitude: null,
-        longitude: null,
-        google_maps_url: null,
-        phone: null,
-        website: null,
-        category: null,
-        rating: null,
-        reviews_count: null,
-        match_score: 0,
-        error_message: null,
-        raw_result: null
-      });
-      continue;
-    }
-
-    // Evaluar cada candidato devuelto
-    let bestCandidate: any = null;
-    let bestScore = -1;
-    let bestStatus: MatchStatus = 'NOT_FOUND';
-
-    for (const cand of items) {
-      const evaluation = evaluateCandidate(venue, cand);
-      if (evaluation.score > bestScore) {
-        bestScore = evaluation.score;
-        bestCandidate = cand;
-        bestStatus = evaluation.status;
-      }
-    }
-
-    const placeId = bestCandidate?.placeId || bestCandidate?.id || bestCandidate?.cid || null;
-    const gName = bestCandidate?.title || bestCandidate?.name || null;
-    const gAddress = bestCandidate?.address || bestCandidate?.fullAddress || bestCandidate?.street || null;
-    const lat = bestCandidate?.location?.lat ?? bestCandidate?.latitude ?? null;
-    const lng = bestCandidate?.location?.lng ?? bestCandidate?.longitude ?? null;
-    const gUrl = bestCandidate?.url || bestCandidate?.googleMapsUrl || null;
-    const phone = bestCandidate?.phone || bestCandidate?.phoneNumber || null;
-    const website = bestCandidate?.website || null;
-    const category = bestCandidate?.categoryName || (Array.isArray(bestCandidate?.categories) ? bestCandidate.categories[0] : null) || null;
-    const rating = typeof bestCandidate?.totalScore === 'number' ? bestCandidate.totalScore : (typeof bestCandidate?.rating === 'number' ? bestCandidate.rating : null);
-    const reviewsCount = typeof bestCandidate?.reviewsCount === 'number' ? bestCandidate.reviewsCount : (typeof bestCandidate?.reviews_count === 'number' ? bestCandidate.reviews_count : null);
-
-    console.log(`  -> Estado: ${bestStatus} (Score: ${bestScore}) | Encontrado: "${gName || '—'}" (${gAddress || '—'})`);
-
-    results.push({
-      source: venue.source,
-      official_name: venue.official_name,
-      official_address: venue.official_address,
-      search_query: searchQuery,
-      match_status: bestStatus,
+    rawDataRecord = {
+      extraction_date: extractionDate,
       apify_run_id: runId,
-      apify_place_id: placeId,
-      google_maps_name: gName,
-      google_maps_address: gAddress,
-      latitude: typeof lat === 'number' ? lat : (lat ? parseFloat(lat) : null),
-      longitude: typeof lng === 'number' ? lng : (lng ? parseFloat(lng) : null),
-      google_maps_url: gUrl,
-      phone,
-      website,
-      category,
-      rating,
-      reviews_count: reviewsCount,
-      match_score: bestScore,
-      error_message: null,
-      raw_result: bestCandidate
-    });
+      queries: options.queries,
+      actor_name: 'scraperlink/google-maps-scraper',
+      total_results_returned: items.length,
+      results: items,
+      metadata: {
+        status: 'SUCCEEDED',
+        usage_total_usd: usageTotalUsd
+      }
+    };
+
+    fs.writeFileSync(rawFilePath, JSON.stringify(rawDataRecord, null, 2), 'utf8');
+    console.log(`Datos raw guardados en: ${rawFilePath} (${items.length} items recibidos)`);
+
+    // 3. Normalizar y deduplicar
+    normalizedCatalog = deduplicateCatalog(items, options.queries[0], runId, extractionDate);
+
+    fs.writeFileSync(normalizedJsonPath, JSON.stringify(normalizedCatalog, null, 2), 'utf8');
+    fs.writeFileSync(normalizedCsvPath, exportCatalogToCsv(normalizedCatalog), 'utf8');
+    console.log(`Catálogo normalizado guardado en: ${normalizedJsonPath} (${normalizedCatalog.length} locales únicos)`);
   }
 
-  // Guardar JSON y CSV
-  const outputDir = path.dirname(outputJsonPath);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+  // 4. Cargar locales oficiales para el cruce
+  if (!fs.existsSync(officialVenuesPath)) {
+    throw new Error(`Archivo de locales oficiales no encontrado en: "${officialVenuesPath}"`);
   }
+  const officialVenues: VenueInput[] = JSON.parse(fs.readFileSync(officialVenuesPath, 'utf8'));
 
-  fs.writeFileSync(outputJsonPath, JSON.stringify(results, null, 2), 'utf8');
-  console.log(`\nResultados JSON guardados en: ${outputJsonPath}`);
+  // 5. Ejecutar cruce
+  const matches = matchCatalogWithOfficialVenues(normalizedCatalog, officialVenues);
 
-  const outputCsvPath = outputJsonPath.replace(/\.json$/i, '.csv');
-  const csvContent = exportToCsv(results);
-  fs.writeFileSync(outputCsvPath, csvContent, 'utf8');
-  console.log(`Resultados CSV guardados en: ${outputCsvPath}`);
+  fs.writeFileSync(matchesJsonPath, JSON.stringify(matches, null, 2), 'utf8');
+  fs.writeFileSync(matchesCsvPath, exportMatchesToCsv(matches), 'utf8');
+  console.log(`Resultados de cruce guardados en: ${matchesJsonPath}`);
 
-  // Resumen
   const counts = {
-    MATCHED: results.filter(r => r.match_status === 'MATCHED').length,
-    NEEDS_MANUAL_REVIEW: results.filter(r => r.match_status === 'NEEDS_MANUAL_REVIEW').length,
-    NOT_FOUND: results.filter(r => r.match_status === 'NOT_FOUND').length,
-    ERROR: results.filter(r => r.match_status === 'ERROR').length
+    MATCHED: matches.filter(m => m.match_status === 'MATCHED').length,
+    NEEDS_MANUAL_REVIEW: matches.filter(m => m.match_status === 'NEEDS_MANUAL_REVIEW').length,
+    NOT_FOUND: matches.filter(m => m.match_status === 'NOT_FOUND').length
   };
 
-  console.log('\n--- RESUMEN DE EXTRACCIÓN ---');
-  console.log(`Total procesados:       ${results.length}`);
-  console.log(`MATCHED:                ${counts.MATCHED}`);
-  console.log(`NEEDS_MANUAL_REVIEW:    ${counts.NEEDS_MANUAL_REVIEW}`);
-  console.log(`NOT_FOUND:              ${counts.NOT_FOUND}`);
-  console.log(`ERROR:                  ${counts.ERROR}`);
-  console.log('------------------------------');
+  const coordsValid = normalizedCatalog.filter(v => v.latitude !== null && v.longitude !== null).length;
 
-  return results;
+  console.log('\n========================================');
+  console.log('RESUMEN DEL PIPELINE DE HOSTELERÍA');
+  console.log('========================================');
+  console.log(`Locales únicos en catálogo:    ${normalizedCatalog.length}`);
+  console.log(`Con coordenadas válidas:       ${coordsValid}`);
+  console.log(`Locales oficiales cruzados:    ${officialVenues.length}`);
+  console.log(`  - MATCHED:                   ${counts.MATCHED}`);
+  console.log(`  - NEEDS_MANUAL_REVIEW:       ${counts.NEEDS_MANUAL_REVIEW}`);
+  console.log(`  - NOT_FOUND:                 ${counts.NOT_FOUND}`);
+  console.log('========================================\n');
+
+  return {
+    rawExtraction: rawDataRecord,
+    catalog: normalizedCatalog,
+    matches,
+    counts,
+    coordsValid
+  };
 }
 
 // Ejecución vía CLI si se invoca directamente
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  let inputPath = '';
-  let outputPath = 'output/apify-google-maps-results.json';
+  let mode = 'pretest'; // pretest | full | match-only
+  let force = false;
 
-  const positional: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--input' && args[i + 1]) {
-      inputPath = args[i + 1];
-      i++;
-    } else if (args[i] === '--output' && args[i + 1]) {
-      outputPath = args[i + 1];
-      i++;
-    } else if (!args[i].startsWith('-')) {
-      positional.push(args[i]);
-    }
+  for (const arg of args) {
+    if (arg === '--full') mode = 'full';
+    if (arg === '--pretest') mode = 'pretest';
+    if (arg === '--force') force = true;
   }
 
-  if (!inputPath && positional.length > 0) {
-    inputPath = positional[0];
-  }
-  if (positional.length > 1) {
-    outputPath = positional[1];
-  }
+  const pretestQueries = ['restaurantes en Palencia'];
+  const fullQueries = [
+    'restaurantes en Palencia',
+    'bares en Palencia',
+    'mesones en Palencia',
+    'asadores en Palencia',
+    'cervecerías en Palencia',
+    'hoteles en Palencia'
+  ];
 
-  if (!inputPath) {
-    inputPath = 'scripts/data/pucherito-2025-input.json';
-  }
+  const queries = mode === 'full' ? fullQueries : pretestQueries;
 
-  runExtraction(inputPath, outputPath).catch(err => {
-    console.error('Error fatal durante la extracción:', err.message);
+  runHospitalityPipeline({
+    queries,
+    num: 200,
+    forceRefresh: force || true
+  }).catch(err => {
+    console.error('Error fatal en pipeline:', err.message);
     process.exit(1);
   });
 }

@@ -1,30 +1,34 @@
-# Extracción y Enriquecimiento de Locales con Apify Google Maps
+# Catálogo Persistente de Hostelería de Palencia y Cruce de Rutas con Apify
 
-Script reutilizable en TypeScript (`scripts/apify-google-maps-extract.ts`) para consultar, extraer y normalizar datos de establecimientos hosteleros desde Google Maps mediante la plataforma Apify, cruzándolos de forma contrastada y sin invención de datos.
+Script reutilizable en TypeScript (`scripts/apify-google-maps-extract.ts`) para extraer un catálogo amplio y persistente de hostelería desde Google Maps mediante el actor `scraperlink/google-maps-scraper` en Apify, normalizarlo, deduplicarlo por `place_id`, validar coordenadas geográficas y cruzarlo con los participantes oficiales de la Ruta del Pucherito 2025.
 
 ---
 
 ## 1. Actor de Apify Utilizado
 - **Actor**: `scraperlink/google-maps-scraper`
-- **Fuente**: Google Maps Places / Business listings
-- **Coste estimado**: Desde $0,40 USD por cada 1.000 resultados.
-  - Para 1 consulta (máx. 5 resultados): ~$0,0004 a $0,0020 USD (< 0,002 €).
-  - Para 22 consultas (máx. 110 resultados): ~$0,0088 a $0,0440 USD (< 0,05 €).
-
-### Parámetros de Extracción
-Para optimizar el coste y evitar cargos no deseados, la llamada se configura estrictamente sin reviews ni Popular Times:
-```json
-{
-  "query": ["<nombre oficial> <dirección oficial> Palencia"],
-  "num": 10,
-  "gl": "es",
-  "hl": "es",
-  "popularTimes": false,
-  "reviews": false,
-  "maxReviews": 0,
-  "maxImages": 0
-}
-```
+- **Fuente**: Google Maps Places / Business listings (modo búsqueda amplia / categoría)
+- **Coste**: A partir de $0,40 USD por 1.000 resultados (~$0,0004 USD por local).
+- **Parámetros de extracción**:
+  ```json
+  {
+    "query": [
+      "restaurantes en Palencia",
+      "bares en Palencia",
+      "mesones en Palencia",
+      "asadores en Palencia",
+      "cervecerías en Palencia",
+      "hoteles en Palencia"
+    ],
+    "num": 200,
+    "gl": "es",
+    "hl": "es",
+    "popularTimes": false,
+    "reviews": false,
+    "maxReviews": 0,
+    "maxImages": 0
+  }
+  ```
+  Sin activación de reviews ni Popular Times ni campos de pago extra.
 
 ---
 
@@ -32,58 +36,56 @@ Para optimizar el coste y evitar cargos no deseados, la llamada se configura est
 
 > [!CAUTION]
 > **Seguridad Estricta del Token**:
-> - El token de Apify **NUNCA** debe escribirse en código, commits, tests, logs, issues ni archivos de documentación.
-> - **NUNCA** pases el token como argumento de línea de comandos (el script rechaza activamente `--token`).
-> - Asegúrate de que los archivos `.env` permanezcan ignorados en `.gitignore`.
-
-Configura la variable de entorno antes de ejecutar:
-```bash
-export APIFY_TOKEN="<tu_token_de_apify>"
-```
-
-Si la variable no está definida, el script aborta inmediatamente con código de salida 1:
-```
-APIFY_TOKEN no está configurado. Configúralo como variable de entorno antes de ejecutar la extracción.
-```
+> - El token de Apify se lee **exclusivamente** desde `process.env.APIFY_TOKEN`.
+> - **NUNCA** se acepta por línea de comandos ni se escribe en código, commits, tests, logs, CSV, JSON o documentación.
+> - Si no está definido, el script aborta inmediatamente con:
+>   `APIFY_TOKEN no está configurado. Configúralo como variable de entorno antes de ejecutar la extracción.`
 
 ---
 
-## 3. Comandos de Ejecución
+## 3. Dataset Persistente y Estructura de Directorios
 
-### Prueba Controlada (1 local: Restaurante San Remo)
-```bash
-bun run scripts/apify-google-maps-extract.ts \
-  --input scripts/data/pucherito-2025-test-one.json \
-  --output output/apify-google-maps-results.json
+Todos los datos se guardan en un directorio versionable para reutilización sin re-extraer ni incurrir en costes adicionales:
+
+```text
+data/google-maps/palencia-hospitality/
+  raw/
+    apify-raw-results-<timestamp>.json
+  normalized/
+    palencia-hospitality-catalog.json
+    palencia-hospitality-catalog.csv
+  matches/
+    pucherito-2025-match-results.json
+    pucherito-2025-match-results.csv
 ```
 
-### Extracción del Lote Completo (22 locales oficiales)
+### Reglas del Catálogo
+1. **Persistencia Raw**: Conserva la respuesta íntegra de Apify con `extraction_date`, `apify_run_id`, `queries` y metadatos de ejecución.
+2. **Normalización y Deduplicación**: Cada local aparece una única vez indexado por su Google Maps `place_id`. Si aparece en múltiples búsquedas, se registran en `found_in_queries` y se consolida la información más completa.
+3. **Validación de Coordenadas**: Se extraen `latitude` y `longitude`, validando que sean números válidos dentro del margen geográfico de Palencia (lat: `41.5` a `42.5`, lng: `-5.2` a `-4.0`). Coordenadas fuera de rango o ausentes se fijan a `null`.
+4. **Política de Caché**: Si ya existe `palencia-hospitality-catalog.json`, el pipeline reutiliza el catálogo local sin llamar a Apify, salvo que se invoque con `--force`.
+
+---
+
+## 4. Cruce con la Ruta del Pucherito 2025
+
+El cruce evalúa los 22 locales oficiales contra el catálogo normalizado:
+- **`MATCHED`** (`match_score >= 0.80`): Coincidencia clara de nombre y dirección.
+- **`NEEDS_MANUAL_REVIEW`** (`0.50 <= match_score < 0.80`): Coincidencia parcial, discrepancia de número o ambigüedad entre varios locales cercanos.
+- **`NOT_FOUND`** (`match_score < 0.50`): Sin candidato razonable en el catálogo.
+
+---
+
+## 5. Modos de Ejecución
+
+### Prueba Previa Obligatoria (1 búsqueda de categoría)
+Ejecuta únicamente `"restaurantes en Palencia"` (num: 200) para validar la cadena de persistencia, deduplicación y cruce:
+```bash
+bun run scripts/apify-google-maps-extract.ts --pretest
+```
+
+### Extracción Completa (6 búsquedas autorizadas)
 *(Requiere autorización expresa previa)*
 ```bash
-bun run scripts/apify-google-maps-extract.ts \
-  --input scripts/data/pucherito-2025-input.json \
-  --output output/apify-google-maps-results.json
+bun run scripts/apify-google-maps-extract.ts --full
 ```
-
-El script genera automáticamente dos artefactos en la ruta de salida indicada:
-1. `output/apify-google-maps-results.json`: Datos estructurados completos, incluyendo candidatos crudos (`raw_result`).
-2. `output/apify-google-maps-results.csv`: Tabla para revisión rápida y hojas de cálculo.
-
----
-
-## 4. Interpretación de Estados (`match_status`)
-
-| Estado | Criterio | Acción Requerida |
-| :--- | :--- | :--- |
-| **`MATCHED`** | Coincidencia de alta confianza tanto en nombre como en dirección (`match_score >= 0.80`). | Candidato validado para cotejo contra catálogo de venues. |
-| **`NEEDS_MANUAL_REVIEW`** | Coincidencia parcial (`0.50 <= score < 0.80`), ambigüedad entre varios locales o discrepancia de numeración. | Curación humana: abrir `google_maps_url`, validar si es el establecimiento real y confirmar o descartar. |
-| **`NOT_FOUND`** | Apify respondió correctamente pero Google Maps no devolvió resultados razonables (`score < 0.50`). | Búsqueda manual alternativa o verificación de si el local ha cambiado de denominación comercial o cerrado. |
-| **`ERROR`** | Fallo técnico (red, error 401 de token, timeout, error en dataset de Apify tras 2 reintentos). | Revisar `error_message`, verificar saldo/conectividad de Apify y reejecutar. |
-
----
-
-## 5. Qué hacer con `NEEDS_MANUAL_REVIEW` y `NOT_FOUND`
-1. **Revisión en Hoja de Cálculo o JSON**: Filtrar los registros cuyo `match_status` sea `NEEDS_MANUAL_REVIEW` o `NOT_FOUND`.
-2. **Cotejo con Fuente Oficial**: Comprobar el nombre en la convocatoria del Ayuntamiento de Palencia.
-3. **Validación en Google Maps**: Verificar si el local opera bajo un rótulo ligeramente distinto (ej. `"Casero by Caway"` frente a `"Restaurante Casero"`).
-4. **Cero Invención**: Si un dato no se localiza de forma fehaciente, no se introduce en el catálogo productivo ni en la base de datos.
