@@ -288,6 +288,7 @@ export interface VenueSummary {
   id: number;
   name: string;
   slug: string;
+  address?: string | null;
   latitude: number | null;
   longitude: number | null;
   google_maps_url: string | null;
@@ -620,6 +621,180 @@ export interface CleanupUploadsResponse {
   preserved_count: number;
   grace_hours: number;
 }
+
+// ==============================================================================
+// RUTAS GASTRONÓMICAS — ENTIDADES Y CONTRATOS
+// ==============================================================================
+
+export type GastronomicRouteStatus = 'draft' | 'published' | 'archived';
+
+export type GastronomicRouteCategory =
+  | 'tapas'
+  | 'bravas'
+  | 'puchero'
+  | 'reposteria'
+  | 'vino'
+  | 'general';
+
+/**
+ * Entidad de base de datos para una Ruta Gastronómica
+ */
+export interface GastronomicRoute {
+  id: number;
+  city_id: number;
+  title: string;
+  slug: string;
+  summary: string;
+  description: string | null;
+  category: GastronomicRouteCategory;
+  status: GastronomicRouteStatus;
+  start_date: string | null;
+  end_date: string | null;
+  image_url: string | null;
+  image_thumb_url: string | null;
+  badge_label: string | null;
+  approximate_price_cents: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Entidad de base de datos para un Local Participante en una Ruta
+ */
+export interface GastronomicRouteParticipant {
+  id: number;
+  route_id: number;
+  venue_id: number;
+  display_order: number;
+  dish_name: string;
+  dish_description: string | null;
+  dish_price_cents: number | null;
+  dish_image_url: string | null;
+  is_optional: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// ------------------------------------------------------------------------------
+// CONTRATOS PÚBLICOS (Sin display_order, sin numeración ni orden de visita)
+// ------------------------------------------------------------------------------
+
+export interface PublicDishInfo {
+  name: string;
+  description: string | null;
+  price_cents: number | null;
+  price_label: string | null;
+  image_url: string | null;
+}
+
+export interface PublicRouteParticipantItem {
+  id: number;
+  dish: PublicDishInfo;
+  venue: VenueSummary;
+  is_optional: boolean;
+}
+
+export interface PublicRouteSummary {
+  id: number;
+  title: string;
+  slug: string;
+  summary: string;
+  category: GastronomicRouteCategory;
+  badge_label: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  is_permanent: boolean;
+  approximate_price_cents: number | null;
+  participants_count: number;
+  image_url: string | null;
+  image_thumb_url: string | null;
+}
+
+export interface GastronomicRoutesResponseContract {
+  city: {
+    slug: string;
+    name: string;
+  };
+  routes: PublicRouteSummary[];
+}
+
+export interface SingleGastronomicRouteResponseContract {
+  route: {
+    id: number;
+    title: string;
+    slug: string;
+    summary: string;
+    description: string | null;
+    category: GastronomicRouteCategory;
+    status: 'published';
+    badge_label: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    is_permanent: boolean;
+    approximate_price_cents: number | null;
+    image_url: string | null;
+    image_thumb_url: string | null;
+    city: {
+      slug: string;
+      name: string;
+    };
+    participants: PublicRouteParticipantItem[];
+  };
+}
+
+// ------------------------------------------------------------------------------
+// CONTRATOS ADMINISTRATIVOS (display_order exclusivo para estabilidad de gestión)
+// ------------------------------------------------------------------------------
+
+export interface AdminRouteParticipantItem {
+  id?: number;
+  venue_id: number;
+  display_order: number;
+  dish_name: string;
+  dish_description?: string | null;
+  dish_price_cents?: number | null;
+  dish_image_url?: string | null;
+  is_optional?: boolean;
+  is_active: boolean;
+  venue?: VenueSummary;
+}
+
+export interface AdminRouteDetail extends GastronomicRoute {
+  participants: AdminRouteParticipantItem[];
+}
+
+export interface AdminRouteListResponseContract {
+  routes: (GastronomicRoute & { participants_count: number })[];
+}
+
+export interface AdminCreateRouteRequest {
+  city_id: number;
+  title: string;
+  slug: string;
+  summary: string;
+  description?: string | null;
+  category: GastronomicRouteCategory;
+  badge_label?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  approximate_price_cents?: number | null;
+  image_url?: string | null;
+}
+
+export interface AdminUpdateRouteParticipantsRequest {
+  participants: {
+    venue_id: number;
+    display_order: number;
+    dish_name: string;
+    dish_description?: string | null;
+    dish_price_cents?: number | null;
+    dish_image_url?: string | null;
+    is_optional?: boolean;
+    is_active?: boolean;
+  }[];
+}
+
 
 
 
