@@ -79,12 +79,23 @@ export const VALID_EVENT_SOURCES: readonly EventSourceType[] = [
 /**
  * Normaliza y devuelve la etiqueta de precio para un evento
  */
-export function formatPriceLabel(priceCents: number, isFree: boolean): string {
-  if (isFree || priceCents === 0) {
+export function formatPriceLabel(
+  priceCents: number,
+  isFree: boolean,
+): string {
+  if (isFree) {
     return 'Entrada libre';
   }
-  const euros = (priceCents / 100).toFixed(2).replace('.', ',');
-  return `${euros} €`;
+
+  if (priceCents > 0) {
+    const euros = (priceCents / 100)
+      .toFixed(2)
+      .replace('.', ',');
+
+    return `${euros} €`;
+  }
+
+  return 'Entradas en taquilla / festival';
 }
 
 /**
