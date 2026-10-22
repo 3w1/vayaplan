@@ -9,7 +9,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
   // 1. BALONCESTO — Primera FEB (Jornada 5) — Pabellón Municipal de Palencia
   {
     sourceId: 'feb_primera_feb',
-    externalId: 'feb-2026-j05-pal-our',
+    externalId: '2026-10-24-super-agropal-palencia-club-ourense-baloncesto',
     title: 'Súper Agropal Palencia vs. Club Ourense Baloncesto',
     sport: 'baloncesto',
     competition: 'Primera FEB',
@@ -31,7 +31,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
   // 2. FÚTBOL — Tercera Federación Grupo VIII (Jornada 9 - El Gran Derbi) — Nueva Balastera
   {
     sourceId: 'fcylf_futbol',
-    externalId: 'fcylf-2026-j09-pca-pcf',
+    externalId: '2026-11-01-palencia-cristo-atletico-palencia-cf',
     title: 'Palencia Cristo Atlético vs. Palencia CF',
     sport: 'futbol',
     competition: 'Tercera Federación — Grupo VIII',
@@ -53,7 +53,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
   // 3. FÚTBOL — Tercera Federación Grupo VIII (Jornada 11) — Nueva Balastera
   {
     sourceId: 'fcylf_futbol',
-    externalId: 'fcylf-2026-j11-pca-bcf',
+    externalId: '2026-11-15-palencia-cristo-atletico-burgos-cf-promesas',
     title: 'Palencia Cristo Atlético vs. Burgos CF Promesas',
     sport: 'futbol',
     competition: 'Tercera Federación — Grupo VIII',
@@ -74,7 +74,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
   // 4. FÚTBOL — Tercera Federación Grupo VIII (Jornada 13) — Nueva Balastera
   {
     sourceId: 'fcylf_futbol',
-    externalId: 'fcylf-2026-j13-pca-sda',
+    externalId: '2026-11-29-palencia-cristo-atletico-sd-almazan',
     title: 'Palencia Cristo Atlético vs. SD Almazán',
     sport: 'futbol',
     competition: 'Tercera Federación — Grupo VIII',
@@ -95,7 +95,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
   // 5. RUGBY — Liga Senior Masculina CyL — Campos de Rugby Nueva Balastera
   {
     sourceId: 'palencia_rugby_club',
-    externalId: 'fcr-2026-nov-silicius-prc',
+    externalId: '2026-11-08-silicius-palencia-rugby-club-salamanca-rugby-club',
     title: 'Silicius Palencia Rugby Club vs. Salamanca Rugby Club',
     sport: 'rugby',
     competition: 'Liga Senior Masculina Castilla y León',
@@ -117,15 +117,15 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
   // 6. ATLETISMO POPULAR — XLV San Silvestre Palentina — Patronato Municipal de Deportes
   {
     sourceId: 'sansilvestre_palentina',
-    externalId: 'pmd-2026-san-silvestre-xlv',
+    externalId: '2026-12-31-xlv-san-silvestre-palentina-2026',
     title: 'XLV San Silvestre Palentina 2026',
     sport: 'cultura',
     competition: 'Circuito de Carreras Populares PMD',
     round: 'Carrera Popular 6 km',
     rawDate: '2026-12-31',
     rawTime: '18:00',
-    venueName: 'Circuito Urbano San Silvestre Palentina',
-    venueAddress: 'Calle San Antonio (Salida) / Pabellón Municipal (Meta), Palencia',
+    venueName: 'Calle Mayor de Palencia — Espacio Público',
+    venueAddress: 'Desde el Salón a la Plaza Mayor, Palencia',
     city: 'Palencia',
     isFree: true,
     priceCents: 0,
