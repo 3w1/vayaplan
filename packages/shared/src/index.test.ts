@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeEditorialDate, formatDishPriceLabel, resolveGoogleMapsUrl } from './index';
+import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, resolveGoogleMapsUrl } from './index';
 
 describe('computeEditorialDate', () => {
   describe('Horario de verano (CEST, UTC+2)', () => {
@@ -248,6 +248,28 @@ describe('Conversión Horaria Robusta — Europe/Madrid a UTC (parseMadridWallCl
     test('retorna null si no hay url ni coordenadas válidas', () => {
       expect(resolveGoogleMapsUrl(null, null, null)).toBeNull();
       expect(resolveGoogleMapsUrl('', undefined, undefined)).toBeNull();
+    });
+  });
+
+  describe('formatPriceLabel', () => {
+    test('is_free = true y price_cents = 0 → "Entrada libre"', () => {
+      expect(formatPriceLabel(0, true)).toBe('Entrada libre');
+    });
+
+    test('is_free = false y price_cents = 1200 → "12,00 €"', () => {
+      expect(formatPriceLabel(1200, false)).toBe('12,00 €');
+    });
+
+    test('is_free = false y price_cents = 1000 → "10,00 €"', () => {
+      expect(formatPriceLabel(1000, false)).toBe('10,00 €');
+    });
+
+    test('is_free = false y price_cents = 0 → "Entradas en taquilla / festival"', () => {
+      expect(formatPriceLabel(0, false)).toBe('Entradas en taquilla / festival');
+    });
+
+    test('is_free = true prevalece independientemente de price_cents', () => {
+      expect(formatPriceLabel(1200, true)).toBe('Entrada libre');
     });
   });
 });
