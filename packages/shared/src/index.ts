@@ -1,4 +1,4 @@
-import type { EventCategory, EventStatus, EventSourceType, VenueCategory } from '@vayaplan/types';
+import type { EventCategory, EventStatus, EventSourceType, VenueCategory, GastronomicRouteCategory } from '@vayaplan/types';
 
 /**
  * Categorías válidas de venues en VayaPlan.
@@ -343,3 +343,70 @@ export function computeEditorialDate(startTimeIso: string, timeZone: string = 'E
 
   return `${y}-${m}-${d}`;
 }
+
+// ==============================================================================
+// RUTAS GASTRONÓMICAS — CONSTANTES Y REGLAS EDITORIALES
+// ==============================================================================
+
+/**
+ * Categorías válidas de rutas gastronómicas en VayaPlan.
+ * Lista cerrada garantizada por restricción CHECK en base de datos.
+ */
+export const VALID_GASTRONOMIC_ROUTE_CATEGORIES: readonly GastronomicRouteCategory[] = [
+  'tapas',
+  'bravas',
+  'puchero',
+  'reposteria',
+  'vino',
+  'general',
+] as const;
+
+/**
+ * Etiquetas públicas y de administración para las categorías de rutas gastronómicas.
+ */
+export const GASTRONOMIC_ROUTE_CATEGORY_LABELS: Readonly<Record<GastronomicRouteCategory, string>> = {
+  tapas: 'Tapas de Autor',
+  bravas: 'Ruta de las Bravas',
+  puchero: 'Puchero y Cuchara',
+  reposteria: 'Repostería y Dulces',
+  vino: 'Vinos y Maridaje',
+  general: 'Selección Gastronómica',
+};
+
+export interface RouteParticipantPublicationCandidate {
+  is_active: boolean;          // Estado de la participación del local en la ruta
+  venue_is_active: boolean;    // Estado censal del local en la tabla venues
+}
+
+export interface RoutePublishValidationResult {
+  canPublish: boolean;
+  activeParticipantsCount: number;
+  reason?: string;
+}
+
+/**
+ * Valida si una ruta gastronómica cumple con la regla defensiva para pasar a estado 'published'.
+ * Exige estrictamente al menos 2 participantes con is_active = true y cuyo venue asociado
+ * tenga también venue_is_active = true.
+ */
+export function validateRoutePublication(
+  participants: RouteParticipantPublicationCandidate[]
+): RoutePublishValidationResult {
+  const activeCount = participants.filter(
+    (p) => p.is_active === true && p.venue_is_active === true
+  ).length;
+
+  if (activeCount < 2) {
+    return {
+      canPublish: false,
+      activeParticipantsCount: activeCount,
+      reason: 'Una ruta gastronómica debe contar con al menos 2 locales participantes activos (con participación activa y local activo) para poder ser publicada.',
+    };
+  }
+
+  return {
+    canPublish: true,
+    activeParticipantsCount: activeCount,
+  };
+}
+
