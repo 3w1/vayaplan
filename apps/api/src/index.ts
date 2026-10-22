@@ -20,6 +20,7 @@ import { adminMetricsRoutes } from './routes/admin/metrics';
 import { adminQrRoutes } from './routes/admin/qr';
 import { adminPromotionsRoutes } from './routes/admin/promotions';
 import { adminUploadsRoutes } from './routes/admin/uploads';
+import { adminGastronomicRoutes } from './routes/admin/gastronomic-routes';
 import { publicUploadsRoutes } from './routes/uploads';
 import { whatsappWebhookRoutes } from './routes/webhooks/whatsapp';
 import { qrRedirectRoutes } from './routes/qr-redirect';
@@ -85,6 +86,7 @@ app.route('/api/v1/admin', adminMetricsRoutes);
 app.route('/api/v1/admin', adminQrRoutes);
 app.route('/api/v1/admin', adminPromotionsRoutes);
 app.route('/api/v1/admin', adminUploadsRoutes);
+app.route('/api/v1/admin', adminGastronomicRoutes);
 
 // Iniciar worker de caducidad automática de eventos pasados
 startExpirationWorker();
