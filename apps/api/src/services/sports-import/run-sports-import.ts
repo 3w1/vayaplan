@@ -67,8 +67,8 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     city: 'Palencia',
     isFree: false,
     priceCents: 0,
-    officialSourceUrl: 'https://palenciacristoatletico.com/',
-    imageUrl: null,
+    officialSourceUrl: 'https://palenciacristo.com/',
+    imageUrl: 'https://palenciacristo.com/wp-content/uploads/2024/03/cropped-Escudo-Cristo-Atletico-1.png',
     status: 'confirmed',
   },
   // 4. FÚTBOL — Tercera Federación Grupo VIII (Jornada 13) — Nueva Balastera
@@ -88,8 +88,8 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     city: 'Palencia',
     isFree: false,
     priceCents: 0,
-    officialSourceUrl: 'https://palenciacristoatletico.com/',
-    imageUrl: null,
+    officialSourceUrl: 'https://palenciacristo.com/',
+    imageUrl: 'https://palenciacristo.com/wp-content/uploads/2024/03/cropped-Escudo-Cristo-Atletico-1.png',
     status: 'confirmed',
   },
   // 5. RUGBY — Liga Senior Masculina CyL — Estadio Municipal Nueva Balastera
@@ -111,7 +111,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     priceCents: 0,
     rawPriceText: 'Acceso libre para aficionados',
     officialSourceUrl: 'https://rugbyclubpalencia.com/',
-    imageUrl: null,
+    imageUrl: 'https://rugbyclubpalencia.com/wp-content/uploads/2021/12/ESCUDO-CURVAS21.webp',
     status: 'confirmed',
   },
   // 6. ATLETISMO POPULAR — XLV San Silvestre Palentina — Patronato Municipal de Deportes
@@ -131,7 +131,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     priceCents: 0,
     rawPriceText: 'Inscripción gratuita con fines solidarios',
     officialSourceUrl: 'http://sansilvestrepalentina.com/',
-    imageUrl: null,
+    imageUrl: 'https://sansilvestrepalentina.com/wp-content/uploads/2025/12/PALENCIA-2026-REDONDO-1.jpg',
     status: 'confirmed',
   },
 ];

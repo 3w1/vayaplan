@@ -55,7 +55,7 @@ export const OFFICIAL_SPORTS_SOURCES: readonly SportsOfficialSource[] = [
   {
     id: 'palencia_cristo_atletico',
     name: 'Club Palencia Cristo Atlético (Web Oficial)',
-    officialUrl: 'https://palenciacristoatletico.com/',
+    officialUrl: 'https://palenciacristo.com/',
     sourceType: 'club_oficial',
     sportsCovered: ['futbol'],
     updateFrequency: 'Semanal',
