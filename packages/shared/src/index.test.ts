@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeEditorialDate } from './index';
+import { computeEditorialDate, formatDishPriceLabel, resolveGoogleMapsUrl } from './index';
 
 describe('computeEditorialDate', () => {
   describe('Horario de verano (CEST, UTC+2)', () => {
@@ -209,5 +209,45 @@ describe('Conversión Horaria Robusta — Europe/Madrid a UTC (parseMadridWallCl
     const minW = String(dtWinter.getUTCMinutes()).padStart(2, '0');
     const icsDtstartWinter = `${yearW}${monthW}${dayW}T${hourW}${minW}00Z`;
     expect(icsDtstartWinter).toBe('20261110T193000Z');
+  });
+
+  describe('formatDishPriceLabel', () => {
+    test('350 céntimos convierte a "3,50 €"', () => {
+      expect(formatDishPriceLabel(350)).toBe('3,50 €');
+    });
+
+    test('0 céntimos convierte a "0,00 €"', () => {
+      expect(formatDishPriceLabel(0)).toBe('0,00 €');
+    });
+
+    test('1250 céntimos convierte a "12,50 €"', () => {
+      expect(formatDishPriceLabel(1250)).toBe('12,50 €');
+    });
+
+    test('null retorna null', () => {
+      expect(formatDishPriceLabel(null)).toBeNull();
+    });
+
+    test('undefined retorna null', () => {
+      expect(formatDishPriceLabel(undefined)).toBeNull();
+    });
+  });
+
+  describe('resolveGoogleMapsUrl', () => {
+    test('prioriza googleMapsUrl verificado si existe', () => {
+      const url = 'https://maps.app.goo.gl/xyz';
+      expect(resolveGoogleMapsUrl(url, 42.0, -4.5)).toBe(url);
+    });
+
+    test('genera URL de búsqueda a partir de coordenadas si no hay url directa', () => {
+      expect(resolveGoogleMapsUrl(null, 42.0095, -4.5320)).toBe(
+        'https://www.google.com/maps/search/?api=1&query=42.0095,-4.532'
+      );
+    });
+
+    test('retorna null si no hay url ni coordenadas válidas', () => {
+      expect(resolveGoogleMapsUrl(null, null, null)).toBeNull();
+      expect(resolveGoogleMapsUrl('', undefined, undefined)).toBeNull();
+    });
   });
 });

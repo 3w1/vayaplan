@@ -373,6 +373,19 @@ export const GASTRONOMIC_ROUTE_CATEGORY_LABELS: Readonly<Record<GastronomicRoute
   general: 'Selección Gastronómica',
 };
 
+/**
+ * Formatea el precio de una propuesta gastronómica (tapa o plato).
+ * Si priceCents es null o undefined, retorna null.
+ * Si priceCents es numérico, formatea a euros con coma decimal (ej. 350 -> "3,50 €", 0 -> "0,00 €").
+ */
+export function formatDishPriceLabel(priceCents: number | null | undefined): string | null {
+  if (priceCents === null || priceCents === undefined) {
+    return null;
+  }
+  const euros = (priceCents / 100).toFixed(2).replace('.', ',');
+  return `${euros} €`;
+}
+
 export interface RouteParticipantPublicationCandidate {
   is_active: boolean;          // Estado de la participación del local en la ruta
   venue_is_active: boolean;    // Estado censal del local en la tabla venues

@@ -10,6 +10,7 @@ import { singleEventRoutes } from './routes/single-event';
 import { metricsRoutes } from './routes/metrics';
 import { festivalsRoutes } from './routes/festivals';
 import { activePromotionsRoutes } from './routes/active-promotions';
+import { gastronomicRoutes } from './routes/gastronomic-routes';
 import { adminAuthRoutes } from './routes/admin/auth';
 import { adminEventsRoutes } from './routes/admin/events';
 import { adminVenuesRoutes } from './routes/admin/venues';
@@ -63,6 +64,7 @@ app.route('/api/v1', placesRoutes);
 app.route('/api/v1', singleEventRoutes);
 app.route('/api/v1', metricsRoutes);
 app.route('/api/v1', activePromotionsRoutes);
+app.route('/api/v1', gastronomicRoutes);
 app.route('/api/v1', publicUploadsRoutes);
 app.route('/', publicUploadsRoutes);
 
