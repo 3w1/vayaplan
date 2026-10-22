@@ -2192,6 +2192,10 @@ export function renderAdminHtml(): string {
           <span class="nav-item-icon">⭐</span>
           <span class="nav-item-label">Promociones</span>
         </button>
+        <button class="drawer-nav-item" id="drawer-nav-routes" onclick="switchSection('routes'); toggleMobileDrawer(false);">
+          <span class="nav-item-icon">🍴</span>
+          <span class="nav-item-label">Rutas Gastronómicas</span>
+        </button>
 
         <div class="nav-group-title" style="margin-top:1.25rem;">GESTIÓN</div>
         <button class="drawer-nav-item" id="drawer-nav-venues" onclick="switchSection('venues'); toggleMobileDrawer(false);">
@@ -2258,6 +2262,10 @@ export function renderAdminHtml(): string {
         <button class="sidebar-nav-item" id="sidebar-nav-promotions" onclick="switchSection('promotions')">
           <span class="nav-item-icon">⭐</span>
           <span class="nav-item-label">Promociones</span>
+        </button>
+        <button class="sidebar-nav-item" id="sidebar-nav-routes" onclick="switchSection('routes')">
+          <span class="nav-item-icon">🍴</span>
+          <span class="nav-item-label">Rutas Gastronómicas</span>
         </button>
 
         <div class="nav-group-title" style="margin-top:1.5rem;">GESTIÓN</div>
@@ -2595,6 +2603,60 @@ export function renderAdminHtml(): string {
         <!-- Vista Móvil: Tarjetas individuales -->
         <div id="qr-cards-container" class="qr-cards-mobile">
           <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando fuentes QR...</div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN 8: RUTAS GASTRONÓMICAS -->
+      <section id="section-routes" style="display:none;">
+        <div class="toolbar" style="margin-bottom:0.75rem;">
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <h3 style="margin:0; font-size:1.125rem; font-weight:800; color:var(--text-main);">Rutas Gastronómicas</h3>
+            <span id="routes-count-badge" class="badge-count" style="display:none;">0</span>
+          </div>
+          <button type="button" class="btn-primary" onclick="openNewRouteModal()">+ Nueva Ruta Gastronómica</button>
+        </div>
+
+        <!-- Filtros y Búsqueda -->
+        <div class="toolbar" style="background:var(--bg-subtle); padding:0.875rem; border-radius:var(--radius); border:1px solid var(--border); margin-bottom:1rem; gap:0.75rem; align-items:stretch;">
+          <div style="flex:1; min-width:220px;">
+            <input type="text" id="route-filter-search" placeholder="🔍 Buscar por título o categoría..." oninput="onRouteSearchInput(this.value)" style="width:100%; box-sizing:border-box;" aria-label="Buscar rutas gastronómicas">
+          </div>
+          <div class="filter-group" style="flex-wrap:wrap; gap:0.5rem;">
+            <select id="route-filter-city" onchange="onRouteFilterChange()" aria-label="Filtrar por ciudad">
+              <option value="1">Palencia</option>
+            </select>
+            <select id="route-filter-status" onchange="onRouteFilterChange()" aria-label="Filtrar por estado">
+              <option value="all">Todos los estados</option>
+              <option value="draft">Borrador</option>
+              <option value="published">Publicada</option>
+              <option value="archived">Archivada</option>
+            </select>
+            <button type="button" class="btn-table-action" onclick="resetRouteFilters()" title="Restablecer filtros" style="padding:0.55rem 0.75rem;">↺ Limpiar</button>
+          </div>
+        </div>
+
+        <!-- Vista Desktop: Tabla estructurada -->
+        <div class="table-container routes-table-desktop">
+          <table>
+            <thead>
+              <tr>
+                <th>Título</th>
+                <th>Categoría</th>
+                <th>Estado</th>
+                <th>Locales</th>
+                <th>Fechas</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="routes-tbody">
+              <tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando rutas gastronómicas...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales sin desbordamiento horizontal -->
+        <div id="routes-cards-container" class="routes-cards-mobile">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando rutas gastronómicas...</div>
         </div>
       </section>
     </main>
@@ -3552,6 +3614,169 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
+  <!-- MODAL: CREACIÓN Y EDICIÓN DE RUTA GASTRONÓMICA -->
+  <div id="modal-route" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-route')">
+    <div class="modal-card modal-card-large" role="dialog" aria-modal="true" aria-labelledby="modal-route-title" style="max-width:850px; width:95%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <h3 id="modal-route-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Nueva Ruta Gastronómica</h3>
+          <span id="modal-route-status-badge" style="display:none;"></span>
+        </div>
+        <button type="button" class="modal-close" onclick="closeModal('modal-route')" aria-label="Cerrar modal">✕</button>
+      </div>
+
+      <!-- Pestañas internas del modal: Datos Generales vs Locales Participantes -->
+      <div id="modal-route-tabs" style="display:flex; border-bottom:1px solid var(--border); background:var(--bg-subtle); padding:0 1rem; flex-shrink:0;">
+        <button type="button" id="tab-btn-route-data" class="tab-btn active" onclick="switchRouteModalTab('data')" style="padding:0.75rem 1rem; border:none; background:none; font-weight:700; color:var(--primary); border-bottom:2px solid var(--primary); cursor:pointer;">1. Datos de la Ruta</button>
+        <button type="button" id="tab-btn-route-participants" class="tab-btn" onclick="switchRouteModalTab('participants')" style="display:none; padding:0.75rem 1rem; border:none; background:none; font-weight:700; color:var(--text-muted); cursor:pointer;">2. Locales Participantes <span id="route-participants-count-tag" style="background:var(--border); padding:0.15rem 0.5rem; border-radius:10px; font-size:0.75rem;">0</span></button>
+      </div>
+
+      <div id="route-form-error" role="alert" style="display:none; margin:1rem 1.5rem 0 1.5rem; padding:0.75rem 1rem; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:#991b1b; font-size:0.875rem;"></div>
+      <div id="route-form-success" role="status" style="display:none; margin:1rem 1.5rem 0 1.5rem; padding:0.75rem 1rem; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; color:#065f46; font-size:0.875rem;"></div>
+
+      <div class="modal-body" style="flex:1; overflow-y:auto; padding:1.25rem 1.5rem;">
+        <!-- PESTAÑA A: DATOS GENERALES -->
+        <form id="form-route" onsubmit="event.preventDefault(); saveRouteMetadata();">
+          <input type="hidden" id="route-id">
+          <div id="tab-content-route-data">
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1rem; margin-bottom:1rem;">
+              <div class="form-group">
+                <label for="route-city-id" style="font-weight:700; color:var(--text-main);">Ciudad *</label>
+                <select id="route-city-id" required>
+                  <option value="1">Palencia</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="route-category" style="font-weight:700; color:var(--text-main);">Categoría *</label>
+                <select id="route-category" required>
+                  <option value="tapas">Tapas de Autor</option>
+                  <option value="bravas">Ruta de las Bravas</option>
+                  <option value="puchero">Puchero y Cuchara</option>
+                  <option value="reposteria">Repostería y Dulces</option>
+                  <option value="vino">Vinos y Maridaje</option>
+                  <option value="general">Selección Gastronómica</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1rem;">
+              <label for="route-title" style="font-weight:700; color:var(--text-main);">Título de la Ruta *</label>
+              <input type="text" id="route-title" required placeholder="Ej. Ruta de las Mejores Bravas de Palencia" oninput="onRouteTitleInput(this.value)">
+            </div>
+
+            <div class="form-group" style="margin-bottom:1rem;">
+              <label for="route-slug" style="font-weight:700; color:var(--text-main);">Slug URL *</label>
+              <input type="text" id="route-slug" required placeholder="ej. ruta-bravas-palencia">
+              <small style="color:var(--text-muted); font-size:0.75rem;">Identificador único en la ciudad (letras minúsculas, números y guiones).</small>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1rem;">
+              <label for="route-summary" style="font-weight:700; color:var(--text-main);">Resumen Editorial *</label>
+              <textarea id="route-summary" rows="2" required placeholder="Breve síntesis atractiva para el listado público..." style="width:100%; box-sizing:border-box;"></textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1rem;">
+              <label for="route-description" style="font-weight:700; color:var(--text-main);">Descripción Detallada (Opcional)</label>
+              <textarea id="route-description" rows="3" placeholder="Contexto histórico, ingredientes destacados, notas del autor..." style="width:100%; box-sizing:border-box;"></textarea>
+            </div>
+
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1rem;">
+              <div class="form-group">
+                <label for="route-start-date" style="font-weight:700; color:var(--text-main);">Fecha Inicio (Opcional)</label>
+                <input type="date" id="route-start-date">
+                <small style="color:var(--text-muted); font-size:0.75rem;">Vacío si es permanente.</small>
+              </div>
+              <div class="form-group">
+                <label for="route-end-date" style="font-weight:700; color:var(--text-main);">Fecha Fin (Opcional)</label>
+                <input type="date" id="route-end-date">
+                <small style="color:var(--text-muted); font-size:0.75rem;">Vacío si es permanente.</small>
+              </div>
+              <div class="form-group">
+                <label for="route-price-eur" style="font-weight:700; color:var(--text-main);">Precio Orientativo (€)</label>
+                <input type="number" id="route-price-eur" step="0.5" min="0" placeholder="Ej. 12.50">
+              </div>
+            </div>
+
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1rem;">
+              <div class="form-group">
+                <label for="route-badge-label" style="font-weight:700; color:var(--text-main);">Badge Editorial (Opcional)</label>
+                <input type="text" id="route-badge-label" placeholder="Ej. Otoño 2026, Clásicos">
+              </div>
+              <div class="form-group">
+                <label for="route-image-url" style="font-weight:700; color:var(--text-main);">URL Foto de Portada (Opcional)</label>
+                <input type="url" id="route-image-url" placeholder="https://images.vayaplan.com/rutas/...">
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- PESTAÑA B: LOCALES PARTICIPANTES -->
+        <div id="tab-content-route-participants" style="display:none;">
+          <div style="background:var(--bg-subtle); padding:1rem; border-radius:8px; border:1px solid var(--border); margin-bottom:1rem;">
+            <h4 style="margin:0 0 0.5rem 0; font-size:0.95rem; font-weight:800; color:var(--text-main);">Añadir Local del Censo Activo</h4>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+              <select id="route-add-venue-select" style="flex:1; min-width:240px;" aria-label="Seleccionar local activo para añadir">
+                <option value="">— Selecciona un establecimiento —</option>
+              </select>
+              <button type="button" class="btn-primary" onclick="addParticipantVenue()" style="padding:0.55rem 1rem;">+ Añadir a la Ruta</button>
+            </div>
+          </div>
+
+          <div id="participants-container">
+            <!-- Renderizado dinámico de tarjetas de participantes -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; flex-shrink:0;">
+        <div id="modal-route-secondary-actions" style="display:flex; gap:0.5rem;">
+          <!-- Botones de Publicar / Archivar cuando esté en edición -->
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button type="button" class="btn-secondary" onclick="closeModal('modal-route')">Cerrar</button>
+          <button type="button" id="btn-save-route-data" class="btn-primary" onclick="saveRouteMetadata()">Guardar Datos</button>
+          <button type="button" id="btn-save-route-participants" class="btn-primary" style="display:none;" onclick="saveRouteParticipants()">Guardar Participantes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PREVIEW PÚBLICO FIEL -->
+  <div id="modal-route-preview" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-route-preview')">
+    <div class="modal-card modal-card-large" role="dialog" aria-modal="true" aria-labelledby="modal-preview-title" style="max-width:800px; width:95%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="flex-shrink:0; background:linear-gradient(135deg, #1e1b4b, #312e81); color:#ffffff;">
+        <div>
+          <span style="font-size:0.75rem; font-weight:800; letter-spacing:1px; opacity:0.8; text-transform:uppercase;">Vista Previa Fiel (Contrato Público)</span>
+          <h3 id="modal-preview-title" style="margin:0.25rem 0 0 0; font-size:1.25rem; font-weight:800; color:#ffffff;"></h3>
+        </div>
+        <button type="button" class="modal-close" onclick="closeModal('modal-route-preview')" aria-label="Cerrar vista previa" style="color:#ffffff;">✕</button>
+      </div>
+      <div class="modal-body" id="modal-preview-body" style="flex:1; overflow-y:auto; padding:1.5rem; background:#f8fafc;">
+        <!-- Renderizado del contrato público exacto -->
+      </div>
+      <div class="modal-footer" style="flex-shrink:0;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-route-preview')">Cerrar Previsualización</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRMACIÓN DE ARCHIVADO ACCESIBLE -->
+  <div id="modal-confirm-archive-route" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-confirm-archive-route')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-archive-route-title" style="max-width:450px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-archive-route-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Confirmar Archivado</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-confirm-archive-route')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" id="modal-archive-route-body" style="padding:1.25rem; color:var(--text-main); font-size:0.95rem; line-height:1.5;">
+        ¿Estás seguro de que deseas archivar esta ruta gastronómica? Dejará de mostrarse en la web pública pero sus locales y propuestas permanecerán guardados.
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-confirm-archive-route')">Cancelar</button>
+        <button type="button" id="btn-confirm-archive-route" class="btn-danger" onclick="executeArchiveRoute()">Archivar Ruta</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ==============================================================================
     // Estado y Helpers del Panel de Curación (Rediseño Shell + Curación en Tema Claro)
@@ -3564,6 +3789,11 @@ export function renderAdminHtml(): string {
     let reassignSelectedVenueId = null;
     let cachedPromotions = [];
     let publishedEventsCache = [];
+    let currentAdminRoutes = [];
+    let currentEditingRoute = null;
+    let currentEditingParticipants = [];
+    let routeToArchiveId = null;
+    let modalRouteSaveInProgress = false;
     let isActionInProgress = false; // Guarda contra clics repetidos
     let promoSaveInProgress = false; // Guarda contra clics repetidos en guardado de promociones
     let promoUserModifiedStartsAt = false;
@@ -3805,7 +4035,7 @@ export function renderAdminHtml(): string {
     // ==============================================================================
     window.switchSection = function(section) {
       currentSection = section;
-      const allSections = ['inbox', 'events', 'promotions', 'venues', 'recurrences', 'places', 'qr'];
+      const allSections = ['inbox', 'events', 'promotions', 'venues', 'recurrences', 'places', 'qr', 'routes'];
       allSections.forEach(s => {
         const el = document.getElementById('section-' + s);
         if (el) el.style.display = s === section ? 'block' : 'none';
@@ -3852,6 +4082,10 @@ export function renderAdminHtml(): string {
         if (titleEl) titleEl.innerText = 'Códigos QR y Canales';
         if (subtitleEl) subtitleEl.innerText = 'Generación de QR y analítica de fuentes físicas';
         loadAdminQr();
+      } else if (section === 'routes') {
+        if (titleEl) titleEl.innerText = 'Rutas Gastronómicas';
+        if (subtitleEl) subtitleEl.innerText = 'Selecciones editoriales curadas de locales participantes y propuestas culinarias';
+        loadAdminRoutes();
       }
     };
 
@@ -3872,6 +4106,8 @@ export function renderAdminHtml(): string {
         loadAdminPlaces();
       } else if (currentSection === 'qr') {
         loadAdminQr();
+      } else if (currentSection === 'routes') {
+        loadAdminRoutes();
       }
     };
 
@@ -8098,6 +8334,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (id === 'modal-exception' && modalExceptionSaveInProgress) return;
       if (id === 'modal-place' && modalPlaceSaveInProgress) return;
       if (id === 'modal-qr' && modalQrSaveInProgress) return;
+      if (id === 'modal-route' && modalRouteSaveInProgress) return;
       const el = document.getElementById(id);
       if (el) el.classList.remove('active');
       const activeModals = document.querySelectorAll('.modal-overlay.active');
@@ -8113,6 +8350,634 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (fallback) fallback.focus();
       }
     };
+
+    // ==============================================================================
+    // RUTAS GASTRONÓMICAS — CONTROLADOR DE PANEL
+    // ==============================================================================
+    const ROUTE_CATEGORY_LABELS = {
+      tapas: 'Tapas de Autor',
+      bravas: 'Ruta de las Bravas',
+      puchero: 'Puchero y Cuchara',
+      reposteria: 'Repostería y Dulces',
+      vino: 'Vinos y Maridaje',
+      general: 'Selección Gastronómica'
+    };
+
+    function slugify(text) {
+      return String(text || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+    }
+
+    window.loadAdminRoutes = async function() {
+      const cityId = document.getElementById('route-filter-city')?.value || '1';
+      const status = document.getElementById('route-filter-status')?.value || 'all';
+      const tbody = document.getElementById('routes-tbody');
+      const cards = document.getElementById('routes-cards-container');
+      const badge = document.getElementById('routes-count-badge');
+
+      try {
+        const res = await apiFetch('/api/v1/admin/cities/' + cityId + '/routes?status=' + status);
+        const data = await res.json();
+        currentAdminRoutes = data.routes || [];
+
+        if (badge) {
+          badge.innerText = currentAdminRoutes.length;
+          badge.style.display = 'inline-block';
+        }
+
+        renderRoutesList(currentAdminRoutes);
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:#dc2626;">Error al cargar rutas: ' + escapeHtml(err.message) + '</td></tr>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:#dc2626;">Error al cargar rutas.</div>';
+      }
+    };
+
+    window.renderRoutesList = function renderRoutesList(routes) {
+      const tbody = document.getElementById('routes-tbody');
+      const cards = document.getElementById('routes-cards-container');
+
+      if (routes.length === 0) {
+        const emptyMsg = 'No hay rutas gastronómicas registradas con los filtros actuales.';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">' + emptyMsg + '</td></tr>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#fff; border-radius:12px; border:1px solid var(--border);">' + emptyMsg + '</div>';
+        return;
+      }
+
+      const getStatusBadge = (st) => {
+        if (st === 'published') return '<span class="badge-status" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;">Publicada</span>';
+        if (st === 'draft') return '<span class="badge-status" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">Borrador</span>';
+        return '<span class="badge-status" style="background:#f3f4f6; color:#374151; border:1px solid #e5e7eb;">Archivada</span>';
+      };
+
+      const getDatesText = (r) => {
+        if (!r.start_date && !r.end_date) return 'Permanente';
+        return (r.start_date || '—') + ' al ' + (r.end_date || '—');
+      };
+
+      // Desktop
+      if (tbody) {
+        tbody.innerHTML = routes.map(r => {
+          const catLabel = ROUTE_CATEGORY_LABELS[r.category] || r.category;
+          return '<tr>' +
+            '<td>' +
+              '<div style="font-weight:700; color:var(--text-main);">' + escapeHtml(r.title) + '</div>' +
+              (r.badge_label ? '<span style="font-size:0.75rem; background:var(--primary-soft); color:var(--primary); padding:0.1rem 0.4rem; border-radius:4px; font-weight:700;">' + escapeHtml(r.badge_label) + '</span>' : '') +
+            '</td>' +
+            '<td><span class="badge-category">' + escapeHtml(catLabel) + '</span></td>' +
+            '<td>' + getStatusBadge(r.status) + '</td>' +
+            '<td>' + (r.participants_count || 0) + ' locales</td>' +
+            '<td style="font-size:0.85rem; color:var(--text-muted);">' + escapeHtml(getDatesText(r)) + '</td>' +
+            '<td>' +
+              '<div style="display:flex; gap:0.4rem; flex-wrap:wrap;">' +
+                '<button type="button" class="btn-table-action" onclick="editRoute(' + r.id + ')">Ver / Editar</button>' +
+                '<button type="button" class="btn-table-action" onclick="previewRoute(' + r.id + ')">Previsualizar</button>' +
+                (r.status === 'draft' ? '<button type="button" class="btn-table-action" style="color:#059669;" onclick="publishRoute(' + r.id + ')">Publicar</button>' : '') +
+                (r.status === 'published' ? '<button type="button" class="btn-table-action" style="color:#dc2626;" onclick="confirmArchiveRoute(' + r.id + ')">Archivar</button>' : '') +
+              '</div>' +
+            '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      // Móvil
+      if (cards) {
+        cards.innerHTML = routes.map(r => {
+          const catLabel = ROUTE_CATEGORY_LABELS[r.category] || r.category;
+          return '<article class="venue-card" style="margin-bottom:0.75rem;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; margin-bottom:0.5rem;">' +
+              '<div>' +
+                '<h4 style="margin:0; font-size:1rem; font-weight:800; color:var(--text-main);">' + escapeHtml(r.title) + '</h4>' +
+                (r.badge_label ? '<span style="font-size:0.75rem; background:var(--primary-soft); color:var(--primary); padding:0.1rem 0.4rem; border-radius:4px; font-weight:700;">' + escapeHtml(r.badge_label) + '</span>' : '') +
+              '</div>' +
+              getStatusBadge(r.status) +
+            '</div>' +
+            '<div style="display:flex; gap:0.5rem; font-size:0.8125rem; color:var(--text-muted); margin-bottom:0.75rem; flex-wrap:wrap;">' +
+              '<span>🏷️ ' + escapeHtml(catLabel) + '</span>' +
+              '<span>📍 ' + (r.participants_count || 0) + ' locales</span>' +
+              '<span>📅 ' + escapeHtml(getDatesText(r)) + '</span>' +
+            '</div>' +
+            '<div style="display:flex; gap:0.4rem; flex-wrap:wrap;">' +
+              '<button type="button" class="btn-table-action" onclick="editRoute(' + r.id + ')">Ver / Editar</button>' +
+              '<button type="button" class="btn-table-action" onclick="previewRoute(' + r.id + ')">Previsualizar</button>' +
+              (r.status === 'draft' ? '<button type="button" class="btn-table-action" style="color:#059669;" onclick="publishRoute(' + r.id + ')">Publicar</button>' : '') +
+              (r.status === 'published' ? '<button type="button" class="btn-table-action" style="color:#dc2626;" onclick="confirmArchiveRoute(' + r.id + ')">Archivar</button>' : '') +
+            '</div>' +
+          '</article>';
+        }).join('');
+      }
+    }
+
+    window.onRouteSearchInput = function(val) {
+      const query = (val || '').toLowerCase().trim();
+      if (!query) {
+        renderRoutesList(currentAdminRoutes);
+        return;
+      }
+      const filtered = currentAdminRoutes.filter(r => {
+        const titleMatch = (r.title || '').toLowerCase().includes(query);
+        const catMatch = (r.category || '').toLowerCase().includes(query) || (ROUTE_CATEGORY_LABELS[r.category] || '').toLowerCase().includes(query);
+        return titleMatch || catMatch;
+      });
+      renderRoutesList(filtered);
+    };
+
+    window.onRouteFilterChange = function() {
+      loadAdminRoutes();
+    };
+
+    window.resetRouteFilters = function() {
+      const searchInput = document.getElementById('route-filter-search');
+      const statusSelect = document.getElementById('route-filter-status');
+      if (searchInput) searchInput.value = '';
+      if (statusSelect) statusSelect.value = 'all';
+      loadAdminRoutes();
+    };
+
+    window.openNewRouteModal = function() {
+      currentEditingRoute = null;
+      currentEditingParticipants = [];
+      document.getElementById('modal-route-title').innerText = 'Nueva Ruta Gastronómica';
+      document.getElementById('modal-route-status-badge').style.display = 'none';
+      document.getElementById('form-route').reset();
+      document.getElementById('route-id').value = '';
+      document.getElementById('tab-btn-route-participants').style.display = 'none';
+      document.getElementById('modal-route-secondary-actions').innerHTML = '';
+      document.getElementById('route-form-error').style.display = 'none';
+      document.getElementById('route-form-success').style.display = 'none';
+      switchRouteModalTab('data');
+      openModal('modal-route');
+    };
+
+    window.editRoute = async function(id) {
+      try {
+        const res = await apiFetch('/api/v1/admin/routes/' + id);
+        const r = await res.json();
+        currentEditingRoute = r;
+        currentEditingParticipants = (r.participants || []).map(p => ({ ...p }));
+
+        document.getElementById('modal-route-title').innerText = 'Editar Ruta #' + r.id;
+        document.getElementById('route-id').value = r.id;
+        document.getElementById('route-city-id').value = r.city_id;
+        document.getElementById('route-category').value = r.category;
+        document.getElementById('route-title').value = r.title;
+        document.getElementById('route-slug').value = r.slug;
+        document.getElementById('route-summary').value = r.summary;
+        document.getElementById('route-description').value = r.description || '';
+        document.getElementById('route-start-date').value = r.start_date || '';
+        document.getElementById('route-end-date').value = r.end_date || '';
+        document.getElementById('route-price-eur').value = r.approximate_price_cents !== null && r.approximate_price_cents !== undefined ? (r.approximate_price_cents / 100) : '';
+        document.getElementById('route-badge-label').value = r.badge_label || '';
+        document.getElementById('route-image-url').value = r.image_url || '';
+
+        // Badge de estado en el modal
+        const badgeEl = document.getElementById('modal-route-status-badge');
+        badgeEl.style.display = 'inline-block';
+        if (r.status === 'published') badgeEl.innerHTML = '<span class="badge-status" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;">Publicada</span>';
+        else if (r.status === 'draft') badgeEl.innerHTML = '<span class="badge-status" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">Borrador</span>';
+        else badgeEl.innerHTML = '<span class="badge-status" style="background:#f3f4f6; color:#374151; border:1px solid #e5e7eb;">Archivada</span>';
+
+        // Acciones secundarias en footer
+        const secActions = document.getElementById('modal-route-secondary-actions');
+        secActions.innerHTML = '';
+        if (r.status === 'draft') {
+          secActions.innerHTML = '<button type="button" class="btn-primary" style="background:#059669;" onclick="publishRoute(' + r.id + ')">Publicar Ruta</button>';
+        } else if (r.status === 'published') {
+          secActions.innerHTML = '<button type="button" class="btn-danger" onclick="confirmArchiveRoute(' + r.id + ')">Archivar Ruta</button>';
+        }
+
+        // Mostrar pestaña de participantes
+        document.getElementById('tab-btn-route-participants').style.display = 'inline-block';
+        updateParticipantsCountTag();
+        renderParticipantsEditor();
+        populateAddVenueSelect(r.city_id);
+
+        document.getElementById('route-form-error').style.display = 'none';
+        document.getElementById('route-form-success').style.display = 'none';
+        switchRouteModalTab('data');
+        openModal('modal-route');
+      } catch (err) {
+        alert('Error al cargar la ruta: ' + err.message);
+      }
+    };
+
+    window.switchRouteModalTab = function(tab) {
+      const dataTabBtn = document.getElementById('tab-btn-route-data');
+      const partTabBtn = document.getElementById('tab-btn-route-participants');
+      const dataContent = document.getElementById('tab-content-route-data');
+      const partContent = document.getElementById('tab-content-route-participants');
+      const saveDateBtn = document.getElementById('btn-save-route-data');
+      const savePartBtn = document.getElementById('btn-save-route-participants');
+
+      if (tab === 'data') {
+        dataTabBtn.style.color = 'var(--primary)';
+        dataTabBtn.style.borderBottom = '2px solid var(--primary)';
+        partTabBtn.style.color = 'var(--text-muted)';
+        partTabBtn.style.borderBottom = 'none';
+        dataContent.style.display = 'block';
+        partContent.style.display = 'none';
+        saveDateBtn.style.display = 'inline-block';
+        savePartBtn.style.display = 'none';
+      } else {
+        partTabBtn.style.color = 'var(--primary)';
+        partTabBtn.style.borderBottom = '2px solid var(--primary)';
+        dataTabBtn.style.color = 'var(--text-muted)';
+        dataTabBtn.style.borderBottom = 'none';
+        partContent.style.display = 'block';
+        dataContent.style.display = 'none';
+        savePartBtn.style.display = 'inline-block';
+        saveDateBtn.style.display = 'none';
+      }
+    };
+
+    window.onRouteTitleInput = function(val) {
+      const id = document.getElementById('route-id')?.value;
+      if (!id) {
+        const slugEl = document.getElementById('route-slug');
+        if (slugEl) slugEl.value = slugify(val);
+      }
+    };
+
+    window.saveRouteMetadata = async function() {
+      const id = document.getElementById('route-id').value;
+      const city_id = parseInt(document.getElementById('route-city-id').value, 10);
+      const category = document.getElementById('route-category').value;
+      const title = document.getElementById('route-title').value.trim();
+      const slug = document.getElementById('route-slug').value.trim();
+      const summary = document.getElementById('route-summary').value.trim();
+      const description = document.getElementById('route-description').value.trim() || null;
+      const start_date = document.getElementById('route-start-date').value || null;
+      const end_date = document.getElementById('route-end-date').value || null;
+      const priceEur = parseFloat(document.getElementById('route-price-eur').value);
+      const approximate_price_cents = !isNaN(priceEur) && priceEur >= 0 ? Math.round(priceEur * 100) : null;
+      const badge_label = document.getElementById('route-badge-label').value.trim() || null;
+      const image_url = document.getElementById('route-image-url').value.trim() || null;
+
+      const errBanner = document.getElementById('route-form-error');
+      const succBanner = document.getElementById('route-form-success');
+      errBanner.style.display = 'none';
+      succBanner.style.display = 'none';
+
+      const payload = {
+        city_id,
+        category,
+        title,
+        slug,
+        summary,
+        description,
+        start_date,
+        end_date,
+        approximate_price_cents,
+        badge_label,
+        image_url
+      };
+
+      modalRouteSaveInProgress = true;
+      try {
+        let res;
+        if (id) {
+          res = await apiFetch('/api/v1/admin/routes/' + id, {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+          });
+        } else {
+          res = await apiFetch('/api/v1/admin/routes', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+        }
+
+        const data = await res.json();
+        if (!res.ok) {
+          errBanner.innerText = data.message || 'Error al guardar los datos de la ruta.';
+          errBanner.style.display = 'block';
+          return;
+        }
+
+        succBanner.innerText = id ? 'Datos actualizados correctamente.' : 'Borrador creado correctamente. Ahora puedes añadir participantes.';
+        succBanner.style.display = 'block';
+        loadAdminRoutes();
+
+        if (!id && data.id) {
+          editRoute(data.id);
+        }
+      } catch (err) {
+        errBanner.innerText = err.message || 'Error de conexión.';
+        errBanner.style.display = 'block';
+      } finally {
+        modalRouteSaveInProgress = false;
+      }
+    };
+
+    // ==============================================================================
+    // GESTIÓN DE PARTICIPANTES (LOCALES Y PROPUESTAS)
+    // ==============================================================================
+    function updateParticipantsCountTag() {
+      const tag = document.getElementById('route-participants-count-tag');
+      if (tag) tag.innerText = currentEditingParticipants.length;
+    }
+
+    function populateAddVenueSelect(cityId) {
+      const sel = document.getElementById('route-add-venue-select');
+      if (!sel) return;
+      const addedVenueIds = new Set(currentEditingParticipants.map(p => p.venue_id));
+      const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+      const eligible = venuesList.filter(v => v.city_id === cityId && v.is_active && !addedVenueIds.has(v.id));
+      sel.innerHTML = '<option value="">— Selecciona un establecimiento —</option>' +
+        eligible.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + (v.address ? ' (' + escapeHtml(v.address) + ')' : '') + '</option>').join('');
+    }
+
+    window.addParticipantVenue = function() {
+      const sel = document.getElementById('route-add-venue-select');
+      const venueId = parseInt(sel?.value, 10);
+      if (!venueId) return;
+
+      const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+      const venue = venuesList.find(v => v.id === venueId);
+      if (!venue) return;
+
+      const newOrder = currentEditingParticipants.length + 1;
+      currentEditingParticipants.push({
+        venue_id: venue.id,
+        display_order: newOrder,
+        dish_name: '',
+        dish_description: '',
+        dish_price_cents: null,
+        dish_image_url: null,
+        is_optional: false,
+        is_active: true,
+        venue: {
+          id: venue.id,
+          name: venue.name,
+          slug: venue.slug,
+          address: venue.address,
+          latitude: venue.latitude,
+          longitude: venue.longitude,
+          google_maps_url: venue.google_maps_url
+        }
+      });
+
+      populateAddVenueSelect(currentEditingRoute.city_id);
+      updateParticipantsCountTag();
+      renderParticipantsEditor();
+    };
+
+    window.removeParticipant = function(index) {
+      currentEditingParticipants.splice(index, 1);
+      // Recalcular display_order correlativo 1..N
+      currentEditingParticipants.forEach((p, idx) => { p.display_order = idx + 1; });
+      populateAddVenueSelect(currentEditingRoute.city_id);
+      updateParticipantsCountTag();
+      renderParticipantsEditor();
+    };
+
+    window.moveParticipant = function(index, direction) {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= currentEditingParticipants.length) return;
+
+      const temp = currentEditingParticipants[index];
+      currentEditingParticipants[index] = currentEditingParticipants[targetIndex];
+      currentEditingParticipants[targetIndex] = temp;
+
+      // Recalcular display_order correlativo 1..N
+      currentEditingParticipants.forEach((p, idx) => { p.display_order = idx + 1; });
+      renderParticipantsEditor();
+    };
+
+    window.renderParticipantsEditor = function renderParticipantsEditor() {
+      const container = document.getElementById('participants-container');
+      if (!container) return;
+
+      if (currentEditingParticipants.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:var(--bg-subtle); border-radius:8px; border:1px dashed var(--border);">No hay locales participantes vinculados a esta ruta. Utiliza el selector superior para añadir locales.</div>';
+        return;
+      }
+
+      container.innerHTML = currentEditingParticipants.map((p, idx) => {
+        const vName = p.venue ? p.venue.name : ('Local #' + p.venue_id);
+        const vAddr = p.venue && p.venue.address ? p.venue.address : '';
+        const priceEur = p.dish_price_cents !== null && p.dish_price_cents !== undefined ? (p.dish_price_cents / 100) : '';
+
+        return '<div class="participant-editor-card" style="background:#ffffff; border:1px solid var(--border); border-radius:8px; padding:1rem; margin-bottom:0.75rem; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; border-bottom:1px solid var(--border); padding-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem;">' +
+            '<div>' +
+              '<strong style="font-size:0.95rem; color:var(--text-main);">🏢 ' + escapeHtml(vName) + '</strong>' +
+              (vAddr ? '<span style="font-size:0.8rem; color:var(--text-muted); margin-left:0.5rem;">(' + escapeHtml(vAddr) + ')</span>' : '') +
+              '<div style="font-size:0.75rem; color:var(--primary); font-weight:700;">Orden de visualización: #' + p.display_order + '</div>' +
+            '</div>' +
+            '<div style="display:flex; gap:0.35rem; align-items:center;">' +
+              '<button type="button" class="btn-table-action" onclick="moveParticipant(' + idx + ', -1)" ' + (idx === 0 ? 'disabled' : '') + ' aria-label="Subir orden técnico">▲ Subir</button>' +
+              '<button type="button" class="btn-table-action" onclick="moveParticipant(' + idx + ', 1)" ' + (idx === currentEditingParticipants.length - 1 ? 'disabled' : '') + ' aria-label="Bajar orden técnico">▼ Bajar</button>' +
+              '<button type="button" class="btn-table-action" style="color:#dc2626;" onclick="removeParticipant(' + idx + ')" aria-label="Quitar de la ruta">🗑️ Quitar</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0.75rem; margin-bottom:0.5rem;">' +
+            '<div class="form-group">' +
+              '<label style="font-size:0.8rem; font-weight:700; color:var(--text-main);">Nombre de la Tapa / Plato *</label>' +
+              '<input type="text" value="' + escapeHtml(p.dish_name || '') + '" oninput="currentEditingParticipants[' + idx + '].dish_name = this.value" placeholder="Ej. Patatas bravas caseras" required>' +
+            '</div>' +
+            '<div class="form-group">' +
+              '<label style="font-size:0.8rem; font-weight:700; color:var(--text-main);">Precio (€) (Opcional)</label>' +
+              '<input type="number" step="0.1" min="0" value="' + priceEur + '" oninput="const val = parseFloat(this.value); currentEditingParticipants[' + idx + '].dish_price_cents = (!isNaN(val) && val >= 0) ? Math.round(val * 100) : null;" placeholder="Ej. 3.50">' +
+            '</div>' +
+          '</div>' +
+          '<div class="form-group" style="margin-bottom:0.5rem;">' +
+            '<label style="font-size:0.8rem; font-weight:700; color:var(--text-main);">Descripción de la Propuesta Culinaria (Opcional)</label>' +
+            '<input type="text" value="' + escapeHtml(p.dish_description || '') + '" oninput="currentEditingParticipants[' + idx + '].dish_description = this.value" placeholder="Ingredientes destacados, elaboración...">' +
+          '</div>' +
+          '<div class="form-group" style="margin-bottom:0.5rem;">' +
+            '<label style="font-size:0.8rem; font-weight:700; color:var(--text-main);">URL Foto de la Tapa (Opcional)</label>' +
+            '<input type="url" value="' + escapeHtml(p.dish_image_url || '') + '" oninput="currentEditingParticipants[' + idx + '].dish_image_url = this.value.trim() || null" placeholder="https://images.vayaplan.com/tapas/...">' +
+          '</div>' +
+          '<div style="display:flex; gap:1.5rem; align-items:center; margin-top:0.5rem;">' +
+            '<label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:600; cursor:pointer;">' +
+              '<input type="checkbox" ' + (p.is_optional ? 'checked' : '') + ' onchange="currentEditingParticipants[' + idx + '].is_optional = this.checked"> Recomendación opcional' +
+            '</label>' +
+            '<label style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:600; cursor:pointer;">' +
+              '<input type="checkbox" ' + (p.is_active ? 'checked' : '') + ' onchange="currentEditingParticipants[' + idx + '].is_active = this.checked"> Participación activa' +
+            '</label>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    window.saveRouteParticipants = async function() {
+      if (!currentEditingRoute) return;
+      const errBanner = document.getElementById('route-form-error');
+      const succBanner = document.getElementById('route-form-success');
+      errBanner.style.display = 'none';
+      succBanner.style.display = 'none';
+
+      // Validar campos obligatorios en memoria
+      for (let i = 0; i < currentEditingParticipants.length; i++) {
+        const p = currentEditingParticipants[i];
+        if (!p.dish_name || !p.dish_name.trim()) {
+          errBanner.innerText = 'El participante en posición #' + (i + 1) + ' debe tener un nombre de propuesta culinaria.';
+          errBanner.style.display = 'block';
+          return;
+        }
+      }
+
+      const payload = {
+        participants: currentEditingParticipants.map((p, idx) => ({
+          venue_id: p.venue_id,
+          display_order: idx + 1,
+          dish_name: p.dish_name.trim(),
+          dish_description: p.dish_description ? p.dish_description.trim() : null,
+          dish_price_cents: p.dish_price_cents !== null && p.dish_price_cents !== undefined ? p.dish_price_cents : null,
+          dish_image_url: p.dish_image_url ? p.dish_image_url.trim() : null,
+          is_optional: p.is_optional === true,
+          is_active: p.is_active !== false
+        }))
+      };
+
+      try {
+        const res = await apiFetch('/api/v1/admin/routes/' + currentEditingRoute.id + '/participants', {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errBanner.innerText = data.message || 'Error al guardar los participantes.';
+          errBanner.style.display = 'block';
+          return;
+        }
+
+        succBanner.innerText = 'Participantes guardados correctamente (' + payload.participants.length + ' locales).';
+        succBanner.style.display = 'block';
+        currentEditingParticipants = (data.participants || []).map(p => ({ ...p }));
+        updateParticipantsCountTag();
+        renderParticipantsEditor();
+        loadAdminRoutes();
+      } catch (err) {
+        errBanner.innerText = err.message || 'Error de conexión.';
+        errBanner.style.display = 'block';
+      }
+    };
+
+    // ==============================================================================
+    // PUBLICACIÓN, ARCHIVADO Y PREVIEW
+    // ==============================================================================
+    window.publishRoute = async function(id) {
+      try {
+        const res = await apiFetch('/api/v1/admin/routes/' + id + '/publish', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          if (res.status === 422 || data.error === 'insufficient_stops') {
+            alert('Se necesitan al menos 2 locales participantes activos con su local activo para publicar la ruta.');
+          } else {
+            alert(data.message || 'Error al publicar la ruta.');
+          }
+          return;
+        }
+
+        alert('Ruta gastronómica publicada con éxito.');
+        loadAdminRoutes();
+        if (currentEditingRoute && currentEditingRoute.id === id) {
+          editRoute(id);
+        }
+      } catch (err) {
+        alert('Error al publicar: ' + err.message);
+      }
+    };
+
+    window.confirmArchiveRoute = function(id) {
+      routeToArchiveId = id;
+      const route = currentAdminRoutes.find(r => r.id === id) || currentEditingRoute;
+      const title = route ? route.title : ('#' + id);
+      const bodyEl = document.getElementById('modal-archive-route-body');
+      if (bodyEl) {
+        bodyEl.innerHTML = '¿Estás seguro de que deseas archivar la ruta gastronómica «<strong>' + escapeHtml(title) + '</strong>»? Dejará de mostrarse en la web pública pero sus locales y propuestas permanecerán guardados.';
+      }
+      openModal('modal-confirm-archive-route');
+    };
+
+    window.executeArchiveRoute = async function() {
+      if (!routeToArchiveId) return;
+      const id = routeToArchiveId;
+      closeModal('modal-confirm-archive-route');
+
+      try {
+        const res = await apiFetch('/api/v1/admin/routes/' + id + '/archive', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.message || 'Error al archivar la ruta.');
+          return;
+        }
+
+        loadAdminRoutes();
+        if (currentEditingRoute && currentEditingRoute.id === id) {
+          editRoute(id);
+        }
+      } catch (err) {
+        alert('Error al archivar: ' + err.message);
+      }
+    };
+
+    window.previewRoute = async function(id) {
+      try {
+        const res = await apiFetch('/api/v1/admin/routes/' + id + '/preview');
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.message || 'Error al obtener la previsualización.');
+          return;
+        }
+
+        const r = data.route;
+        document.getElementById('modal-preview-title').innerText = r.title;
+
+        const bodyEl = document.getElementById('modal-preview-body');
+        const catLabel = ROUTE_CATEGORY_LABELS[r.category] || r.category;
+        const timingText = r.is_permanent ? 'Ruta Permanente' : ('Temporada: ' + (r.start_date || '—') + ' al ' + (r.end_date || '—'));
+
+        let participantsHtml = '<div style="margin-top:1.5rem;"><h4 style="font-size:1.05rem; font-weight:800; color:var(--text-main); margin-bottom:0.75rem;">Locales Participantes (' + (r.participants ? r.participants.length : 0) + ')</h4>';
+        if (!r.participants || r.participants.length === 0) {
+          participantsHtml += '<p style="color:var(--text-muted); font-size:0.9rem;">No hay locales participantes activos configurados en esta ruta.</p>';
+        } else {
+          participantsHtml += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:1rem;">' +
+            r.participants.map(p => {
+              return '<article style="background:#ffffff; border:1px solid var(--border); border-radius:10px; padding:1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
+                (p.dish.image_url ? '<div style="height:140px; margin:-1rem -1rem 0.75rem -1rem; overflow:hidden; border-radius:10px 10px 0 0;"><img src="' + escapeHtml(p.dish.image_url) + '" alt="' + escapeHtml(p.dish.name) + '" style="width:100%; height:100%; object-fit:cover;"></div>' : '') +
+                '<div style="font-size:0.8rem; font-weight:700; color:var(--primary); margin-bottom:0.25rem;">🏢 ' + escapeHtml(p.venue.name) + '</div>' +
+                '<h5 style="margin:0 0 0.35rem 0; font-size:1rem; font-weight:800; color:var(--text-main);">' + escapeHtml(p.dish.name) + '</h5>' +
+                (p.dish.description ? '<p style="margin:0 0 0.5rem 0; font-size:0.85rem; color:var(--text-muted); line-height:1.4;">' + escapeHtml(p.dish.description) + '</p>' : '') +
+                '<div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem; border-top:1px solid var(--border); padding-top:0.5rem;">' +
+                  (p.dish.price_label ? '<span style="font-weight:800; color:#059669; font-size:0.9rem;">' + escapeHtml(p.dish.price_label) + '</span>' : '<span></span>') +
+                  (p.venue.google_maps_url ? '<a href="' + escapeHtml(p.venue.google_maps_url) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.8rem; color:var(--primary); font-weight:700; text-decoration:none;">Cómo llegar ↗</a>' : '') +
+                '</div>' +
+              '</article>';
+            }).join('') +
+          '</div>';
+        }
+        participantsHtml += '</div>';
+
+        bodyEl.innerHTML = '<div style="background:#ffffff; padding:1.25rem; border-radius:10px; border:1px solid var(--border); margin-bottom:1rem;">' +
+          '<div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem; align-items:center;">' +
+            '<span class="badge-category">' + escapeHtml(catLabel) + '</span>' +
+            '<span style="font-size:0.75rem; background:var(--bg-subtle); color:var(--text-muted); padding:0.2rem 0.5rem; border-radius:999px; font-weight:700;">' + escapeHtml(timingText) + '</span>' +
+            '<span class="badge-status" style="margin-left:auto;">Estado: ' + escapeHtml(r.status) + '</span>' +
+          '</div>' +
+          '<p style="font-size:1rem; font-weight:700; color:var(--text-main); margin:0 0 0.5rem 0;">' + escapeHtml(r.summary) + '</p>' +
+          (r.description ? '<p style="font-size:0.9rem; color:var(--text-muted); line-height:1.5; margin:0;">' + escapeHtml(r.description) + '</p>' : '') +
+        '</div>' +
+        participantsHtml;
+
+        openModal('modal-route-preview');
+      } catch (err) {
+        alert('Error al previsualizar: ' + err.message);
+      }
+    };
+
+    window.getCurrentEditingRoute = function() { return currentEditingRoute; };
+    window.setCurrentEditingRoute = function(r) { currentEditingRoute = r; };
+    window.getCurrentEditingParticipants = function() { return currentEditingParticipants; };
+    window.setCurrentEditingParticipants = function(p) { currentEditingParticipants = p; };
+    window.getRouteToArchiveId = function() { return routeToArchiveId; };
+    window.setRouteToArchiveId = function(id) { routeToArchiveId = id; };
 
     function escapeHtml(str) {
       if (!str) return '';
