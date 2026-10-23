@@ -24,7 +24,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     isFree: false,
     priceCents: 0, // Entradas en taquilla / festival
     rawPriceText: 'Venta de entradas en taquilla y abonados club',
-    officialSourceUrl: 'https://palenciabaloncesto.com/calendario/',
+    officialSourceUrl: 'https://www.palenciabaloncesto.com/es/proximos-partidos',
     imageUrl: null,
     status: 'confirmed',
   },

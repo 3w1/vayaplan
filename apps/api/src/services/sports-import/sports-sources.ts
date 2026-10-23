@@ -31,7 +31,7 @@ export const OFFICIAL_SPORTS_SOURCES: readonly SportsOfficialSource[] = [
   {
     id: 'palencia_baloncesto_club',
     name: 'Club Palencia Baloncesto (Web Oficial)',
-    officialUrl: 'https://palenciabaloncesto.com/',
+    officialUrl: 'https://www.palenciabaloncesto.com/',
     sourceType: 'club_oficial',
     sportsCovered: ['baloncesto'],
     updateFrequency: 'Diaria / Semanal',
