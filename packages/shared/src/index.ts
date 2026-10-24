@@ -99,6 +99,114 @@ export function formatPriceLabel(
   return 'Entradas en taquilla / festival';
 }
 
+export interface NormalizedPrice {
+  amount: number;         // Valor decimal numérico (ej. 12.50)
+  numericString: string;  // Cadena en formato SQL numeric(10,2) (ej. "12.50")
+  priceCents: number;     // Entero exacto en céntimos para events.price_cents (ej. 1250)
+  formatted: string;      // Etiqueta legible en formato español (ej. "12,50 €")
+  isFree: boolean;        // true solo si el importe es 0
+}
+
+/**
+ * Función única de validación y normalización de precios en formato español / estándar.
+ *
+ * Reglas:
+ * - Acepta "12,50", "12.50", "12,5" y "12".
+ * - Elimina espacios, "€", "EUR" y símbolos innecesarios.
+ * - Trata la coma como separador decimal en formato español.
+ * - Convierte "12,50" a 12.50 numérico y 1250 céntimos.
+ * - Soporta separador de miles con punto en formato español (ej. "1.234,56" -> 1234.56).
+ * - Rechaza formatos anglosajones ambiguos con coma de miles (ej. "1,234.56").
+ * - Rechaza valores negativos (ej. "-5").
+ * - Rechaza valores no numéricos (ej. "abc").
+ * - Permite precio 0 solo si el evento es gratuito (isFree = true).
+ * - Guarda el valor como numeric(10,2) (numericString = "12.50").
+ * - Devuelve el precio formateado como "12,50 €" en la interfaz.
+ */
+export function normalizePrice(raw: unknown): NormalizedPrice {
+  if (raw === null || raw === undefined || raw === '') {
+    throw new Error('El precio es obligatorio y no puede estar vacío');
+  }
+
+  let str = String(raw).trim();
+
+  // Eliminar símbolos de moneda y texto redundante
+  str = str.replace(/€|EUR|eur/gi, '').trim();
+
+  // Rechazar negativos explícitamente
+  if (str.startsWith('-') || str.includes('-')) {
+    throw new Error('El precio no puede ser negativo');
+  }
+
+  // Quitar espacios internos (ej. "12 , 50")
+  str = str.replace(/\s+/g, '');
+
+  // Comprobar caracteres no permitidos
+  if (/[^\d.,]/.test(str)) {
+    throw new Error(`Valor de precio no numérico: "${raw}"`);
+  }
+
+  // Caso 1: Contiene tanto punto como coma
+  if (str.includes('.') && str.includes(',')) {
+    const lastDot = str.lastIndexOf('.');
+    const lastComma = str.lastIndexOf(',');
+
+    if (lastDot < lastComma) {
+      // Formato español: punto como separador de miles, coma como decimal (ej. 1.234,56)
+      const cleanThousands = str.replace(/\./g, '');
+      if ((cleanThousands.match(/,/g) || []).length !== 1) {
+        throw new Error(`Formato de precio inválido: "${raw}"`);
+      }
+      str = cleanThousands.replace(',', '.');
+    } else {
+      // Formato anglosajón con coma de miles (ej. 1,234.56) -> Rechazar explícitamente
+      throw new Error(`Formato de separador de miles anglosajón no permitido ("${raw}"). Utilice el formato español 1.234,56 o sin separador de miles.`);
+    }
+  } else if (str.includes(',')) {
+    // Solo coma(s): debe haber una única coma decimal
+    const commaCount = (str.match(/,/g) || []).length;
+    if (commaCount > 1) {
+      throw new Error(`Múltiples separadores decimales no válidos: "${raw}"`);
+    }
+    str = str.replace(',', '.');
+  } else if (str.includes('.')) {
+    // Solo punto(s)
+    const dotCount = (str.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      throw new Error(`Múltiples puntos no válidos en el precio: "${raw}"`);
+    }
+    const parts = str.split('.');
+    if (parts[1] && parts[1].length > 2) {
+      throw new Error(`Formato de decimales no válido (máximo 2 decimales): "${raw}"`);
+    }
+  }
+
+  const num = Number(str);
+  if (isNaN(num)) {
+    throw new Error(`Valor de precio no numérico: "${raw}"`);
+  }
+
+  if (num < 0) {
+    throw new Error('El precio no puede ser negativo');
+  }
+
+  const roundedAmount = Math.round(num * 100) / 100;
+  const priceCents = Math.round(roundedAmount * 100);
+  const numericString = roundedAmount.toFixed(2);
+  const [integerPart, decimalPart] = numericString.split('.');
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const formatted = `${formattedInteger},${decimalPart} €`;
+  const isFree = priceCents === 0;
+
+  return {
+    amount: roundedAmount,
+    numericString,
+    priceCents,
+    formatted,
+    isFree,
+  };
+}
+
 /**
  * Parsea una fecha (YYYY-MM-DD) y hora (HH:mm) en la zona horaria 'Europe/Madrid'
  * y calcula su equivalente exacto en UTC.

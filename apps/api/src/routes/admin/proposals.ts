@@ -4,6 +4,7 @@ import { requireAdminAuth } from '../../middleware/auth';
 import {
   VALID_EVENT_CATEGORIES,
   isValidDateString,
+  normalizePrice,
 } from '@vayaplan/shared';
 import type { AdminUser } from '@vayaplan/types';
 
@@ -163,10 +164,17 @@ adminProposalsRoutes.get('/proposals', async (c) => {
       p.reviewed_at,
       p.rejection_reason,
       p.created_event_id,
+      p.matched_event_id,
+      p.match_level,
+      p.match_reasons,
+      me.title AS matched_event_title,
+      me.status AS matched_event_status,
+      me.editorial_date AS matched_event_date,
       p.created_at,
       p.updated_at
     FROM curation_proposals p
     LEFT JOIN venues v ON p.venue_id = v.id
+    LEFT JOIN events me ON p.matched_event_id = me.id
     ${whereClause}
     ORDER BY 
       p.proposed_date ASC NULLS LAST,
@@ -238,6 +246,14 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
     body = {};
   }
 
+  // Regla editorial: El contenido clasificado como CONTENIDO_VENUE no puede convertirse en evento
+  if (proposal.classification === 'CONTENIDO_VENUE') {
+    return c.json({
+      error: 'cannot_approve_venue_content',
+      message: 'El contenido clasificado como CONTENIDO_VENUE no puede aprobarse como evento de agenda. Puede conservarse o archivarse como material del local.',
+    }, 400);
+  }
+
   const effectiveTitle = (body.title || proposal.title || '').trim();
   const effectiveDate = (body.proposed_date || proposal.proposed_date || '').trim();
   const effectiveTime =
@@ -247,12 +263,28 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
   const effectiveVenueId =
     body.venue_id !== undefined ? parseInt(body.venue_id, 10) : proposal.venue_id;
   const effectiveCategory = (body.category || proposal.category || 'dj_tardeo').trim();
-  const effectivePriceCents =
-    body.price_cents !== undefined
-      ? parseInt(body.price_cents, 10)
-      : proposal.price !== null
-      ? proposal.price * 100
-      : 0;
+
+  // Normalización defensiva de precio
+  let normalizedPrice;
+  try {
+    const rawPriceInput =
+      body.price !== undefined
+        ? body.price
+        : body.price_cents !== undefined
+        ? (Number(body.price_cents) / 100).toFixed(2)
+        : proposal.price !== null
+        ? proposal.price
+        : '0';
+    normalizedPrice = normalizePrice(rawPriceInput);
+  } catch (priceErr: any) {
+    return c.json({
+      error: 'invalid_price',
+      message: `Precio inválido: ${priceErr.message}`,
+    }, 400);
+  }
+
+  const effectivePriceCents = normalizedPrice.priceCents;
+  const isFree = normalizedPrice.isFree;
   const effectiveImageUrl = (body.image_url || proposal.image_url || '').trim();
   const effectiveDescription = (body.description || proposal.caption || '').trim();
 
@@ -274,22 +306,23 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
     return c.json({ error: 'venue_not_found', message: `El venue con ID ${effectiveVenueId} no existe o no está activo.` }, 400);
   }
 
-  // 3. Validar hora si está presente (HH:mm)
-  let startTimeIso: string | null = null;
-  let timeStatus = 'pending_time';
-  let scheduleText = 'Horario pendiente de confirmación';
-
-  if (effectiveTime && typeof effectiveTime === 'string' && effectiveTime.trim() !== '') {
-    const timeMatch = effectiveTime.trim().match(/^([012]?\d):([0-5]\d)(?::[0-5]\d)?$/);
-    if (!timeMatch) {
-      return c.json({ error: 'invalid_time', message: 'El formato de hora debe ser HH:mm (ej: 22:30).' }, 400);
-    }
-    const hh = timeMatch[1].padStart(2, '0');
-    const mm = timeMatch[2].padStart(2, '0');
-    timeStatus = 'confirmed';
-    startTimeIso = `${effectiveDate}T${hh}:${mm}:00+02:00`;
-    scheduleText = `${hh}:${mm}h`;
+  // 3. Validar hora obligatoria (HH:mm) para crear el borrador
+  if (!effectiveTime || typeof effectiveTime !== 'string' || effectiveTime.trim() === '') {
+    return c.json({
+      error: 'missing_time',
+      message: 'La hora del evento es obligatoria para poder aprobar el borrador. Añada una hora válida (HH:mm).',
+    }, 400);
   }
+
+  const timeMatch = effectiveTime.trim().match(/^([012]?\d):([0-5]\d)(?::[0-5]\d)?$/);
+  if (!timeMatch) {
+    return c.json({ error: 'invalid_time', message: 'El formato de hora debe ser HH:mm (ej: 22:30).' }, 400);
+  }
+  const hh = timeMatch[1].padStart(2, '0');
+  const mm = timeMatch[2].padStart(2, '0');
+  const timeStatus = 'confirmed';
+  const startTimeIso = `${effectiveDate}T${hh}:${mm}:00+02:00`;
+  const scheduleText = `${hh}:${mm}h`;
 
   // 4. Validar que la imagen provenga de Cloudflare R2
   if (!isValidR2ImageUrl(effectiveImageUrl)) {
@@ -435,7 +468,7 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
       effectiveTime || null,
       effectiveVenueId,
       effectiveCategory,
-      effectivePriceCents > 0 ? Math.round(effectivePriceCents / 100) : null,
+      normalizedPrice.amount > 0 ? normalizedPrice.amount : (isFree ? 0 : null),
       effectiveImageUrl,
       userEmail,
       createdEvent.id,
@@ -592,6 +625,72 @@ adminProposalsRoutes.post('/proposals/:id/promotion', async (c) => {
 });
 
 /**
+ * POST /api/v1/admin/proposals/:id/link-event
+ * Vincula una propuesta (ej. DUPLICADO_POSIBLE) a un evento ya existente/publicado.
+ * Requiere confirmación humana explícita.
+ * NO crea ningún evento nuevo en el catálogo.
+ */
+adminProposalsRoutes.post('/proposals/:id/link-event', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) {
+    return c.json({ error: 'invalid_id', message: 'ID de propuesta no válido' }, 400);
+  }
+
+  let body: any = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid_json', message: 'Cuerpo JSON inválido' }, 400);
+  }
+
+  const targetEventId = parseInt(body.target_event_id, 10);
+  if (!targetEventId || isNaN(targetEventId)) {
+    return c.json({
+      error: 'missing_target_event',
+      message: 'Debe especificar el ID del evento existente al que desea vincular la propuesta.',
+    }, 400);
+  }
+
+  // Verificar que la propuesta existe
+  const propRes = await query(`SELECT * FROM curation_proposals WHERE id = $1;`, [id]);
+  if (propRes.rows.length === 0) {
+    return c.json({ error: 'not_found', message: `Propuesta con ID ${id} no encontrada.` }, 404);
+  }
+
+  // Verificar que el evento destino existe
+  const evRes = await query(`SELECT id, title, editorial_date, status, venue_id FROM events WHERE id = $1;`, [targetEventId]);
+  if (evRes.rows.length === 0) {
+    return c.json({ error: 'event_not_found', message: `Evento con ID ${targetEventId} no existe en el catálogo.` }, 404);
+  }
+  const targetEvent = evRes.rows[0];
+
+  const user = c.get('user');
+  const userEmail = user?.email || 'admin@vayaplan.com';
+
+  // Actualizar la propuesta vinculándola al evento existente sin crear duplicado
+  const updateRes = await query(
+    `UPDATE curation_proposals
+     SET review_status = 'approved_draft',
+         requires_manual_review = false,
+         created_event_id = $1,
+         matched_event_id = $1,
+         reviewed_by = $2,
+         reviewed_at = NOW(),
+         updated_at = NOW()
+     WHERE id = $3
+     RETURNING *;`,
+    [targetEventId, userEmail, id]
+  );
+
+  return c.json({
+    success: true,
+    message: `Propuesta #${id} vinculada exitosamente al evento existente #${targetEventId} ("${targetEvent.title}"). No se ha creado ningún evento duplicado.`,
+    proposal: updateRes.rows[0],
+    linkedEvent: targetEvent,
+  });
+});
+
+/**
  * PATCH /api/v1/admin/proposals/:id
  * Edición previa de campos antes de la aprobación
  */
@@ -654,10 +753,23 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
     fields.push(`category = $${params.length}`);
   }
 
-  if (body.price !== undefined) {
-    const p = body.price !== null ? parseInt(body.price, 10) : null;
-    params.push(p);
-    fields.push(`price = $${params.length}`);
+  if (body.price !== undefined || body.price_cents !== undefined) {
+    if (body.price === null && body.price_cents === undefined) {
+      params.push(null);
+      fields.push(`price = $${params.length}`);
+    } else {
+      const rawVal =
+        body.price !== undefined
+          ? body.price
+          : (Number(body.price_cents) / 100).toFixed(2);
+      try {
+        const norm = normalizePrice(rawVal);
+        params.push(norm.amount);
+        fields.push(`price = $${params.length}`);
+      } catch (err: any) {
+        return c.json({ error: 'invalid_price', message: `Precio inválido: ${err.message}` }, 400);
+      }
+    }
   }
 
   if (body.image_url !== undefined) {

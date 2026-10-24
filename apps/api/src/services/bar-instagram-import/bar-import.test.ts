@@ -103,7 +103,7 @@ describe('Piloto de Actividad de Bares en Instagram (bar-instagram-import)', () 
         timestamp: '2026-10-08T10:00:00Z',
       };
       const res = classifyBarPost(mockPost, 'Bar Salvaje');
-      expect(res.classification).toBe('CONTENIDO_GENERAL');
+      expect(res.classification).toBe('CONTENIDO_VENUE');
     });
 
     test('Clasifica como REQUIERE_REVISION la presentación de un headliner sin fecha en el post', () => {
@@ -227,8 +227,8 @@ describe('Piloto de Actividad de Bares en Instagram (bar-instagram-import)', () 
       expect(res[0].requiresManualReview).toBe(true);
       expect(res[0].proposedTime).toBe('18:00');
 
-      // Propuesta futura
-      expect(res[1].classification).toBe('EVENTO_POSIBLE');
+      // Propuesta futura sin hora confirmada -> EVENTO_POSIBLE_SIN_HORA
+      expect(res[1].classification).toBe('EVENTO_POSIBLE_SIN_HORA');
       expect(res[1].reviewStatus).toBe('pending');
       expect(res[1].requiresManualReview).toBe(true);
       expect(res[1].proposedTime).toBeNull();
