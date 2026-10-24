@@ -14,6 +14,12 @@ DROP INDEX IF EXISTS idx_events_price_status;
 -- 2. Restaurar constraints en curation_proposals
 ALTER TABLE curation_proposals DROP CONSTRAINT IF EXISTS chk_proposals_price_status;
 ALTER TABLE curation_proposals DROP CONSTRAINT IF EXISTS chk_proposals_classification;
+
+-- Revertir clasificaciones de eventos continuos a EVENTO_POSIBLE_SIN_HORA antes de restringir el CHECK
+UPDATE curation_proposals
+  SET classification = 'EVENTO_POSIBLE_SIN_HORA'
+  WHERE classification = 'EVENTO_CONTINUO';
+
 ALTER TABLE curation_proposals ADD CONSTRAINT chk_proposals_classification CHECK (
   classification IN (
     'EVENTO_POSIBLE',
