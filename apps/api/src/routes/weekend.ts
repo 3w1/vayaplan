@@ -145,6 +145,10 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       e.schedule_text,
       e.approximate_schedule,
       e.price_cents,
+      e.price_status,
+      e.price_note,
+      e.price_source,
+      e.price_checked_at,
       e.is_free,
       e.image_url,
       ${variantsEventCols}
@@ -170,7 +174,10 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       AND p.starts_at <= now()
       AND p.ends_at > now()
     WHERE e.city_id = $1 
-      AND e.editorial_date = ANY($2::date[]) 
+      AND (
+        (e.end_date IS NULL AND e.editorial_date = ANY($2::date[])) OR
+        (e.end_date IS NOT NULL AND e.editorial_date <= $3 AND e.end_date >= $4)
+      )
       AND e.status IN ('published', 'cancelled')
     ORDER BY 
       e.editorial_date ASC,
@@ -179,7 +186,7 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       e.start_time ASC;
   `;
 
-  const eventsResult = await query(eventsSql, [city.id, targetDates]);
+  const eventsResult = await query(eventsSql, [city.id, targetDates, sundayDate, startFriday]);
 
   // Agrupar eventos por fecha editorial
   const eventsByDate = new Map<string, PublicEventItem[]>();
@@ -206,6 +213,14 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       row.venue_longitude
     );
 
+    const hasOfficialChannel = (row.source_type === 'web' && row.source_url) || false;
+    const priceLabel = formatPriceLabel(
+      row.price_cents !== null && row.price_cents !== undefined ? Number(row.price_cents) : null,
+      row.is_free,
+      row.price_status,
+      Boolean(hasOfficialChannel)
+    );
+
     const eventItem: PublicEventItem = {
       id: Number(row.id),
       title: row.title,
@@ -220,9 +235,11 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       schedule_text: row.schedule_text || null,
       approximate_schedule: row.approximate_schedule || null,
       price: {
-        amount_cents: Number(row.price_cents),
-        is_free: Boolean(row.is_free),
-        label: formatPriceLabel(Number(row.price_cents), Boolean(row.is_free)),
+        amount_cents: row.price_cents !== null && row.price_cents !== undefined ? Number(row.price_cents) : null,
+        is_free: row.price_status === 'FREE' || (row.price_cents === 0 && row.price_status !== 'UNKNOWN' && row.price_status !== 'NOT_INFORMED' && row.price_status !== 'CHECK_BOX_OFFICE'),
+        status: (row.price_status || 'UNKNOWN') as any,
+        note: row.price_note || null,
+        label: priceLabel,
       },
       status: row.status,
       venue: {
@@ -256,9 +273,17 @@ weekendRoutes.get('/cities/:citySlug/weekend', async (c) => {
       festivals: [],
     };
 
-    const targetList = eventsByDate.get(editorialDateStr);
-    if (targetList) {
-      targetList.push(eventItem);
+    if (endDateStr && editorialDateStr !== endDateStr) {
+      for (const date of targetDates) {
+        if (date >= editorialDateStr && date <= endDateStr) {
+          eventsByDate.get(date)?.push(eventItem);
+        }
+      }
+    } else {
+      const targetList = eventsByDate.get(editorialDateStr);
+      if (targetList) {
+        targetList.push(eventItem);
+      }
     }
   }
 
