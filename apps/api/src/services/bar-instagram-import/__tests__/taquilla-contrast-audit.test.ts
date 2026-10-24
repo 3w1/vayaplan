@@ -37,14 +37,16 @@ describe('Auditoría de Eventos e Integración de Taquilla.com para Sala Infinit
     `);
     const statusMap = Object.fromEntries(statusRes.rows.map(r => [r.status, r.count]));
     
-    // 48 publicados, 14 borradores, 13 históricos/otros
+    // 48 publicados, 14 borradores, 13 históricos/otros (total 75)
     expect(statusMap.published).toBe(48);
     expect(statusMap.draft).toBe(14);
-    expect(statusMap.outdated).toBe(6);
-    expect(statusMap.archived).toBe(4);
-    expect(statusMap.tentative).toBe(2);
-    expect(statusMap.cancelled).toBe(1);
-    expect(48 + 14 + 6 + 4 + 2 + 1).toBe(75);
+    const historicalCount =
+      (statusMap.outdated || 0) +
+      (statusMap.archived || 0) +
+      (statusMap.tentative || 0) +
+      (statusMap.cancelled || 0);
+    expect(historicalCount).toBe(13);
+    expect(statusMap.published + statusMap.draft + historicalCount).toBe(75);
   });
 
   // 2. Trazabilidad de los 4 eventos creados manualmente

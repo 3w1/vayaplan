@@ -29,8 +29,8 @@ export interface ExistingEventRecord {
   id: number;
   venue_id: number | null;
   venue_name?: string | null;
-  editorial_date: string; // YYYY-MM-DD
-  start_time: string | null;
+  editorial_date: string | Date; // YYYY-MM-DD
+  start_time: string | Date | null | undefined;
   title: string;
   description?: string | null;
   status: string; // 'published' | 'draft' | etc.
@@ -84,17 +84,79 @@ export function calculateKeywordSimilarity(setA: Set<string>, setB: Set<string>)
 }
 
 /**
+ * Normaliza cualquier representación temporal a formato de hora "HH:mm".
+ * Soporta de manera defensiva:
+ * - Instancias de Date (usando UTC: value.toISOString().substring(11, 16))
+ * - Strings ISO completos (ej. "2026-10-24T21:00:00Z" o "2026-10-24 21:00:00")
+ * - Strings de hora (ej. "21:00", "21:00:00", "9:30")
+ * - null, undefined o valores no válidos (retorna null sin lanzar excepción)
+ */
+export function toTimeString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    try {
+      return value.toISOString().substring(11, 16);
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value === 'string') {
+    const str = value.trim();
+    if (!str) return null;
+
+    // Formato ISO o datetime completo (longitud >= 16 con T o espacio)
+    if (str.length >= 16 && (str.includes('T') || str.includes(' '))) {
+      const sub = str.substring(11, 16);
+      if (/^\d{2}:\d{2}$/.test(sub)) {
+        return sub;
+      }
+    }
+
+    // Formato directo de hora HH:mm o H:mm
+    const match = str.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      const h = match[1].padStart(2, '0');
+      const m = match[2];
+      const hNum = parseInt(h, 10);
+      const mNum = parseInt(m, 10);
+      if (hNum >= 0 && hNum <= 23 && mNum >= 0 && mNum <= 59) {
+        return `${h}:${m}`;
+      }
+    }
+
+    // Si es otro string parseable como fecha válida
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      try {
+        return parsed.toISOString().substring(11, 16);
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  return null;
+}
+
+/**
  * Comprueba si dos fechas YYYY-MM-DD son idénticas o adyacentes (+/- 1 día natural).
  */
 export function evaluateDateProximity(
-  dateA: string | null,
-  dateB: string
+  dateA: string | Date | null | undefined,
+  dateB: string | Date | null | undefined
 ): { sameDate: boolean; daysDiff: number } {
   if (!dateA || !dateB) return { sameDate: false, daysDiff: 999 };
-  if (dateA === dateB) return { sameDate: true, daysDiff: 0 };
+  const strA = dateA instanceof Date ? dateA.toISOString().split('T')[0] : String(dateA).split('T')[0].trim();
+  const strB = dateB instanceof Date ? dateB.toISOString().split('T')[0] : String(dateB).split('T')[0].trim();
+  if (strA === strB) return { sameDate: true, daysDiff: 0 };
 
-  const msA = new Date(`${dateA}T12:00:00Z`).getTime();
-  const msB = new Date(`${dateB}T12:00:00Z`).getTime();
+  const msA = new Date(`${strA}T12:00:00Z`).getTime();
+  const msB = new Date(`${strB}T12:00:00Z`).getTime();
   if (isNaN(msA) || isNaN(msB)) return { sameDate: false, daysDiff: 999 };
 
   const daysDiff = Math.abs(Math.round((msA - msB) / (1000 * 60 * 60 * 24)));
@@ -104,10 +166,13 @@ export function evaluateDateProximity(
 /**
  * Comprueba si dos horas HH:mm están dentro de una ventana de tolerancia en minutos.
  */
-export function isTimeSimilar(timeA: string | null, timeB: string | null, maxMinutes = 60): boolean {
-  if (!timeA || !timeB) return false;
-  const matchA = timeA.match(/^(\d{1,2}):(\d{2})/);
-  const matchB = timeB.match(/^(\d{1,2}):(\d{2})/);
+export function isTimeSimilar(timeA: unknown, timeB: unknown, maxMinutes = 60): boolean {
+  const normA = toTimeString(timeA);
+  const normB = toTimeString(timeB);
+  if (!normA || !normB) return false;
+
+  const matchA = normA.match(/^(\d{1,2}):(\d{2})/);
+  const matchB = normB.match(/^(\d{1,2}):(\d{2})/);
   if (!matchA || !matchB) return false;
 
   const minA = parseInt(matchA[1], 10) * 60 + parseInt(matchA[2], 10);
@@ -194,10 +259,11 @@ export function matchPostWithPublishedEvents(
     }
 
     // 5. Hora
-    const evTime = ev.start_time ? ev.start_time.substring(11, 16) : null;
-    if (candidate.proposedTime && evTime && isTimeSimilar(candidate.proposedTime, evTime, 60)) {
+    const evTime = toTimeString(ev.start_time);
+    const candidateTime = toTimeString(candidate.proposedTime);
+    if (candidateTime && evTime && isTimeSimilar(candidateTime, evTime, 60)) {
       score += 10;
-      signals.push(`Hora similar (${candidate.proposedTime} vs ${evTime})`);
+      signals.push(`Hora similar (${candidateTime} vs ${evTime})`);
     }
 
     // Determinar nivel de coincidencia según señales ponderadas
