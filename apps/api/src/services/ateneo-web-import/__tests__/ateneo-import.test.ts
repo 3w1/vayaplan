@@ -507,4 +507,54 @@ END:VCALENDAR`;
     expect(futureEvents[0].endDate).toBe('2026-10-30');
     expect(futureEvents[0].time).toBeNull(); // 08:00 - 18:00 neutralizado
   });
+
+  // 20. Verificación exhaustiva de evento estrictamente futuro y reglas de hora plausible
+  test('20. Extracción de evento estrictamente futuro y reglas de rango continuo >= 6h / hora temprana', async () => {
+    // 1. Evento estrictamente futuro con fecha y hora estándar
+    const mockRawFuture = [
+      {
+        id: 9995,
+        slug: 'conferencia-noviembre',
+        title: { rendered: 'Conferencia Magistral de Historia de Castilla' },
+        link: 'https://ateneodepalencia.com/events/conferencia-noviembre/',
+      },
+    ];
+
+    const icalFuture = async () => `BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Madrid:20261112T193000
+DTEND;TZID=Europe/Madrid:20261112T210000
+SUMMARY:Conferencia Magistral de Historia de Castilla
+END:VEVENT
+END:VCALENDAR`;
+
+    const extractedFuture = await fetchAteneoProgramacionEvents({
+      maxItems: 1,
+      mockRawItems: mockRawFuture,
+      mockIcalProvider: icalFuture,
+      futureOnly: true,
+      minDate: '2026-10-24',
+    });
+
+    expect(extractedFuture.length).toBe(1);
+    expect(extractedFuture[0].date).toBe('2026-11-12');
+    expect(extractedFuture[0].time).toBe('19:30');
+    expect(extractedFuture[0].category).toBe('conferencias');
+
+    const futureClass = classifyAteneoEvent(extractedFuture[0], false);
+    expect(futureClass.classification).toBe('EVENTO_POSIBLE');
+    expect(futureClass.suggestedTime).toBe('19:30');
+
+    // 2. Comprobación directa de función de plausibilidad: hora temprana (< 09:00)
+    const { isPlausibleEventTime } = await import('../ateneo-extractor');
+    expect(isPlausibleEventTime('07:00')).toBe(false);
+    expect(isPlausibleEventTime('08:30')).toBe(false);
+    expect(isPlausibleEventTime('00:00')).toBe(false);
+
+    // 3. Comprobación directa de rango continuo >= 6h (jornada/exposición)
+    expect(isPlausibleEventTime('10:00', '16:30')).toBe(false); // 6h 30m -> neutralizado
+    expect(isPlausibleEventTime('11:00', '19:00')).toBe(false); // 8h -> neutralizado
+    expect(isPlausibleEventTime('19:30', '21:00')).toBe(true);  // 1h 30m -> válido
+    expect(isPlausibleEventTime('20:00', '20:00')).toBe(true);  // puntual -> válido
+  });
 });
