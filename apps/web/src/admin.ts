@@ -2726,6 +2726,7 @@ export function renderAdminHtml(): string {
           <button type="button" id="prop-tab-no-time" class="subfilter-pill" onclick="switchProposalTab('no_time')" style="font-weight:700;">⏰ 2. Eventos sin hora</button>
           <button type="button" id="prop-tab-duplicates" class="subfilter-pill" onclick="switchProposalTab('duplicates')" style="font-weight:700;">⚠️ 3. Posibles duplicados</button>
           <button type="button" id="prop-tab-venue-content" class="subfilter-pill" onclick="switchProposalTab('venue_content')" style="font-weight:700;">🍸 4. Contenido de venues</button>
+          <button type="button" id="prop-tab-ateneo" class="subfilter-pill" onclick="switchProposalTab('ateneo')" style="font-weight:700;">🏛️ Programación Ateneo</button>
           <button type="button" id="prop-tab-archived" class="subfilter-pill" onclick="switchProposalTab('archived')" style="font-weight:700;">📦 5. Archivadas</button>
         </div>
 
@@ -9622,6 +9623,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         no_time: 'prop-tab-no-time',
         duplicates: 'prop-tab-duplicates',
         venue_content: 'prop-tab-venue-content',
+        ateneo: 'prop-tab-ateneo',
         archived: 'prop-tab-archived'
       };
       Object.keys(tabIds).forEach(t => {
@@ -9778,6 +9780,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         list = list.filter(p => p.classification === 'DUPLICADO_POSIBLE' || !!p.matched_event_id);
       } else if (currentProposalTab === 'venue_content') {
         list = list.filter(p => p.classification === 'CONTENIDO_VENUE');
+      } else if (currentProposalTab === 'ateneo') {
+        list = list.filter(p => p.source_type === 'WEB_PROGRAMACION' || p.venue_id === 10149);
       } else if (currentProposalTab === 'archived') {
         list = list.filter(p => p.review_status === 'archived' || p.review_status === 'rejected');
       }
