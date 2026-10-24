@@ -10,6 +10,7 @@
  */
 
 import type { AteneoRawEvent, AteneoClassificationResult } from './ateneo-types';
+import { isPlausibleEventTime } from './ateneo-extractor';
 
 export function classifyAteneoEvent(
   rawEvent: AteneoRawEvent,
@@ -18,7 +19,15 @@ export function classifyAteneoEvent(
   const reasons: string[] = [];
   const title = (rawEvent.title || '').trim();
   const date = rawEvent.date ? rawEvent.date.trim() : null;
-  const time = rawEvent.time ? rawEvent.time.trim() : null;
+  let time = rawEvent.time ? rawEvent.time.trim() : null;
+
+  // Neutralización defensiva de horas no verosímiles / placeholders de jornada completa
+  if (time && !isPlausibleEventTime(time, rawEvent.endTime)) {
+    reasons.push(
+      `Hora detectada (${time}) neutralizada a NULL: corresponde a un placeholder de apertura o rango amplio sin sesión concreta`
+    );
+    time = null;
+  }
 
   // 1. Caso Duplicado detectado por matching
   if (hasDuplicateMatch) {

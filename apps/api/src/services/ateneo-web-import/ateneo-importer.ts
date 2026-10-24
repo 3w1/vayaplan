@@ -92,6 +92,8 @@ export async function runAteneoPilotIngestion(options?: {
       rawEvents = await fetchAteneoProgramacionEvents({
         maxItems,
         fetchFn: options?.fetchFn,
+        futureOnly: true,
+        minDate: TODAY_EDITORIAL,
       });
     }
 
@@ -178,10 +180,19 @@ export async function runAteneoPilotIngestion(options?: {
         let requiresManualReview = true;
         let effectiveClassification = classificationResult.classification;
 
-        if (raw.date && raw.date < TODAY_EDITORIAL) {
+        const isEventActiveOrFuture =
+          (raw.date && raw.date >= TODAY_EDITORIAL) ||
+          (raw.endDate && raw.endDate >= TODAY_EDITORIAL);
+
+        if (!isEventActiveOrFuture) {
           effectiveClassification = 'CONTENIDO_VENUE'; // o archivo histórico
           reviewStatus = 'archived';
           requiresManualReview = false;
+        }
+
+        let effectiveCaption = raw.description;
+        if (raw.endDate && raw.endDate !== raw.date) {
+          effectiveCaption = `[Exposición / Actividad del ${raw.date} al ${raw.endDate}] ${raw.description}`;
         }
 
         // 10. Inserción de la propuesta en curation_proposals
@@ -226,7 +237,7 @@ export async function runAteneoPilotIngestion(options?: {
           ATENEO_VENUE_ID,
           classificationResult.suggestedCategory,
           classificationResult.suggestedPrice,
-          raw.description,
+          effectiveCaption,
           raw.eventUrl,
           ATENEO_SOURCE_TYPE,
           r2Key,

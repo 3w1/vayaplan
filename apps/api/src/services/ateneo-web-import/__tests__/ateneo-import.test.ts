@@ -386,4 +386,125 @@ END:VCALENDAR
     const status = await getPersistentLockStatus(testLockKey);
     expect(status.locked).toBe(false);
   });
+
+  // 17. Neutralización de horas inverosímiles (07:00 / 08:00 placeholders)
+  test('17. Neutralización de horas placeholder (07:00 / 08:00 con duración >= 6h) a EVENTO_POSIBLE_SIN_HORA', () => {
+    const rawVillaviudas: AteneoRawEvent = {
+      sourceId: 'ateneo_9972',
+      mecId: 9972,
+      slug: 'presentacion-de-entidad-fundacion-128-villaviudas',
+      title: 'PRESENTACION DE ENTIDAD: FUNDACION 128 VILLAVIUDAS',
+      date: '2026-10-15',
+      time: '07:00',
+      endDate: '2026-10-15',
+      endTime: '18:00',
+      description: 'Presentación de la entidad fundación 128 villaviudas',
+      price: null,
+      isFree: true,
+      category: 'conferencias',
+      eventUrl: 'https://ateneodepalencia.com/events/presentacion-de-entidad-fundacion-128-villaviudas/',
+      imageUrl: null,
+      lastCheckedAt: new Date().toISOString(),
+    };
+
+    const classification = classifyAteneoEvent(rawVillaviudas, false);
+    expect(classification.classification).toBe('EVENTO_POSIBLE_SIN_HORA');
+    expect(classification.suggestedTime).toBeNull();
+    expect(classification.suggestedDate).toBe('2026-10-15');
+    expect(classification.confidence).toBe('MEDIA');
+  });
+
+  // 18. Aislamiento estricto de VEVENT frente a VTIMEZONE en iCal
+  test('18. parseMecIcal extrae exclusivamente DTSTART de VEVENT ignorando DAYLIGHT de VTIMEZONE', () => {
+    const fullIcalWithTz = `BEGIN:VCALENDAR
+VERSION:2.0
+METHOD:PUBLISH
+PRODID:-//WordPress - MECv7.30.0//EN
+X-WR-TIMEZONE:Europe/Madrid
+BEGIN:VTIMEZONE
+TZID:Europe/Madrid
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+TZNAME:CEST
+DTSTART:20260329T030000
+RRULE:FREQ=YEARLY;BYMONTH=03;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+DTSTART:20261025T020000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=4SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+CLASS:PUBLIC
+DTSTART;TZID=Europe/Madrid:20261030T193000
+DTEND;TZID=Europe/Madrid:20261030T210000
+SUMMARY:Recital Literario de Otoño
+DESCRIPTION:Acto en el salón de actos\n
+ATTACH;FMTTYPE=image/png:https://ateneodepalencia.com/wp-content/uploads/2026/10/cartel.png
+END:VEVENT
+END:VCALENDAR`;
+
+    const parsed = parseMecIcal(fullIcalWithTz);
+    expect(parsed.date).toBe('2026-10-30');
+    expect(parsed.time).toBe('19:30');
+    expect(parsed.endDate).toBe('2026-10-30');
+    expect(parsed.endTime).toBe('21:00');
+    expect(parsed.summary).toBe('Recital Literario de Otoño');
+    expect(parsed.imageUrl).toBe('https://ateneodepalencia.com/wp-content/uploads/2026/10/cartel.png');
+  });
+
+  // 19. Filtrado estricto futureOnly
+  test('19. Filtrado estricto futureOnly descarta eventos pasados y conserva activos/futuros', async () => {
+    const mockRawItems = [
+      {
+        id: 9984,
+        slug: 'evento-pasado-1',
+        title: { rendered: 'Evento Pasado Octubre 22' },
+        link: 'https://ateneodepalencia.com/events/evento-pasado-1/',
+      },
+      {
+        id: 9967,
+        slug: 'exposicion-antonio-capel',
+        title: { rendered: 'Exposición de Antonio Capel' },
+        link: 'https://ateneodepalencia.com/events/exposicion-antonio-capel/',
+      },
+    ];
+
+    const icalProvider = async (id: number) => {
+      if (id === 9984) {
+        return `BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Madrid:20261022T200000
+DTEND;TZID=Europe/Madrid:20261022T213000
+SUMMARY:Evento Pasado Octubre 22
+END:VEVENT
+END:VCALENDAR`;
+      }
+      return `BEGIN:VCALENDAR
+BEGIN:VEVENT
+DTSTART;TZID=Europe/Madrid:20261001T080000
+DTEND;TZID=Europe/Madrid:20261030T180000
+SUMMARY:Exposición de Antonio Capel
+END:VEVENT
+END:VCALENDAR`;
+    };
+
+    const futureEvents = await fetchAteneoProgramacionEvents({
+      maxItems: 5,
+      mockRawItems,
+      mockIcalProvider: icalProvider,
+      futureOnly: true,
+      minDate: '2026-10-24',
+    });
+
+    expect(futureEvents.length).toBe(1);
+    expect(futureEvents[0].mecId).toBe(9967);
+    expect(futureEvents[0].date).toBe('2026-10-01');
+    expect(futureEvents[0].endDate).toBe('2026-10-30');
+    expect(futureEvents[0].time).toBeNull(); // 08:00 - 18:00 neutralizado
+  });
 });

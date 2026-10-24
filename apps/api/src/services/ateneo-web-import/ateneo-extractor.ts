@@ -52,7 +52,46 @@ export function cleanHtmlDescription(html: string, maxLength = 300): string {
 }
 
 /**
- * Parsea fechas y horas desde el contenido iCal (VEVENT) de un evento MEC
+ * Determina si una hora es verosímil para un evento cultural puntual en España.
+ * Filtra horas inverosímiles (e.g. 07:00, 08:00) o placeholders de día completo / rangos amplios (>= 6h)
+ * generados por Modern Events Calendar Lite cuando no hay hora específica asignada.
+ */
+export function isPlausibleEventTime(time: string | null, endTime?: string | null): boolean {
+  if (!time) return false;
+  if (time === '00:00') return false;
+
+  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return false;
+
+  const hh = parseInt(match[1], 10);
+  const mm = parseInt(match[2], 10);
+
+  // En España, las presentaciones/actos culturales de ateneos no se inician entre las 01:00 y las 08:59.
+  // Horas como 07:00 u 08:00 corresponden a placeholders de apertura administrativa o día completo de MEC.
+  if (hh >= 1 && hh < 9) {
+    return false;
+  }
+
+  // Si se dispone de endTime y la duración abarca 6 horas o más (e.g., 07:00 - 18:00, 08:00 - 18:00),
+  // se trata de una franja de disponibilidad de sala / jornada completa, no de una sesión puntual.
+  if (endTime && endTime !== '00:00') {
+    const endMatch = endTime.match(/^(\d{1,2}):(\d{2})$/);
+    if (endMatch) {
+      const eh = parseInt(endMatch[1], 10);
+      const em = parseInt(endMatch[2], 10);
+      const startMin = hh * 60 + mm;
+      const endMin = eh * 60 + em;
+      if (endMin > startMin && endMin - startMin >= 6 * 60) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Parsea fechas y horas desde el contenido iCal (bloque VEVENT) de un evento MEC
  */
 export function parseMecIcal(icalText: string): {
   date: string | null;
@@ -69,22 +108,25 @@ export function parseMecIcal(icalText: string): {
   let summary: string | undefined;
   let imageUrl: string | undefined;
 
-  const lines = icalText.split(/\r?\n/);
+  // Aislar el bloque VEVENT para ignorar definiciones de zona horaria VTIMEZONE/DAYLIGHT/STANDARD
+  const veventMatch = icalText.match(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/i);
+  const targetText = veventMatch ? veventMatch[1] : icalText;
+
+  const lines = targetText.split(/\r?\n/);
   for (const line of lines) {
     // DTSTART;TZID=Europe/Madrid:20261022T200000
     // DTSTART:20261022T200000Z
     const dtStartMatch = line.match(/^DTSTART(?:;[^:]+)?:(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
-    if (dtStartMatch && !line.includes('DAYLIGHT') && !line.includes('STANDARD')) {
+    if (dtStartMatch) {
       const [, y, m, d, hh, mm] = dtStartMatch;
       date = `${y}-${m}-${d}`;
       if (hh !== undefined && mm !== undefined) {
-        // Ignorar 00:00:00 si representa evento de día completo sin hora
         time = `${hh}:${mm}`;
       }
     }
 
     const dtEndMatch = line.match(/^DTEND(?:;[^:]+)?:(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2}))?/);
-    if (dtEndMatch && !line.includes('DAYLIGHT') && !line.includes('STANDARD')) {
+    if (dtEndMatch) {
       const [, y, m, d, hh, mm] = dtEndMatch;
       endDate = `${y}-${m}-${d}`;
       if (hh !== undefined && mm !== undefined) {
@@ -102,47 +144,80 @@ export function parseMecIcal(icalText: string): {
     }
   }
 
+  // Sanitización de hora mediante plausibilidad de evento
+  if (time && !isPlausibleEventTime(time, endTime)) {
+    time = null;
+  }
+
   return { date, time, endDate, endTime, summary, imageUrl };
 }
 
-/**
- * Extrae hasta `maxItems` eventos de la programación del Ateneo de Palencia
- */
-export async function fetchAteneoProgramacionEvents(options?: {
+export interface FetchAteneoOptions {
   maxItems?: number;
   fetchFn?: typeof fetch;
   mockRawItems?: any[];
   mockIcalProvider?: (id: number) => Promise<string>;
-}): Promise<AteneoRawEvent[]> {
+  futureOnly?: boolean;
+  minDate?: string;
+  maxPagesToScan?: number;
+}
+
+/**
+ * Extrae hasta `maxItems` eventos de la programación del Ateneo de Palencia.
+ * Por defecto filtra únicamente eventos futuros o en curso (>= minDate) ordenados cronológicamente.
+ */
+export async function fetchAteneoProgramacionEvents(
+  options?: FetchAteneoOptions
+): Promise<AteneoRawEvent[]> {
   const maxItems = Math.min(options?.maxItems || ATENEO_MAX_PILOT_ITEMS, 5);
   const customFetch = options?.fetchFn || fetch;
   const nowIso = new Date().toISOString();
+  const futureOnly = options?.futureOnly ?? (options?.mockRawItems ? false : true);
+  const minDate = options?.minDate || '2026-10-24';
+  const maxPagesToScan = options?.maxPagesToScan || 3;
 
-  let rawItems: any[] = [];
+  const rawCandidateItems: any[] = [];
+
   if (options?.mockRawItems) {
-    rawItems = options.mockRawItems.slice(0, maxItems);
+    rawCandidateItems.push(...options.mockRawItems);
   } else {
-    const url = `${ATENEO_MEC_API_URL}?per_page=${maxItems}&status=publish`;
-    const res = await customFetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; VayaPlanBot/1.0; +https://vayaplan.com)',
-        Accept: 'application/json',
-      },
-    });
+    // Consulta paginada defensiva para localizar eventos futuros
+    for (let page = 1; page <= maxPagesToScan; page++) {
+      const url = `${ATENEO_MEC_API_URL}?per_page=10&page=${page}&status=publish`;
+      try {
+        const res = await customFetch(url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (compatible; VayaPlanBot/1.0; +https://vayaplan.com)',
+            Accept: 'application/json',
+          },
+        });
 
-    if (!res.ok) {
-      throw new Error(
-        `Fallo al consultar la API de eventos del Ateneo de Palencia (HTTP ${res.status}): ${res.statusText}`
-      );
+        if (!res.ok) {
+          if (page === 1) {
+            throw new Error(
+              `Fallo al consultar la API de eventos del Ateneo de Palencia (HTTP ${res.status}): ${res.statusText}`
+            );
+          }
+          break; // Fin de páginas disponibles
+        }
+
+        const pageItems = (await res.json()) as any[];
+        if (!Array.isArray(pageItems) || pageItems.length === 0) {
+          break;
+        }
+
+        rawCandidateItems.push(...pageItems);
+      } catch (err: any) {
+        if (page === 1) throw err;
+        break;
+      }
     }
-
-    rawItems = (await res.json()) as any[];
   }
 
   const events: AteneoRawEvent[] = [];
 
-  for (const item of rawItems.slice(0, maxItems)) {
+  for (const item of rawCandidateItems) {
     const mecId = Number(item.id);
     const slug = String(item.slug || `ateneo-${mecId}`);
     const rawTitle = item.title?.rendered || item.title || 'Actividad en el Ateneo de Palencia';
@@ -189,13 +264,9 @@ export async function fetchAteneoProgramacionEvents(options?: {
       if (icalText) {
         const parsedIcal = parseMecIcal(icalText);
         if (parsedIcal.date) date = parsedIcal.date;
-        if (parsedIcal.time && parsedIcal.time !== '00:00') {
-          time = parsedIcal.time;
-        }
+        if (parsedIcal.time) time = parsedIcal.time;
         if (parsedIcal.endDate) endDate = parsedIcal.endDate;
-        if (parsedIcal.endTime && parsedIcal.endTime !== '00:00') {
-          endTime = parsedIcal.endTime;
-        }
+        if (parsedIcal.endTime) endTime = parsedIcal.endTime;
         if (!primaryImageUrl && parsedIcal.imageUrl) {
           primaryImageUrl = parsedIcal.imageUrl;
         }
@@ -208,6 +279,19 @@ export async function fetchAteneoProgramacionEvents(options?: {
     // Si no hubo fecha en iCal, usar fecha del post
     if (!date && item.date) {
       date = item.date.split('T')[0];
+    }
+
+    // Sanitización final de hora
+    if (time && !isPlausibleEventTime(time, endTime)) {
+      time = null;
+    }
+
+    // Filtrado estricto de eventos futuros / en curso si futureOnly está activo
+    const isFutureOrActive =
+      (date && date >= minDate) || (endDate && endDate >= minDate);
+
+    if (futureOnly && !isFutureOrActive) {
+      continue;
     }
 
     // Ateneo de Palencia: Entrada libre por defecto para actos culturales
@@ -246,7 +330,18 @@ export async function fetchAteneoProgramacionEvents(options?: {
       credit: 'Ateneo de Palencia',
       lastCheckedAt: nowIso,
     });
+
+    if (events.length >= maxItems) {
+      break;
+    }
   }
 
-  return events;
+  // Ordenación cronológica: los más próximos primero
+  events.sort((a, b) => {
+    const dateComp = (a.date || '').localeCompare(b.date || '');
+    if (dateComp !== 0) return dateComp;
+    return (a.time || '').localeCompare(b.time || '');
+  });
+
+  return events.slice(0, maxItems);
 }
