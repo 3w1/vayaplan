@@ -656,3 +656,87 @@ export function validateRoutePublication(
   };
 }
 
+export interface ParsedInstagramResult {
+  isValid: boolean;
+  username: string | null;
+  canonicalUrl: string | null;
+  error?: string;
+}
+
+/**
+ * Normaliza y valida una entrada de Instagram procedente de un usuario, handle o enlace de perfil.
+ * - Acepta: 'usuario', '@usuario', 'https://www.instagram.com/usuario/', 'https://instagram.com/usuario?igsh=...'
+ * - Rechaza: URLs a publicaciones (/p/), reels (/reel/), stories, dominios no oficiales y cadenas vacías o inválidas.
+ * - Genera: username en minúsculas y canonicalUrl sin parámetros de seguimiento.
+ */
+export function parseAndNormalizeInstagramInput(input: unknown): ParsedInstagramResult {
+  if (input === null || input === undefined) {
+    return { isValid: false, username: null, canonicalUrl: null, error: 'Valor de Instagram no proporcionado.' };
+  }
+  if (typeof input !== 'string') {
+    return { isValid: false, username: null, canonicalUrl: null, error: 'Formato de entrada no válido.' };
+  }
+  const raw = input.trim();
+  if (raw === '') {
+    return { isValid: false, username: null, canonicalUrl: null, error: 'El campo de Instagram no puede estar vacío.' };
+  }
+
+  // Si contiene http:// o https:// o slashes o "instagram.com", procesarlo como URL
+  if (/^https?:\/\//i.test(raw) || raw.includes('instagram.com') || raw.includes('/')) {
+    let parsed: URL;
+    try {
+      const urlToParse = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      parsed = new URL(urlToParse);
+    } catch {
+      return { isValid: false, username: null, canonicalUrl: null, error: 'La URL de Instagram no tiene un formato válido.' };
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const isInstagramHost = host === 'instagram.com' || host === 'www.instagram.com' || host === 'm.instagram.com';
+    if (!isInstagramHost) {
+      return { isValid: false, username: null, canonicalUrl: null, error: 'El enlace debe pertenecer al dominio oficial instagram.com.' };
+    }
+
+    // Limpiar path
+    const pathParts = parsed.pathname.split('/').filter((p) => p.trim() !== '');
+    if (pathParts.length === 0) {
+      return { isValid: false, username: null, canonicalUrl: null, error: 'La URL debe incluir el nombre de usuario del perfil.' };
+    }
+
+    const firstSegment = pathParts[0].toLowerCase();
+    const disallowedPrefixes = ['p', 'reel', 'reels', 'stories', 'explore', 'tags', 'direct', 'accounts', 'developer', 'about'];
+    if (disallowedPrefixes.includes(firstSegment)) {
+      const label = firstSegment === 'p' ? 'publicaciones' : (firstSegment === 'reel' || firstSegment === 'reels') ? 'reels' : firstSegment;
+      return { isValid: false, username: null, canonicalUrl: null, error: `No se admiten enlaces a ${label}. Debe ser la URL del perfil principal.` };
+    }
+
+    const cleanUsername = firstSegment.replace(/^@+/, '');
+    if (!/^[a-zA-Z0-9._]{2,30}$/.test(cleanUsername)) {
+      return { isValid: false, username: null, canonicalUrl: null, error: 'El usuario de Instagram en la URL debe tener entre 2 y 30 caracteres válidos.' };
+    }
+
+    return {
+      isValid: true,
+      username: cleanUsername,
+      canonicalUrl: `https://www.instagram.com/${cleanUsername}/`,
+    };
+  }
+
+  // Si es un username directo o @username
+  const cleanUsername = raw.replace(/^@+/, '').toLowerCase();
+  if (!/^[a-zA-Z0-9._]{2,30}$/.test(cleanUsername)) {
+    return {
+      isValid: false,
+      username: null,
+      canonicalUrl: null,
+      error: 'El usuario de Instagram debe tener entre 2 y 30 caracteres (letras, números, puntos y guiones bajos).',
+    };
+  }
+
+  return {
+    isValid: true,
+    username: cleanUsername,
+    canonicalUrl: `https://www.instagram.com/${cleanUsername}/`,
+  };
+}
+

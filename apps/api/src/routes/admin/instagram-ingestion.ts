@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { query } from '@vayaplan/db';
+import { parseAndNormalizeInstagramInput } from '@vayaplan/shared';
 import { requireAdminAuth } from '../../middleware/auth';
 import type { AdminUser } from '@vayaplan/types';
 import {
@@ -71,8 +72,13 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources', async (c) => 
   }
 
   const venueId = parseInt(body.venue_id, 10);
-  const username = (body.instagram_username || '').trim().replace(/^@/, '').toLowerCase();
-  const profileUrl = (body.instagram_profile_url || `https://www.instagram.com/${username}/`).trim();
+  const rawIg = body.instagram_input || body.instagram_username || body.instagram_profile_url || '';
+  const parsedIg = parseAndNormalizeInstagramInput(rawIg);
+  if (!parsedIg.isValid) {
+    return c.json({ error: 'invalid_username', message: parsedIg.error || 'El usuario de Instagram es obligatorio y debe tener un formato válido.' }, 400);
+  }
+  const username = parsedIg.username!;
+  const profileUrl = parsedIg.canonicalUrl!;
   const postsPerRun = body.posts_per_run !== undefined ? parseInt(body.posts_per_run, 10) : 5;
   const includeReels = body.include_reels !== undefined ? Boolean(body.include_reels) : true;
   const isActive = body.is_active !== undefined ? Boolean(body.is_active) : true;
@@ -80,10 +86,6 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources', async (c) => 
   // Validaciones
   if (!venueId || isNaN(venueId)) {
     return c.json({ error: 'missing_venue', message: 'Debe seleccionar un venue existente del catálogo.' }, 400);
-  }
-
-  if (!username || username.length < 2) {
-    return c.json({ error: 'invalid_username', message: 'El usuario de Instagram es obligatorio y debe tener al menos 2 caracteres.' }, 400);
   }
 
   if (isNaN(postsPerRun) || postsPerRun < 1 || postsPerRun > 20) {
@@ -166,12 +168,17 @@ adminInstagramIngestionRoutes.patch('/instagram-ingestion-sources/:id', async (c
   }
   const current = currentRes.rows[0];
 
-  const username = body.instagram_username !== undefined
-    ? body.instagram_username.trim().replace(/^@/, '').toLowerCase()
-    : current.instagram_username;
-  const profileUrl = body.instagram_profile_url !== undefined
-    ? body.instagram_profile_url.trim()
-    : current.instagram_profile_url;
+  let username = current.instagram_username;
+  let profileUrl = current.instagram_profile_url;
+  if (body.instagram_input !== undefined || body.instagram_username !== undefined || body.instagram_profile_url !== undefined) {
+    const rawIg = body.instagram_input || body.instagram_username || body.instagram_profile_url || '';
+    const parsedIg = parseAndNormalizeInstagramInput(rawIg);
+    if (!parsedIg.isValid) {
+      return c.json({ error: 'invalid_username', message: parsedIg.error || 'El usuario de Instagram no es válido.' }, 400);
+    }
+    username = parsedIg.username!;
+    profileUrl = parsedIg.canonicalUrl!;
+  }
   const postsPerRun = body.posts_per_run !== undefined
     ? parseInt(body.posts_per_run, 10)
     : current.posts_per_run;
