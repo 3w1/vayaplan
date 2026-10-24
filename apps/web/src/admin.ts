@@ -1372,7 +1372,9 @@ export function renderAdminHtml(): string {
       .venues-table-desktop,
       .recurrences-table-desktop,
       .places-table-desktop,
-      .qr-table-desktop {
+      .qr-table-desktop,
+      .proposals-table-desktop,
+      .sources-table-desktop {
         display: none !important;
       }
       .events-cards-mobile,
@@ -1380,7 +1382,9 @@ export function renderAdminHtml(): string {
       .venues-cards-mobile,
       .recurrences-cards-mobile,
       .places-cards-mobile,
-      .qr-cards-mobile {
+      .qr-cards-mobile,
+      .proposals-cards-mobile,
+      .sources-cards-mobile {
         display: flex !important;
       }
     }
@@ -1390,7 +1394,9 @@ export function renderAdminHtml(): string {
       .venues-table-desktop,
       .recurrences-table-desktop,
       .places-table-desktop,
-      .qr-table-desktop {
+      .qr-table-desktop,
+      .proposals-table-desktop,
+      .sources-table-desktop {
         display: block !important;
       }
       .events-cards-mobile,
@@ -1398,7 +1404,9 @@ export function renderAdminHtml(): string {
       .venues-cards-mobile,
       .recurrences-cards-mobile,
       .places-cards-mobile,
-      .qr-cards-mobile {
+      .qr-cards-mobile,
+      .proposals-cards-mobile,
+      .sources-cards-mobile {
         display: none !important;
       }
     }
@@ -2184,6 +2192,15 @@ export function renderAdminHtml(): string {
           <span class="nav-item-label">Bandeja de curación</span>
           <span id="drawer-badge-inbox" class="badge-count" style="display:none;">0</span>
         </button>
+        <button class="drawer-nav-item" id="drawer-nav-proposals" onclick="switchSection('proposals'); toggleMobileDrawer(false);">
+          <span class="nav-item-icon">🍸</span>
+          <span class="nav-item-label">Propuestas Bares (Instagram)</span>
+          <span id="drawer-badge-proposals" class="badge-count" style="display:none; background:#8b5cf6;">0</span>
+        </button>
+        <button class="drawer-nav-item" id="drawer-nav-sources" onclick="switchSection('sources'); toggleMobileDrawer(false);">
+          <span class="nav-item-icon">📡</span>
+          <span class="nav-item-label">Venues de ingesta Instagram</span>
+        </button>
         <button class="drawer-nav-item" id="drawer-nav-events" onclick="switchSection('events'); toggleMobileDrawer(false);">
           <span class="nav-item-icon">📅</span>
           <span class="nav-item-label">Agenda publicada</span>
@@ -2254,6 +2271,15 @@ export function renderAdminHtml(): string {
           <span class="nav-item-icon">📥</span>
           <span class="nav-item-label">Bandeja de curación</span>
           <span id="sidebar-badge-inbox" class="badge-count" style="display:none;">0</span>
+        </button>
+        <button class="sidebar-nav-item" id="sidebar-nav-proposals" onclick="switchSection('proposals')">
+          <span class="nav-item-icon">🍸</span>
+          <span class="nav-item-label">Propuestas Bares (Instagram)</span>
+          <span id="sidebar-badge-proposals" class="badge-count" style="display:none; background:#8b5cf6;">0</span>
+        </button>
+        <button class="sidebar-nav-item" id="sidebar-nav-sources" onclick="switchSection('sources')">
+          <span class="nav-item-icon">📡</span>
+          <span class="nav-item-label">Venues de ingesta Instagram</span>
         </button>
         <button class="sidebar-nav-item" id="sidebar-nav-events" onclick="switchSection('events')">
           <span class="nav-item-icon">📅</span>
@@ -2326,6 +2352,9 @@ export function renderAdminHtml(): string {
           <button id="inbox-subfilter-collisions" class="subfilter-pill" onclick="setCurationSubfilter('tentative_collisions')">
             💥 Posibles colisiones <span id="inbox-badge-collisions" class="badge-count badge-danger" style="display:none;">0</span>
           </button>
+          <button id="inbox-subfilter-proposals" class="subfilter-pill" onclick="switchSection('proposals')" style="background:#f5f3ff; border-color:#ddd6fe; color:#6d28d9;">
+            🍸 Propuestas Instagram <span id="inbox-badge-proposals" class="badge-count" style="display:none; background:#8b5cf6;">0</span>
+          </button>
         </div>
 
         <div id="inbox-cards-grid" class="inbox-grid">
@@ -2340,15 +2369,31 @@ export function renderAdminHtml(): string {
         <div class="toolbar">
           <div class="filter-group">
             <select id="event-filter-status" onchange="onManualStatusFilterChange()" aria-label="Filtrar por estado del evento">
+              <option value="published" selected>Publicados</option>
+              <option value="draft">Borradores (Todos los orígenes)</option>
               <option value="">Todos los estados</option>
-              <option value="published">Publicados</option>
-              <option value="tentative">Borradores Tentativos (WhatsApp/Web)</option>
               <option value="cancelled">Cancelados</option>
               <option value="outdated">Caducados (Outdated)</option>
               <option value="archived">Archivados</option>
               <option value="duplicate">Duplicados</option>
             </select>
-            <input type="date" id="event-filter-date" onchange="loadAdminEvents()" aria-label="Filtrar por fecha editorial">
+            <select id="event-filter-category" onchange="onEventCategoryFilterChange()" aria-label="Tipo de actividad">
+              <option value="" selected>Todos los tipos</option>
+              <option value="musica">Música</option>
+              <option value="deporte">Deporte</option>
+              <option value="cultura">Cultura</option>
+              <option value="gastronomia">Gastronomía</option>
+              <option value="familia">Familia</option>
+              <option value="ocio">Ocio</option>
+              <option value="otros">Otros</option>
+            </select>
+            <div style="position:relative; display:inline-flex; align-items:center;">
+              <input type="text" id="event-filter-search" placeholder="Buscar evento..." aria-label="Buscar evento" oninput="onEventSearchInput(this.value)" style="padding-right:2rem; min-width:200px;">
+              <button type="button" id="event-filter-search-clear" onclick="clearEventSearch()" aria-label="Limpiar búsqueda" style="position:absolute; right:0.5rem; background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:0.875rem; display:none; padding:0.2rem;">✕</button>
+            </div>
+            <button type="button" id="event-filter-clear-btn" class="btn-secondary" onclick="resetEventFilters()" aria-label="Limpiar filtros" style="display:none; padding:0.5rem 0.75rem; font-size:0.8125rem;">Limpiar filtros</button>
+            <input type="date" id="event-filter-date" onchange="onEventDateFilterChange()" aria-label="Filtrar por fecha editorial">
+            <span id="events-count-badge" class="badge-tag" style="display:none; font-size:0.8125rem; font-weight:600; padding:0.35rem 0.65rem; background:#f1f5f9; color:var(--text-muted); border-radius:6px;"></span>
           </div>
           <button class="btn-primary" onclick="openNewEventModal()">+ Nuevo Evento</button>
         </div>
@@ -2375,6 +2420,18 @@ export function renderAdminHtml(): string {
         <!-- Vista Móvil: Tarjetas individuales -->
         <div id="events-cards-container" class="events-cards-mobile" style="display:none; flex-direction:column; gap:0.875rem;">
           <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando eventos...</div>
+        </div>
+
+        <!-- Paginación Server-Side -->
+        <div id="events-pagination-container" style="display:none; justify-content:space-between; align-items:center; padding:1rem 0; margin-top:0.75rem; flex-wrap:wrap; gap:0.75rem;">
+          <div id="events-pagination-info" style="font-size:0.875rem; color:var(--text-muted);">
+            Cargando información de páginas...
+          </div>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <button type="button" id="events-prev-page-btn" class="btn-table-action" onclick="changeEventPage(-1)" disabled>◀ Anterior</button>
+            <span id="events-page-indicator" style="font-size:0.875rem; font-weight:600; color:var(--text-main); padding:0 0.5rem;">Página 1 de 1</span>
+            <button type="button" id="events-next-page-btn" class="btn-table-action" onclick="changeEventPage(1)" disabled>Siguiente ▶</button>
+          </div>
         </div>
       </section><!-- SECCIÓN PROMOCIONES -->
       <section id="section-promotions" style="display:none;">
@@ -2657,6 +2714,113 @@ export function renderAdminHtml(): string {
         <!-- Vista Móvil: Tarjetas individuales sin desbordamiento horizontal -->
         <div id="routes-cards-container" class="routes-cards-mobile">
           <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando rutas gastronómicas...</div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN PROPUESTAS DE BARES (INSTAGRAM) -->
+      <section id="section-proposals" style="display:none;">
+        <div class="toolbar" style="flex-wrap:wrap; gap:0.75rem; margin-bottom:1.25rem;">
+          <div class="filter-group" style="flex-wrap:wrap; gap:0.5rem; align-items:center;">
+            <select id="proposal-filter-status" onchange="onProposalFilterChange()" aria-label="Filtrar por estado">
+              <option value="pending" selected>Pendientes de revisión</option>
+              <option value="approved_draft">Aprobados como borrador</option>
+              <option value="rejected">Rechazados</option>
+              <option value="archived">Archivados</option>
+              <option value="promotion">Promociones</option>
+              <option value="">Todos los estados</option>
+            </select>
+            <select id="proposal-filter-venue" onchange="onProposalFilterChange()" aria-label="Filtrar por local">
+              <option value="" selected>Todos los locales</option>
+            </select>
+            <select id="proposal-filter-category" onchange="onProposalFilterChange()" aria-label="Filtrar por categoría">
+              <option value="" selected>Todas las categorías</option>
+              <option value="dj_tardeo">DJ / Tardeo</option>
+              <option value="musica_directo">Música en directo</option>
+              <option value="musica">Música general</option>
+              <option value="concierto">Concierto</option>
+              <option value="ocio">Ocio nocturno</option>
+              <option value="fiesta">Fiesta temática</option>
+              <option value="cultura">Cultura</option>
+              <option value="gastronomia">Gastronomía</option>
+              <option value="otros">Otros</option>
+            </select>
+            <select id="proposal-filter-confidence" onchange="onProposalFilterChange()" aria-label="Filtrar por confianza">
+              <option value="" selected>Toda confianza</option>
+              <option value="ALTA">Alta</option>
+              <option value="MEDIA">Media</option>
+              <option value="BAJA">Baja</option>
+            </select>
+            <input type="date" id="proposal-filter-date" onchange="onProposalFilterChange()" aria-label="Filtrar por fecha">
+            <div style="position:relative; display:inline-flex; align-items:center;">
+              <input type="text" id="proposal-filter-search" placeholder="Buscar en propuestas..." aria-label="Buscar en propuestas" oninput="onProposalSearchInput(this.value)" style="padding-right:2rem; min-width:180px;">
+              <button type="button" id="proposal-filter-search-clear" onclick="clearProposalSearch()" aria-label="Limpiar búsqueda" style="position:absolute; right:0.5rem; background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:0.875rem; display:none; padding:0.2rem;">✕</button>
+            </div>
+            <button type="button" id="proposal-filter-clear-btn" class="btn-secondary" onclick="resetProposalFilters()" aria-label="Limpiar filtros" style="display:none; padding:0.5rem 0.75rem; font-size:0.8125rem;">Limpiar filtros</button>
+            <span id="proposals-count-badge" class="badge-tag" style="display:none; font-size:0.8125rem; font-weight:600; padding:0.35rem 0.65rem; background:#f1f5f9; color:var(--text-muted); border-radius:6px;"></span>
+          </div>
+        </div>
+
+        <!-- Vista Desktop: Tabla de propuestas -->
+        <div class="table-container proposals-table-desktop">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:72px;">Foto</th>
+                <th>Propuesta / Local</th>
+                <th>Fecha / Hora</th>
+                <th>Categoría / Confianza</th>
+                <th>Estado</th>
+                <th style="text-align:right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="proposals-tbody">
+              <tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas de bares...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales -->
+        <div id="proposals-cards-container" class="proposals-cards-mobile" style="display:flex; flex-direction:column; gap:1rem;">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>
+        </div>
+      </section>
+
+      <!-- SECCIÓN VENUES DE INGESTA INSTAGRAM -->
+      <section id="section-sources" style="display:none;">
+        <div class="toolbar" style="flex-wrap:wrap; gap:0.75rem; margin-bottom:1.25rem;">
+          <div class="filter-group" style="flex-wrap:wrap; gap:0.5rem; align-items:center;">
+            <button type="button" class="btn-primary" onclick="openAddSourceModal()" style="font-weight:700;">+ Añadir Fuente</button>
+            <button type="button" id="btn-run-selected-sources" class="btn-secondary" onclick="runSelectedSources()" disabled title="Selecciona al menos una fuente">▶ Ingesta Seleccionados (<span id="selected-sources-count">0</span>)</button>
+            <button type="button" id="btn-run-all-active-sources" class="btn-secondary" onclick="runAllActiveSources()" style="background:#f5f3ff; border-color:#ddd6fe; color:#6d28d9; font-weight:700;">▶ Ingesta Todos los Activos</button>
+            <span id="sources-count-badge" class="badge-tag" style="display:none; font-size:0.8125rem; font-weight:600; padding:0.35rem 0.65rem; background:#f1f5f9; color:var(--text-muted); border-radius:6px;"></span>
+          </div>
+        </div>
+
+        <div id="sources-alert-box" style="display:none; margin-bottom:1rem; padding:0.75rem 1rem; border-radius:8px; font-size:0.875rem;"></div>
+
+        <!-- Vista Desktop: Tabla de fuentes -->
+        <div class="table-container sources-table-desktop">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px;"><input type="checkbox" id="sources-select-all" onchange="toggleSelectAllSources(this.checked)" title="Seleccionar todas las fuentes"></th>
+                <th>Local (Venue)</th>
+                <th>Perfil Instagram</th>
+                <th>Configuración</th>
+                <th>Estado</th>
+                <th>Última Ingesta</th>
+                <th style="text-align:right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="sources-tbody">
+              <tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando fuentes de ingesta...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Vista Móvil: Tarjetas individuales -->
+        <div id="sources-cards-container" class="sources-cards-mobile" style="display:flex; flex-direction:column; gap:1rem;">
+          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando fuentes...</div>
         </div>
       </section>
     </main>
@@ -3777,6 +3941,291 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
+  <!-- MODAL: APROBAR PROPUESTA Y CREAR BORRADOR -->
+  <div id="modal-approve-proposal" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-approve-proposal')">
+    <div class="modal-card modal-card-large" role="dialog" aria-modal="true" aria-labelledby="modal-approve-prop-title" style="max-width:760px; width:95%; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="flex-shrink:0; background:linear-gradient(135deg, #4f46e5, #7c3aed); color:#ffffff;">
+        <div>
+          <span style="font-size:0.75rem; font-weight:800; letter-spacing:1px; opacity:0.85; text-transform:uppercase;">Curación de Propuesta (Instagram)</span>
+          <h3 id="modal-approve-prop-title" style="margin:0.25rem 0 0 0; font-size:1.25rem; font-weight:800; color:#ffffff;">Aprobar como Evento Borrador</h3>
+        </div>
+        <button type="button" class="modal-close" onclick="closeModal('modal-approve-proposal')" aria-label="Cerrar modal" style="color:#ffffff;">✕</button>
+      </div>
+
+      <div class="modal-body" style="flex:1; overflow-y:auto; padding:1.5rem; background:#f8fafc;">
+        <input type="hidden" id="approve-prop-id" value="">
+        <div id="approve-prop-error" class="editor-alert-error" style="display:none; margin-bottom:1rem;"></div>
+
+        <!-- Alerta de Evento Duplicado (si colisiona) -->
+        <div id="approve-prop-duplicate-alert" style="display:none; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:1rem; margin-bottom:1rem;">
+          <div style="font-weight:800; color:#b91c1c; margin-bottom:0.25rem;">⚠️ Colisión / Posible Duplicado Detectado</div>
+          <div id="approve-prop-duplicate-msg" style="font-size:0.875rem; color:#7f1d1d; line-height:1.4;"></div>
+        </div>
+
+        <!-- Banner informativo: Se creará estrictamente como borrador -->
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.25rem; font-size:0.85rem; color:#1e40af; display:flex; align-items:center; gap:0.5rem;">
+          <span>ℹ️</span>
+          <span><strong>Política estricta:</strong> Esta acción creará un evento en estado <strong>BORRADOR (draft)</strong>. Nunca se publicará automáticamente en la agenda.</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 220px; gap:1.25rem;">
+          <!-- Columna Izquierda: Formulario Editorial -->
+          <div style="display:flex; flex-direction:column; gap:1rem;">
+            <div>
+              <label for="approve-prop-title-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Título del Evento *</label>
+              <input type="text" id="approve-prop-title-input" required style="width:100%; font-size:0.95rem; font-weight:600;" placeholder="Ej: Tardeo Basket con DJ Gómez Palentino">
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+              <div>
+                <label for="approve-prop-date-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Fecha Editorial *</label>
+                <input type="date" id="approve-prop-date-input" required style="width:100%;">
+              </div>
+              <div>
+                <label for="approve-prop-time-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Hora (HH:mm)</label>
+                <input type="text" id="approve-prop-time-input" style="width:100%;" placeholder="ej: 18:00">
+                <span style="font-size:0.7rem; color:var(--text-muted);">Dejar vacío si no hay hora confirmada</span>
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+              <div>
+                <label for="approve-prop-venue-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Local (Venue) *</label>
+                <select id="approve-prop-venue-select" required style="width:100%;">
+                  <option value="">— Seleccionar local —</option>
+                </select>
+              </div>
+              <div>
+                <label for="approve-prop-category-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Categoría</label>
+                <select id="approve-prop-category-select" style="width:100%;">
+                  <option value="dj_tardeo">dj_tardeo (DJ / Tardeo)</option>
+                  <option value="musica_directo">musica_directo (Música en directo)</option>
+                  <option value="musica">musica (Música general)</option>
+                  <option value="concierto">concierto (Concierto)</option>
+                  <option value="ocio">ocio (Ocio nocturno)</option>
+                  <option value="cultura">cultura (Cultura)</option>
+                  <option value="gastronomia">gastronomia (Gastronomía)</option>
+                  <option value="otros">otros (Otros)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label for="approve-prop-price-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Precio en céntimos (0 = Gratuito)</label>
+              <input type="number" id="approve-prop-price-input" min="0" step="50" value="0" style="width:140px;" placeholder="0">
+              <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.5rem;">0 = Gratis, 1000 = 10,00 €</span>
+            </div>
+
+            <div>
+              <label for="approve-prop-desc-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Descripción editorial</label>
+              <textarea id="approve-prop-desc-input" rows="3" style="width:100%; font-size:0.875rem;" placeholder="Breve descripción del plan para el público..."></textarea>
+            </div>
+
+            <div>
+              <label for="approve-prop-img-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">URL de Imagen en Cloudflare R2 *</label>
+              <input type="url" id="approve-prop-img-input" oninput="updateApproveImagePreview()" style="width:100%; font-size:0.8125rem; font-family:monospace;" placeholder="https://media.vayaplan.com/bars/...">
+              <span style="font-size:0.7rem; color:#059669;">✓ Solo se admiten imágenes alojadas en Cloudflare R2</span>
+            </div>
+          </div>
+
+          <!-- Columna Derecha: Vista previa de imagen y metadatos de Instagram -->
+          <div style="background:#ffffff; border:1px solid var(--border); border-radius:8px; padding:0.875rem; display:flex; flex-direction:column; gap:0.75rem;">
+            <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Previsualización R2</div>
+            <div style="width:100%; height:180px; background:#f1f5f9; border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid var(--border);">
+              <img id="approve-prop-img-preview" src="" alt="Previsualización" style="width:100%; height:100%; object-fit:cover; display:none;">
+              <span id="approve-prop-img-placeholder" style="color:var(--text-muted); font-size:0.8rem;">Sin imagen</span>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:0.75rem; font-size:0.75rem; color:var(--text-dim); display:flex; flex-direction:column; gap:0.35rem;">
+              <div><strong>Origen:</strong> <span id="approve-prop-meta-source">Instagram</span></div>
+              <div><strong>Perfil:</strong> <span id="approve-prop-meta-user">@...</span></div>
+              <div><strong>Confianza:</strong> <span id="approve-prop-meta-conf" class="badge-tag">ALTA</span></div>
+              <div style="margin-top:0.35rem;">
+                <a id="approve-prop-meta-link" href="#" target="_blank" rel="noopener noreferrer" style="color:var(--primary); font-weight:700; text-decoration:none;">Ver post original ↗</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-approve-proposal')">Cancelar</button>
+        <button type="button" id="btn-submit-approve-prop" class="btn-primary" onclick="submitApproveProposal()" style="background:#059669; border-color:#059669;">✓ Aprobar y Crear Borrador</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: RECHAZAR PROPUESTA -->
+  <div id="modal-reject-proposal" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-reject-proposal')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-reject-prop-title" style="max-width:480px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-reject-prop-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Rechazar Propuesta</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-reject-proposal')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding:1.25rem;">
+        <input type="hidden" id="reject-prop-id" value="">
+        <p id="reject-prop-title-text" style="font-weight:700; font-size:0.95rem; margin:0 0 1rem 0; color:var(--text-main);"></p>
+        
+        <label for="reject-prop-reason-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Motivo de descarte *</label>
+        <select id="reject-prop-reason-select" onchange="onRejectReasonSelectChange(this.value)" style="width:100%; margin-bottom:0.75rem;">
+          <option value="">— Selecciona un motivo frecuente —</option>
+          <option value="No es un evento público o espectáculo">No es un evento público o espectáculo</option>
+          <option value="Información insuficiente o ambigua">Información insuficiente o ambigua</option>
+          <option value="Publicidad o promoción comercial exclusiva">Publicidad o promoción comercial exclusiva</option>
+          <option value="Evento cancelado por el propio local">Evento cancelado por el propio local</option>
+          <option value="custom">Otro motivo personalizado...</option>
+        </select>
+
+        <textarea id="reject-prop-reason-text" rows="3" required style="width:100%; font-size:0.875rem;" placeholder="Detalla el motivo del descarte..."></textarea>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-reject-proposal')">Cancelar</button>
+        <button type="button" id="btn-submit-reject-prop" class="btn-danger" onclick="submitRejectProposal()">Confirmar Rechazo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VER CAPTION Y METADATOS COMPLETOS DE LA PROPUESTA -->
+  <div id="modal-proposal-caption" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-proposal-caption')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-caption-prop-title" style="max-width:580px; max-height:85vh; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-caption-prop-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Detalle de Fuente Original</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-proposal-caption')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" id="modal-caption-prop-body" style="flex:1; overflow-y:auto; padding:1.25rem;">
+        <!-- Se inyecta dinámicamente -->
+      </div>
+      <div class="modal-footer" style="flex-shrink:0;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-proposal-caption')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AÑADIR FUENTE DE INGESTA INSTAGRAM -->
+  <div id="modal-add-source" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-add-source')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-add-source-title" style="max-width:540px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-add-source-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Configurar Fuente de Ingesta Instagram</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-add-source')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding:1.25rem;">
+        <div id="add-source-error" class="editor-alert-error" style="display:none; margin-bottom:1rem;"></div>
+
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          <div>
+            <label for="add-source-venue-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Local del Censo (Venue) *</label>
+            <select id="add-source-venue-select" required style="width:100%;">
+              <option value="">— Selecciona un local existente —</option>
+            </select>
+            <span style="font-size:0.75rem; color:var(--text-muted);">Solo se asocian venues existentes. No se crean nuevos venues.</span>
+          </div>
+
+          <div>
+            <label for="add-source-username-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Usuario de Instagram *</label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <span style="position:absolute; left:0.75rem; color:var(--text-dim); font-weight:700;">@</span>
+              <input type="text" id="add-source-username-input" required placeholder="ej: portal1986" style="width:100%; padding-left:1.85rem;" oninput="onAddSourceUsernameInput(this.value)">
+            </div>
+          </div>
+
+          <div>
+            <label for="add-source-url-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">URL de Perfil Público (Opcional)</label>
+            <input type="url" id="add-source-url-input" placeholder="https://www.instagram.com/..." style="width:100%; font-size:0.85rem;">
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; background:var(--bg-subtle); padding:0.75rem; border-radius:8px; border:1px solid var(--border);">
+            <div>
+              <label for="add-source-posts-limit" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Posts por ejecución</label>
+              <input type="number" id="add-source-posts-limit" min="1" max="20" value="5" style="width:90px;">
+              <span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:0.2rem;">Entre 1 y 20 posts</span>
+            </div>
+            <div style="display:flex; flex-direction:column; justify-content:center; gap:0.5rem;">
+              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer;">
+                <input type="checkbox" id="add-source-include-reels" checked> Incluir Reels
+              </label>
+              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer; color:#059669;">
+                <input type="checkbox" id="add-source-is-active" checked> Activo
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-add-source')">Cancelar</button>
+        <button type="button" id="btn-submit-add-source" class="btn-primary" onclick="submitAddSource()">Guardar Fuente</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR FUENTE DE INGESTA INSTAGRAM -->
+  <div id="modal-edit-source" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-edit-source')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-edit-source-title" style="max-width:540px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-edit-source-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Editar Configuración de Ingesta</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-edit-source')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding:1.25rem;">
+        <input type="hidden" id="edit-source-id">
+        <div id="edit-source-error" class="editor-alert-error" style="display:none; margin-bottom:1rem;"></div>
+
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          <div>
+            <label style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Local Asociado (Inmutable)</label>
+            <div id="edit-source-venue-name" style="padding:0.6rem 0.75rem; background:#f1f5f9; border-radius:6px; font-weight:700; color:var(--text-main); font-size:0.9rem;"></div>
+          </div>
+
+          <div>
+            <label for="edit-source-username-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Usuario de Instagram *</label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <span style="position:absolute; left:0.75rem; color:var(--text-dim); font-weight:700;">@</span>
+              <input type="text" id="edit-source-username-input" required style="width:100%; padding-left:1.85rem;">
+            </div>
+          </div>
+
+          <div>
+            <label for="edit-source-url-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">URL de Perfil Público (Opcional)</label>
+            <input type="url" id="edit-source-url-input" style="width:100%; font-size:0.85rem;">
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; background:var(--bg-subtle); padding:0.75rem; border-radius:8px; border:1px solid var(--border);">
+            <div>
+              <label for="edit-source-posts-limit" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Posts por ejecución</label>
+              <input type="number" id="edit-source-posts-limit" min="1" max="20" style="width:90px;">
+              <span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:0.2rem;">Entre 1 y 20 posts</span>
+            </div>
+            <div style="display:flex; flex-direction:column; justify-content:center; gap:0.5rem;">
+              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer;">
+                <input type="checkbox" id="edit-source-include-reels"> Incluir Reels
+              </label>
+              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer; color:#059669;">
+                <input type="checkbox" id="edit-source-is-active"> Activo
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-edit-source')">Cancelar</button>
+        <button type="button" id="btn-submit-edit-source" class="btn-primary" onclick="submitEditSource()">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: INFORME DE RESULTADO DE INGESTA -->
+  <div id="modal-source-report" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-source-report')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-report-title" style="max-width:580px; max-height:85vh; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-report-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Resultado de Ingesta Instagram</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-source-report')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" id="modal-report-body" style="flex:1; overflow-y:auto; padding:1.25rem;"></div>
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-source-report')">Cerrar</button>
+        <button type="button" class="btn-primary" onclick="closeModal('modal-source-report'); switchSection('proposals');" style="background:#8b5cf6; border-color:#8b5cf6;">Ir a Bandeja de Propuestas ➔</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ==============================================================================
     // Estado y Helpers del Panel de Curación (Rediseño Shell + Curación en Tema Claro)
@@ -3799,6 +4248,12 @@ export function renderAdminHtml(): string {
     let promoUserModifiedStartsAt = false;
     let promoUserModifiedEndsAt = false;
     let adminEventsRequestId = 0;
+    let eventCurrentPage = 1;
+    let eventPageLimit = 50;
+    let eventSearchQuery = '';
+    let eventSearchTimeout = null;
+    let eventTotalCount = 0;
+    let eventTotalPages = 1;
     const eventActionsInProgress = new Set();
     let modalEventSaveInProgress = false;
     let isEventImageUploading = false;
@@ -3822,7 +4277,7 @@ export function renderAdminHtml(): string {
 
     function getEventStatusBadge(status) {
       if (status === 'published') return '<span class="status-pill status-published">Publicado</span>';
-      if (status === 'tentative') return '<span class="status-pill status-tentative">Borrador</span>';
+      if (status === 'tentative' || status === 'draft') return '<span class="status-pill status-tentative">Borrador</span>';
       if (status === 'cancelled') return '<span class="status-pill status-cancelled">Cancelado</span>';
       if (status === 'outdated') return '<span class="status-pill status-outdated">Caducado</span>';
       if (status === 'archived') return '<span class="status-pill status-archived">Archivado</span>';
@@ -4035,7 +4490,7 @@ export function renderAdminHtml(): string {
     // ==============================================================================
     window.switchSection = function(section) {
       currentSection = section;
-      const allSections = ['inbox', 'events', 'promotions', 'venues', 'recurrences', 'places', 'qr', 'routes'];
+      const allSections = ['inbox', 'proposals', 'sources', 'events', 'promotions', 'venues', 'recurrences', 'places', 'qr', 'routes'];
       allSections.forEach(s => {
         const el = document.getElementById('section-' + s);
         if (el) el.style.display = s === section ? 'block' : 'none';
@@ -4058,6 +4513,14 @@ export function renderAdminHtml(): string {
         if (titleEl) titleEl.innerText = 'Bandeja de Curación';
         if (subtitleEl) subtitleEl.innerText = 'Revisión y validación de borradores antes de su publicación en la agenda';
         loadAdminInbox();
+      } else if (section === 'proposals') {
+        if (titleEl) titleEl.innerText = 'Propuestas de Bares (Instagram)';
+        if (subtitleEl) subtitleEl.innerText = 'Curación editorial y validación antes de crear eventos borrador';
+        loadAdminProposals();
+      } else if (section === 'sources') {
+        if (titleEl) titleEl.innerText = 'Venues de ingesta Instagram';
+        if (subtitleEl) subtitleEl.innerText = 'Gestión de locales participantes en extracción automática y lanzador manual';
+        loadAdminSources();
       } else if (section === 'events') {
         if (titleEl) titleEl.innerText = 'Agenda Publicada';
         if (subtitleEl) subtitleEl.innerText = 'Gestión completa de eventos, historial y archivo';
@@ -4094,6 +4557,10 @@ export function renderAdminHtml(): string {
       updateCurationCounts();
       if (currentSection === 'inbox') {
         loadAdminInbox();
+      } else if (currentSection === 'proposals') {
+        loadAdminProposals();
+      } else if (currentSection === 'sources') {
+        loadAdminSources();
       } else if (currentSection === 'events') {
         loadAdminEvents();
       } else if (currentSection === 'promotions') {
@@ -4125,9 +4592,35 @@ export function renderAdminHtml(): string {
         selects.forEach(id => {
           const el = document.getElementById(id);
           if (el && el.tagName === 'SELECT') {
-            el.innerHTML = cachedVenues.map(v => \`<option value="\${v.id}">\${escapeHtml(v.name)}</option>\`).join('');
+            el.innerHTML = cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
           }
         });
+
+        // Rellenar selects de propuestas
+        const pVenueSelect = document.getElementById('proposal-filter-venue');
+        if (pVenueSelect) {
+          const curVal = pVenueSelect.value;
+          pVenueSelect.innerHTML = '<option value="">Todos los locales</option>' +
+            cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
+          pVenueSelect.value = curVal;
+        }
+
+        const appVenueSelect = document.getElementById('approve-prop-venue-select');
+        if (appVenueSelect) {
+          const curVal = appVenueSelect.value;
+          appVenueSelect.innerHTML = '<option value="">— Seleccionar local —</option>' +
+            cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
+          if (curVal) appVenueSelect.value = curVal;
+        }
+
+        // Rellenar selector de local para nueva fuente de ingesta
+        const addSourceVenueSelect = document.getElementById('add-source-venue-select');
+        if (addSourceVenueSelect) {
+          const curVal = addSourceVenueSelect.value;
+          addSourceVenueSelect.innerHTML = '<option value="">— Selecciona un local existente —</option>' +
+            cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
+          if (curVal) addSourceVenueSelect.value = curVal;
+        }
         const evVenueId = document.getElementById('ev-venue-id')?.value;
         if (evVenueId && typeof window.selectVenue === 'function') {
           window.selectVenue(evVenueId);
@@ -4157,12 +4650,72 @@ export function renderAdminHtml(): string {
     };
 
     window.onManualStatusFilterChange = function() {
+      eventCurrentPage = 1;
       loadAdminEvents();
+    };
+
+    window.onEventCategoryFilterChange = function() {
+      eventCurrentPage = 1;
+      loadAdminEvents();
+    };
+
+    window.onEventDateFilterChange = function() {
+      eventCurrentPage = 1;
+      loadAdminEvents();
+    };
+
+    window.onEventSearchInput = function(val) {
+      const clearIcon = document.getElementById('event-filter-search-clear');
+      if (clearIcon) clearIcon.style.display = (val && val.trim()) ? 'inline-block' : 'none';
+
+      clearTimeout(eventSearchTimeout);
+      eventSearchTimeout = setTimeout(() => {
+        eventSearchQuery = (val || '').trim();
+        eventCurrentPage = 1;
+        loadAdminEvents();
+      }, 300);
+    };
+
+    window.clearEventSearch = function() {
+      const searchInput = document.getElementById('event-filter-search');
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+      }
+      const clearIcon = document.getElementById('event-filter-search-clear');
+      if (clearIcon) clearIcon.style.display = 'none';
+      eventSearchQuery = '';
+      eventCurrentPage = 1;
+      loadAdminEvents();
+    };
+
+    window.resetEventFilters = function() {
+      const statusEl = document.getElementById('event-filter-status');
+      const catEl = document.getElementById('event-filter-category');
+      const searchEl = document.getElementById('event-filter-search');
+      const dateEl = document.getElementById('event-filter-date');
+      const clearIcon = document.getElementById('event-filter-search-clear');
+      if (statusEl) statusEl.value = 'published';
+      if (catEl) catEl.value = '';
+      if (searchEl) searchEl.value = '';
+      if (dateEl) dateEl.value = '';
+      if (clearIcon) clearIcon.style.display = 'none';
+      eventSearchQuery = '';
+      eventCurrentPage = 1;
+      loadAdminEvents();
+    };
+
+    window.changeEventPage = function(delta) {
+      const targetPage = eventCurrentPage + delta;
+      if (targetPage >= 1 && targetPage <= eventTotalPages) {
+        eventCurrentPage = targetPage;
+        loadAdminEvents();
+      }
     };
 
     async function updateCurationCounts() {
       try {
-        const res = await apiFetch('/api/v1/admin/events?status=tentative');
+        const res = await apiFetch('/api/v1/admin/events?status=draft');
         const data = await res.json();
         const drafts = data.events || [];
 
@@ -4206,6 +4759,31 @@ export function renderAdminHtml(): string {
           bCollisions.innerText = totalCollisions;
           bCollisions.style.display = totalCollisions > 0 ? 'inline-block' : 'none';
         }
+
+        // Actualizar contadores de propuestas de bares (Instagram)
+        try {
+          const propRes = await apiFetch('/api/v1/admin/proposals?review_status=pending');
+          const propData = await propRes.json();
+          const pendingProposals = propData.proposals ? propData.proposals.length : 0;
+
+          const sidebarBadgeProp = document.getElementById('sidebar-badge-proposals');
+          if (sidebarBadgeProp) {
+            sidebarBadgeProp.innerText = pendingProposals;
+            sidebarBadgeProp.style.display = pendingProposals > 0 ? 'inline-block' : 'none';
+          }
+
+          const drawerBadgeProp = document.getElementById('drawer-badge-proposals');
+          if (drawerBadgeProp) {
+            drawerBadgeProp.innerText = pendingProposals;
+            drawerBadgeProp.style.display = pendingProposals > 0 ? 'inline-block' : 'none';
+          }
+
+          const inboxBadgeProp = document.getElementById('inbox-badge-proposals');
+          if (inboxBadgeProp) {
+            inboxBadgeProp.innerText = pendingProposals;
+            inboxBadgeProp.style.display = pendingProposals > 0 ? 'inline-block' : 'none';
+          }
+        } catch {}
       } catch {}
     }
 
@@ -4216,7 +4794,7 @@ export function renderAdminHtml(): string {
       const grid = document.getElementById('inbox-cards-grid');
       grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-dim); padding: 2.5rem;">Cargando borradores pendientes...</div>';
 
-      let url = '/api/v1/admin/events?status=tentative&';
+      let url = '/api/v1/admin/events?status=draft&';
       if (curationSubfilter === 'tentative_unassigned') {
         url += 'venue_id=unassigned&';
       } else if (curationSubfilter === 'tentative_collisions') {
@@ -4362,20 +4940,40 @@ export function renderAdminHtml(): string {
       const currentReqId = ++adminEventsRequestId;
       const tbody = document.getElementById('events-tbody');
       const cardsContainer = document.getElementById('events-cards-container');
+      const countBadge = document.getElementById('events-count-badge');
+      const clearBtn = document.getElementById('event-filter-clear-btn');
+      const paginationContainer = document.getElementById('events-pagination-container');
+      const prevBtn = document.getElementById('events-prev-page-btn');
+      const nextBtn = document.getElementById('events-next-page-btn');
+      const pageIndicator = document.getElementById('events-page-indicator');
+      const pageInfo = document.getElementById('events-pagination-info');
 
       if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando eventos...</td></tr>';
       if (cardsContainer) cardsContainer.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando eventos...</div>';
 
       const statusEl = document.getElementById('event-filter-status');
+      const catEl = document.getElementById('event-filter-category');
+      const searchEl = document.getElementById('event-filter-search');
       const dateEl = document.getElementById('event-filter-date');
+
       const status = statusEl ? statusEl.value : '';
+      const category = catEl ? catEl.value : '';
+      const queryStr = eventSearchQuery || (searchEl ? searchEl.value.trim() : '');
       const date = dateEl ? dateEl.value : '';
+
+      const isFiltered = (status && status !== 'published') || Boolean(category) || Boolean(queryStr) || Boolean(date);
+      if (clearBtn) {
+        clearBtn.style.display = isFiltered ? 'inline-block' : 'none';
+      }
 
       let url = '/api/v1/admin/events?';
       if (status) url += 'status=' + encodeURIComponent(status) + '&';
+      if (category) url += 'category=' + encodeURIComponent(category) + '&';
+      if (queryStr) url += 'q=' + encodeURIComponent(queryStr) + '&';
       if (date) url += 'date=' + encodeURIComponent(date) + '&';
+      url += 'page=' + eventCurrentPage + '&limit=' + eventPageLimit + '&';
 
-      if (status === 'tentative') {
+      if (status === 'tentative' || status === 'draft') {
         if (curationSubfilter === 'tentative_unassigned') {
           url += 'venue_id=unassigned&';
         } else if (curationSubfilter === 'tentative_collisions') {
@@ -4389,11 +4987,28 @@ export function renderAdminHtml(): string {
         const data = await res.json();
         const events = data.events || [];
         currentLoadedEvents = events;
+        eventTotalCount = typeof data.total === 'number' ? data.total : events.length;
+        eventTotalPages = data.pagination?.total_pages || Math.ceil(eventTotalCount / eventPageLimit) || 1;
+
+        if (countBadge) {
+          countBadge.innerText = String(eventTotalCount) + (eventTotalCount === 1 ? ' evento' : ' eventos');
+          countBadge.style.display = 'inline-block';
+        }
+
+        // Paginación UI
+        if (prevBtn) prevBtn.disabled = eventCurrentPage <= 1;
+        if (nextBtn) nextBtn.disabled = eventCurrentPage >= eventTotalPages;
+        if (pageIndicator) pageIndicator.textContent = 'Página ' + eventCurrentPage + ' de ' + eventTotalPages;
+
+        const startItem = eventTotalCount === 0 ? 0 : (eventCurrentPage - 1) * eventPageLimit + 1;
+        const endItem = Math.min(eventCurrentPage * eventPageLimit, eventTotalCount);
+        if (pageInfo) pageInfo.textContent = 'Mostrando ' + startItem + ' - ' + endItem + ' de ' + eventTotalCount + ' eventos';
+        if (paginationContainer) paginationContainer.style.display = eventTotalCount > 0 ? 'flex' : 'none';
 
         updateCurationCounts();
 
         if (events.length === 0) {
-          const emptyMsg = 'No se encontraron eventos con los filtros seleccionados.';
+          const emptyMsg = 'No se han encontrado eventos con los filtros seleccionados.';
           if (tbody) tbody.innerHTML = \`<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem;">\${emptyMsg}</td></tr>\`;
           if (cardsContainer) cardsContainer.innerHTML = \`<div style="text-align:center; color:var(--text-dim); padding:2.5rem 1rem; background:#ffffff; border-radius:12px; border:1px solid var(--border);">\${emptyMsg}</div>\`;
           return;
@@ -4402,7 +5017,7 @@ export function renderAdminHtml(): string {
         // Render Desktop (Tabla)
         if (tbody) {
           tbody.innerHTML = events.map(e => {
-            const isTentative = e.status === 'tentative';
+            const isTentative = e.status === 'tentative' || e.status === 'draft';
             const isUnassigned = !e.venue_id || Number(e.venue_id) === 9999;
             const hasCollision = Boolean(e.collision_alert);
             const statusBadge = getEventStatusBadge(e.status);
@@ -4492,7 +5107,7 @@ export function renderAdminHtml(): string {
         // Render Móvil (Tarjetas)
         if (cardsContainer) {
           cardsContainer.innerHTML = events.map(e => {
-            const isTentative = e.status === 'tentative';
+            const isTentative = e.status === 'tentative' || e.status === 'draft';
             const isUnassigned = !e.venue_id || Number(e.venue_id) === 9999;
             const hasCollision = Boolean(e.collision_alert);
             const statusBadge = getEventStatusBadge(e.status);
@@ -8978,6 +9593,1089 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     window.setCurrentEditingParticipants = function(p) { currentEditingParticipants = p; };
     window.getRouteToArchiveId = function() { return routeToArchiveId; };
     window.setRouteToArchiveId = function(id) { routeToArchiveId = id; };
+
+    // ==============================================================================
+    // GESTIÓN DE PROPUESTAS DE BARES (INSTAGRAM)
+    // ==============================================================================
+    let cachedProposals = [];
+    let proposalSearchQuery = '';
+
+    window.onProposalFilterChange = function() {
+      loadAdminProposals();
+    };
+
+    window.onProposalSearchInput = function(val) {
+      proposalSearchQuery = (val || '').trim().toLowerCase();
+      const clearBtn = document.getElementById('proposal-filter-search-clear');
+      if (clearBtn) clearBtn.style.display = proposalSearchQuery ? 'block' : 'none';
+      renderProposalsList(cachedProposals);
+    };
+
+    window.clearProposalSearch = function() {
+      const searchInput = document.getElementById('proposal-filter-search');
+      if (searchInput) searchInput.value = '';
+      window.onProposalSearchInput('');
+    };
+
+    window.resetProposalFilters = function() {
+      const statusEl = document.getElementById('proposal-filter-status');
+      const venueEl = document.getElementById('proposal-filter-venue');
+      const catEl = document.getElementById('proposal-filter-category');
+      const confEl = document.getElementById('proposal-filter-confidence');
+      const dateEl = document.getElementById('proposal-filter-date');
+      const searchEl = document.getElementById('proposal-filter-search');
+      const clearSearchBtn = document.getElementById('proposal-filter-search-clear');
+      const clearAllBtn = document.getElementById('proposal-filter-clear-btn');
+
+      if (statusEl) statusEl.value = 'pending';
+      if (venueEl) venueEl.value = '';
+      if (catEl) catEl.value = '';
+      if (confEl) confEl.value = '';
+      if (dateEl) dateEl.value = '';
+      if (searchEl) searchEl.value = '';
+      if (clearSearchBtn) clearSearchBtn.style.display = 'none';
+      if (clearAllBtn) clearAllBtn.style.display = 'none';
+
+      proposalSearchQuery = '';
+      loadAdminProposals();
+    };
+
+    window.loadAdminProposals = async function() {
+      const tbody = document.getElementById('proposals-tbody');
+      const cards = document.getElementById('proposals-cards-container');
+      const badge = document.getElementById('proposals-count-badge');
+      const clearAllBtn = document.getElementById('proposal-filter-clear-btn');
+
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas de bares...</td></tr>';
+      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>';
+
+      const status = document.getElementById('proposal-filter-status')?.value || '';
+      const venueId = document.getElementById('proposal-filter-venue')?.value || '';
+      const category = document.getElementById('proposal-filter-category')?.value || '';
+      const confidence = document.getElementById('proposal-filter-confidence')?.value || '';
+      const date = document.getElementById('proposal-filter-date')?.value || '';
+
+      const isFiltered = status !== 'pending' || venueId || category || confidence || date || proposalSearchQuery;
+      if (clearAllBtn) clearAllBtn.style.display = isFiltered ? 'inline-block' : 'none';
+
+      const params = new URLSearchParams();
+      if (status) params.append('review_status', status);
+      if (venueId) params.append('venue_id', venueId);
+      if (category) params.append('category', category);
+      if (confidence) params.append('confidence', confidence);
+      if (date) params.append('date', date);
+
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals?' + params.toString());
+        const data = await res.json();
+        cachedProposals = data.proposals || [];
+        renderProposalsList(cachedProposals);
+        updateCurationCounts();
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-danger);">Error al cargar propuestas: ' + escapeHtml(err.message) + '</td></tr>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas.</div>';
+      }
+    };
+
+    window.renderProposalsList = function(proposals) {
+      const tbody = document.getElementById('proposals-tbody');
+      const cards = document.getElementById('proposals-cards-container');
+      const badge = document.getElementById('proposals-count-badge');
+
+      let list = proposals;
+      if (proposalSearchQuery) {
+        list = list.filter(p => {
+          const t = (p.title || '').toLowerCase();
+          const v = (p.venue_name || '').toLowerCase();
+          const c = (p.caption || '').toLowerCase();
+          const u = (p.instagram_username || '').toLowerCase();
+          return t.includes(proposalSearchQuery) || v.includes(proposalSearchQuery) || c.includes(proposalSearchQuery) || u.includes(proposalSearchQuery);
+        });
+      }
+
+      if (badge) {
+        badge.innerText = list.length + (list.length === 1 ? ' propuesta' : ' propuestas');
+        badge.style.display = 'inline-block';
+      }
+
+      if (list.length === 0) {
+        const emptyMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-muted);"><div style="font-size:1.5rem; margin-bottom:0.5rem;">🍸</div><strong>No se encontraron propuestas</strong><p style="margin:0.25rem 0 0 0; font-size:0.875rem;">Ajusta los filtros o cambia el estado para ver más candidatos.</p></div>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6">' + emptyMsg + '</td></tr>';
+        if (cards) cards.innerHTML = '<div style="background:#ffffff; border-radius:12px; border:1px solid var(--border);">' + emptyMsg + '</div>';
+        return;
+      }
+
+      // Render Desktop Rows
+      if (tbody) {
+        tbody.innerHTML = list.map(p => {
+          const confBadge = p.confidence === 'ALTA'
+            ? '<span class="badge-tag" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700;">ALTA</span>'
+            : (p.confidence === 'MEDIA'
+              ? '<span class="badge-tag" style="background:#fffbeb; color:#92400e; border:1px solid #fde68a; font-weight:700;">MEDIA</span>'
+              : '<span class="badge-tag" style="background:#f3f4f6; color:#4b5563; border:1px solid #e5e7eb;">BAJA</span>');
+
+          const statusBadge = p.review_status === 'pending'
+            ? '<span class="badge-status badge-draft" style="background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe;">Pendiente</span>'
+            : (p.review_status === 'approved_draft'
+              ? '<span class="badge-status badge-published" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;">Borrador Creado</span>'
+              : (p.review_status === 'rejected'
+                ? '<span class="badge-status badge-danger" style="background:#fef2f2; color:#991b1b; border:1px solid #fecaca;">Rechazado</span>'
+                : (p.review_status === 'promotion'
+                  ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">Promoción</span>'
+                  : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">Archivado</span>')));
+
+          const timeHtml = p.proposed_time
+            ? '<div style="font-weight:700; color:var(--text-main); font-size:0.875rem;">⏰ ' + escapeHtml(p.proposed_time) + ' h</div>'
+            : '<div style="font-size:0.75rem; color:#d97706; font-weight:600;">⚠️ Hora pendiente</div>';
+
+          let actionsHtml = '';
+          if (p.review_status === 'pending') {
+            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
+              '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Aprobar y crear borrador" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" title="Rechazar con motivo" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')" title="Archivar sin crear evento">Archivar</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')" title="Marcar como promoción comercial">Promoción</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" title="Ver texto original y fuente">Ver Post</button>' +
+            '</div>';
+          } else if (p.review_status === 'approved_draft') {
+            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
+              (p.created_event_id ? '<span style="font-size:0.75rem; font-weight:700; color:#059669;">Evento #' + p.created_event_id + ' (Draft)</span>' : '') +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+            '</div>';
+          } else if (p.review_status === 'rejected') {
+            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Detalle</button>' +
+            '</div>';
+          } else {
+            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Detalle</button>' +
+            '</div>';
+          }
+
+          return '<tr id="prop-row-' + p.id + '">' +
+            '<td>' +
+              '<div style="width:56px; height:56px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:#f1f5f9; display:flex; align-items:center; justify-content:center;">' +
+                (p.image_url ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;">' : '<span style="font-size:0.7rem; color:var(--text-muted);">Sin foto</span>') +
+              '</div>' +
+            '</td>' +
+            '<td>' +
+              '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35; margin-bottom:0.25rem;">' + escapeHtml(p.title) + '</div>' +
+              '<div style="font-size:0.8rem; color:var(--text-dim); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">' +
+                '<span>📍 <strong>' + escapeHtml(p.venue_name || ('Local #' + (p.venue_id || '—'))) + '</strong></span>' +
+                (p.instagram_username ? '<span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>' : '') +
+              '</div>' +
+            '</td>' +
+            '<td>' +
+              '<div style="font-weight:600; font-size:0.875rem;">' + (p.proposed_date || 'Sin fecha') + '</div>' +
+              timeHtml +
+            '</td>' +
+            '<td>' +
+              '<div style="display:flex; flex-direction:column; gap:0.25rem;">' +
+                '<span class="badge-tag" style="font-size:0.75rem; align-self:flex-start;">' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
+                confBadge +
+              '</div>' +
+            '</td>' +
+            '<td>' +
+              statusBadge +
+              (p.rejection_reason ? '<div style="font-size:0.75rem; color:#dc2626; margin-top:0.25rem; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(p.rejection_reason) + '">' + escapeHtml(p.rejection_reason) + '</div>' : '') +
+            '</td>' +
+            '<td style="text-align:right;">' +
+              actionsHtml +
+            '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      // Render Mobile Cards
+      if (cards) {
+        cards.innerHTML = list.map(p => {
+          const confBadge = p.confidence === 'ALTA'
+            ? '<span class="badge-tag" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700;">ALTA</span>'
+            : (p.confidence === 'MEDIA'
+              ? '<span class="badge-tag" style="background:#fffbeb; color:#92400e; border:1px solid #fde68a; font-weight:700;">MEDIA</span>'
+              : '<span class="badge-tag" style="background:#f3f4f6; color:#4b5563; border:1px solid #e5e7eb;">BAJA</span>');
+
+          const statusBadge = p.review_status === 'pending'
+            ? '<span class="badge-status badge-draft" style="background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe;">Pendiente</span>'
+            : (p.review_status === 'approved_draft'
+              ? '<span class="badge-status badge-published" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;">Borrador Creado</span>'
+              : (p.review_status === 'rejected'
+                ? '<span class="badge-status badge-danger" style="background:#fef2f2; color:#991b1b; border:1px solid #fecaca;">Rechazado</span>'
+                : (p.review_status === 'promotion'
+                  ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">Promoción</span>'
+                  : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">Archivado</span>')));
+
+          return '<article style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
+            '<div style="display:flex; gap:0.75rem; margin-bottom:0.75rem;">' +
+              '<div style="width:70px; height:70px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:#f1f5f9; flex-shrink:0;">' +
+                (p.image_url ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;">' : '<div style="display:flex; height:100%; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.75rem;">Sin foto</div>') +
+              '</div>' +
+              '<div style="flex:1; min-width:0;">' +
+                '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; margin-bottom:0.25rem;">' +
+                  statusBadge +
+                  confBadge +
+                '</div>' +
+                '<h4 style="margin:0 0 0.25rem 0; font-size:0.95rem; font-weight:800; color:var(--text-main); line-height:1.3;">' + escapeHtml(p.title) + '</h4>' +
+                '<div style="font-size:0.8rem; color:var(--text-dim);">📍 <strong>' + escapeHtml(p.venue_name || ('Local #' + (p.venue_id || '—'))) + '</strong></div>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem;">' +
+              '<span>📅 ' + (p.proposed_date || 'Sin fecha') + '</span>' +
+              '<span>' + (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '⚠️ Hora pendiente') + '</span>' +
+              '<span>🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
+            '</div>' +
+            (p.rejection_reason ? '<div style="font-size:0.8rem; color:#dc2626; background:#fef2f2; padding:0.4rem 0.6rem; border-radius:6px; margin-bottom:0.75rem;"><strong>Motivo rechazo:</strong> ' + escapeHtml(p.rejection_reason) + '</div>' : '') +
+            '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
+              (p.review_status === 'pending' ?
+                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626;">Rechazar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>'
+                : '') +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+            '</div>' +
+          '</article>';
+        }).join('');
+      }
+    };
+
+    window.openApproveProposalModal = function(id) {
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!prop) {
+        alert('Propuesta no encontrada.');
+        return;
+      }
+
+      document.getElementById('approve-prop-id').value = prop.id;
+      document.getElementById('approve-prop-title-input').value = prop.title || '';
+      document.getElementById('approve-prop-date-input').value = prop.proposed_date || '';
+      document.getElementById('approve-prop-time-input').value = prop.proposed_time || '';
+      document.getElementById('approve-prop-venue-select').value = prop.venue_id ? String(prop.venue_id) : '';
+      document.getElementById('approve-prop-category-select').value = prop.category || 'dj_tardeo';
+      document.getElementById('approve-prop-price-input').value = prop.price !== null ? prop.price * 100 : 0;
+      document.getElementById('approve-prop-desc-input').value = prop.caption ? prop.caption.slice(0, 300) : '';
+      document.getElementById('approve-prop-img-input').value = prop.image_url || '';
+
+      document.getElementById('approve-prop-meta-source').innerText = prop.source_type || 'Instagram';
+      document.getElementById('approve-prop-meta-user').innerText = prop.instagram_username ? '@' + prop.instagram_username : '—';
+      const confSpan = document.getElementById('approve-prop-meta-conf');
+      if (confSpan) {
+        confSpan.innerText = prop.confidence || 'MEDIA';
+        confSpan.style.background = prop.confidence === 'ALTA' ? '#ecfdf5' : '#fffbeb';
+        confSpan.style.color = prop.confidence === 'ALTA' ? '#065f46' : '#92400e';
+      }
+
+      const metaLink = document.getElementById('approve-prop-meta-link');
+      if (metaLink) {
+        metaLink.href = prop.source_url || '#';
+        metaLink.style.display = prop.source_url ? 'inline-block' : 'none';
+      }
+
+      const errBox = document.getElementById('approve-prop-error');
+      if (errBox) errBox.style.display = 'none';
+
+      const dupBox = document.getElementById('approve-prop-duplicate-alert');
+      if (dupBox) dupBox.style.display = 'none';
+
+      updateApproveImagePreview();
+      openModal('modal-approve-proposal');
+    };
+
+    window.updateApproveImagePreview = function() {
+      const url = (document.getElementById('approve-prop-img-input')?.value || '').trim();
+      const img = document.getElementById('approve-prop-img-preview');
+      const placeholder = document.getElementById('approve-prop-img-placeholder');
+
+      if (!url) {
+        if (img) img.style.display = 'none';
+        if (placeholder) { placeholder.style.display = 'block'; placeholder.innerText = 'Sin imagen'; }
+        return;
+      }
+
+      if (url.includes('cdninstagram.com') || url.includes('fbcdn.net') || url.includes('instagram.com')) {
+        if (img) img.style.display = 'none';
+        if (placeholder) { placeholder.style.display = 'block'; placeholder.innerHTML = '<span style="color:#dc2626;">❌ Prohibido: URL de CDN Instagram</span>'; }
+        return;
+      }
+
+      if (img) {
+        img.src = url;
+        img.style.display = 'block';
+        img.onerror = function() {
+          img.style.display = 'none';
+          if (placeholder) { placeholder.style.display = 'block'; placeholder.innerText = 'Error cargando imagen R2'; }
+        };
+        img.onload = function() {
+          if (placeholder) placeholder.style.display = 'none';
+        };
+      }
+    };
+
+    window.submitApproveProposal = async function() {
+      const id = parseInt(document.getElementById('approve-prop-id')?.value, 10);
+      const title = (document.getElementById('approve-prop-title-input')?.value || '').trim();
+      const date = (document.getElementById('approve-prop-date-input')?.value || '').trim();
+      const time = (document.getElementById('approve-prop-time-input')?.value || '').trim();
+      const venueId = parseInt(document.getElementById('approve-prop-venue-select')?.value, 10);
+      const category = (document.getElementById('approve-prop-category-select')?.value || 'dj_tardeo').trim();
+      const priceCents = parseInt(document.getElementById('approve-prop-price-input')?.value, 10) || 0;
+      const description = (document.getElementById('approve-prop-desc-input')?.value || '').trim();
+      const imageUrl = (document.getElementById('approve-prop-img-input')?.value || '').trim();
+
+      const errBox = document.getElementById('approve-prop-error');
+      const dupBox = document.getElementById('approve-prop-duplicate-alert');
+      const dupMsg = document.getElementById('approve-prop-duplicate-msg');
+      if (errBox) errBox.style.display = 'none';
+      if (dupBox) dupBox.style.display = 'none';
+
+      // Validaciones cliente
+      if (!title) {
+        if (errBox) { errBox.innerText = 'El título del evento es obligatorio.'; errBox.style.display = 'block'; }
+        return;
+      }
+      if (!date) {
+        if (errBox) { errBox.innerText = 'La fecha del evento es obligatoria.'; errBox.style.display = 'block'; }
+        return;
+      }
+      if (!venueId || isNaN(venueId)) {
+        if (errBox) { errBox.innerText = 'Debes seleccionar un local (venue) válido.'; errBox.style.display = 'block'; }
+        return;
+      }
+      if (!imageUrl || imageUrl.includes('instagram.com') || imageUrl.includes('fbcdn.net')) {
+        if (errBox) { errBox.innerText = 'La imagen debe estar alojada en Cloudflare R2 (media.vayaplan.com). No se admiten URLs de CDN Instagram.'; errBox.style.display = 'block'; }
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-approve-prop');
+      if (btn) { btn.disabled = true; btn.innerText = 'Guardando Borrador...'; }
+
+      try {
+        const payload = {
+          title: title,
+          proposed_date: date,
+          proposed_time: time || null,
+          venue_id: venueId,
+          category: category,
+          price_cents: priceCents,
+          description: description,
+          image_url: imageUrl
+        };
+
+        const res = await apiFetch('/api/v1/admin/proposals/' + id + '/approve', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.status === 409) {
+          // Colisión / duplicado
+          if (dupBox && dupMsg) {
+            dupMsg.innerHTML = '<strong>' + escapeHtml(data.message) + '</strong><br>' +
+              (data.existingEvent ? 'Evento existente: ID #' + data.existingEvent.id + ' — "' + escapeHtml(data.existingEvent.title) + '" (' + data.existingEvent.status + ')' : '');
+            dupBox.style.display = 'block';
+          }
+          if (btn) { btn.disabled = false; btn.innerText = '✓ Aprobar y Crear Borrador'; }
+          return;
+        }
+
+        if (!res.ok) {
+          if (errBox) { errBox.innerText = data.message || 'Error al aprobar propuesta.'; errBox.style.display = 'block'; }
+          if (btn) { btn.disabled = false; btn.innerText = '✓ Aprobar y Crear Borrador'; }
+          return;
+        }
+
+        closeModal('modal-approve-proposal');
+        alert('✓ ' + (data.message || 'Propuesta aprobada como borrador con éxito.'));
+        loadAdminProposals();
+      } catch (err) {
+        if (errBox) { errBox.innerText = 'Error de conexión: ' + err.message; errBox.style.display = 'block'; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = '✓ Aprobar y Crear Borrador'; }
+      }
+    };
+
+    window.openRejectProposalModal = function(id) {
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!prop) {
+        alert('Propuesta no encontrada.');
+        return;
+      }
+
+      document.getElementById('reject-prop-id').value = prop.id;
+      document.getElementById('reject-prop-title-text').innerText = 'Propuesta #' + prop.id + ': ' + prop.title;
+      document.getElementById('reject-prop-reason-select').value = '';
+      document.getElementById('reject-prop-reason-text').value = '';
+
+      openModal('modal-reject-proposal');
+    };
+
+    window.onRejectReasonSelectChange = function(val) {
+      const reasonText = document.getElementById('reject-prop-reason-text');
+      if (!reasonText) return;
+      if (val && val !== 'custom') {
+        reasonText.value = val;
+      } else if (val === 'custom') {
+        reasonText.value = '';
+        reasonText.focus();
+      }
+    };
+
+    window.submitRejectProposal = async function() {
+      const id = parseInt(document.getElementById('reject-prop-id')?.value, 10);
+      const reason = (document.getElementById('reject-prop-reason-text')?.value || '').trim();
+
+      if (!reason) {
+        alert('Debes indicar un motivo para rechazar la propuesta.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-reject-prop');
+      if (btn) { btn.disabled = true; btn.innerText = 'Rechazando...'; }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals/' + id + '/reject', {
+          method: 'POST',
+          body: JSON.stringify({ rejection_reason: reason })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'No se pudo rechazar la propuesta.'));
+          return;
+        }
+
+        closeModal('modal-reject-proposal');
+        loadAdminProposals();
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Confirmar Rechazo'; }
+      }
+    };
+
+    window.archiveProposal = async function(id) {
+      if (!confirm('¿Estás seguro de que deseas archivar esta propuesta? No creará ningún evento.')) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals/' + id + '/archive', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'No se pudo archivar la propuesta.'));
+          return;
+        }
+        loadAdminProposals();
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    };
+
+    window.markProposalPromotion = async function(id) {
+      if (!confirm('¿Deseas marcar esta propuesta como promoción comercial? No se creará evento en agenda.')) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals/' + id + '/promotion', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'No se pudo marcar como promoción.'));
+          return;
+        }
+        loadAdminProposals();
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    };
+
+    window.openProposalCaptionModal = function(id) {
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!prop) {
+        alert('Propuesta no encontrada.');
+        return;
+      }
+
+      const bodyEl = document.getElementById('modal-caption-prop-body');
+      if (!bodyEl) return;
+
+      bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; gap:1rem;">' +
+        '<div style="background:#ffffff; border:1px solid var(--border); border-radius:8px; padding:1rem;">' +
+          '<h4 style="margin:0 0 0.5rem 0; font-size:1.05rem; font-weight:800; color:var(--text-main);">' + escapeHtml(prop.title) + '</h4>' +
+          '<div style="display:flex; gap:0.5rem; flex-wrap:wrap; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem;">' +
+            '<span>📍 ' + escapeHtml(prop.venue_name || ('Local #' + prop.venue_id)) + '</span>' +
+            '<span>📅 ' + (prop.proposed_date || 'Sin fecha') + '</span>' +
+            (prop.proposed_time ? '<span>⏰ ' + escapeHtml(prop.proposed_time) + ' h</span>' : '<span style="color:#d97706;">⚠️ Hora pendiente</span>') +
+            '<span>🏷️ ' + escapeHtml(prop.category || 'dj_tardeo') + '</span>' +
+          '</div>' +
+          '<div style="font-size:0.75rem; color:var(--text-muted);">' +
+            '<div><strong>Estado:</strong> ' + escapeHtml(prop.review_status) + ' | <strong>Clasificación:</strong> ' + escapeHtml(prop.classification) + '</div>' +
+            (prop.rejection_reason ? '<div style="color:#dc2626; margin-top:0.25rem;"><strong>Motivo rechazo:</strong> ' + escapeHtml(prop.rejection_reason) + '</div>' : '') +
+            (prop.reviewed_by ? '<div><strong>Revisado por:</strong> ' + escapeHtml(prop.reviewed_by) + ' (' + (prop.reviewed_at ? prop.reviewed_at.slice(0, 19).replace('T', ' ') : '—') + ')</div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:1rem;">' +
+          '<div style="font-weight:800; font-size:0.8125rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.5rem;">Texto del Post (Caption Original)</div>' +
+          '<div style="white-space:pre-wrap; font-size:0.875rem; color:var(--text-main); line-height:1.5; font-family:inherit; max-height:220px; overflow-y:auto; background:#ffffff; padding:0.75rem; border-radius:6px; border:1px solid var(--border);">' +
+            (prop.caption ? escapeHtml(prop.caption) : '<span style="color:var(--text-muted); font-style:italic;">Sin caption disponible</span>') +
+          '</div>' +
+        '</div>' +
+        '<div style="background:#ffffff; border:1px solid var(--border); border-radius:8px; padding:1rem; font-size:0.8125rem; display:flex; flex-direction:column; gap:0.35rem;">' +
+          '<div><strong>Perfil de Instagram:</strong> ' + (prop.instagram_username ? '@' + escapeHtml(prop.instagram_username) : '—') + '</div>' +
+          '<div><strong>Shortcode:</strong> ' + escapeHtml(prop.instagram_post_shortcode || '—') + '</div>' +
+          '<div><strong>URL en Cloudflare R2:</strong> <a href="' + escapeHtml(prop.image_url) + '" target="_blank" rel="noopener noreferrer" style="color:var(--primary); word-break:break-all;">' + escapeHtml(prop.image_url) + ' ↗</a></div>' +
+          (prop.source_url ? '<div style="margin-top:0.5rem;"><a href="' + escapeHtml(prop.source_url) + '" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:0.4rem 0.75rem; background:#f1f5f9; border-radius:6px; color:var(--text-main); text-decoration:none; font-weight:700;">Ver post en Instagram ↗</a></div>' : '') +
+        '</div>' +
+      '</div>';
+
+      openModal('modal-proposal-caption');
+    };
+
+    // ==============================================================================
+    // GESTIÓN DE VENUES DE INGESTA INSTAGRAM
+    // ==============================================================================
+    let cachedSources = [];
+    let selectedSourceIds = new Set();
+
+    window.loadAdminSources = async function() {
+      const tbody = document.getElementById('sources-tbody');
+      const cards = document.getElementById('sources-cards-container');
+      const badge = document.getElementById('sources-count-badge');
+      const alertBox = document.getElementById('sources-alert-box');
+
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando fuentes de ingesta...</td></tr>';
+      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando fuentes...</div>';
+
+      try {
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources');
+        const data = await res.json();
+        cachedSources = data.sources || [];
+        selectedSourceIds.clear();
+        updateSelectedSourcesButtons();
+
+        if (alertBox) {
+          if (data.isLocked) {
+            alertBox.style.display = 'block';
+            alertBox.style.background = '#eff6ff';
+            alertBox.style.color = '#1e40af';
+            alertBox.style.border = '1px solid #bfdbfe';
+            alertBox.innerHTML = '⏳ <strong>Ingesta en progreso:</strong> Hay una extracción de posts en curso iniciada a las ' + (data.lockStartedAt ? data.lockStartedAt.slice(11, 19) : '') + ' UTC.';
+          } else {
+            alertBox.style.display = 'none';
+          }
+        }
+
+        renderSourcesList(cachedSources);
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-danger);">Error al cargar fuentes: ' + escapeHtml(err.message) + '</td></tr>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar fuentes.</div>';
+      }
+    };
+
+    window.renderSourcesList = function(sources) {
+      const tbody = document.getElementById('sources-tbody');
+      const cards = document.getElementById('sources-cards-container');
+      const badge = document.getElementById('sources-count-badge');
+      const selectAll = document.getElementById('sources-select-all');
+
+      if (selectAll) selectAll.checked = false;
+
+      if (badge) {
+        badge.innerText = sources.length + (sources.length === 1 ? ' fuente configurada' : ' fuentes configuradas');
+        badge.style.display = 'inline-block';
+      }
+
+      if (sources.length === 0) {
+        const emptyMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-muted);"><div style="font-size:1.5rem; margin-bottom:0.5rem;">📡</div><strong>No hay locales configurados para ingesta</strong><p style="margin:0.25rem 0 0 0; font-size:0.875rem;">Haz clic en "+ Añadir Fuente" para asociar un venue del catálogo a su perfil de Instagram.</p></div>';
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7">' + emptyMsg + '</td></tr>';
+        if (cards) cards.innerHTML = '<div style="background:#ffffff; border-radius:12px; border:1px solid var(--border);">' + emptyMsg + '</div>';
+        return;
+      }
+
+      // Desktop table
+      if (tbody) {
+        tbody.innerHTML = sources.map(s => {
+          const isChecked = selectedSourceIds.has(s.id);
+          const activeBadge = s.is_active
+            ? '<span class="badge-tag" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700;">Activo</span>'
+            : '<span class="badge-tag" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1;">Inactivo</span>';
+
+          const statusBadge = s.last_status === 'success'
+            ? '<span class="badge-status badge-published" style="background:#ecfdf5; color:#065f46;">Éxito</span>'
+            : (s.last_status === 'partial'
+              ? '<span class="badge-status" style="background:#fffbeb; color:#92400e; border:1px solid #fde68a;">Parcial</span>'
+              : (s.last_status === 'error'
+                ? '<span class="badge-status badge-danger" style="background:#fef2f2; color:#991b1b;">Error</span>'
+                : '<span class="badge-status" style="background:#f1f5f9; color:#475569;">Sin ejecutar</span>'));
+
+          const lastTimeStr = s.last_ingested_at
+            ? s.last_ingested_at.slice(0, 16).replace('T', ' ')
+            : 'Nunca';
+
+          return '<tr id="source-row-' + s.id + '">' +
+            '<td><input type="checkbox" class="source-checkbox" value="' + s.id + '" ' + (isChecked ? 'checked' : '') + ' onchange="toggleSourceSelect(' + s.id + ', this.checked)"></td>' +
+            '<td>' +
+              '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main);">' + escapeHtml(s.venue_name || ('Venue #' + s.venue_id)) + '</div>' +
+              (s.venue_address ? '<div style="font-size:0.75rem; color:var(--text-muted);">' + escapeHtml(s.venue_address) + '</div>' : '') +
+            '</td>' +
+            '<td>' +
+              '<div style="font-weight:700; color:var(--primary); font-size:0.875rem;">@' + escapeHtml(s.instagram_username) + '</div>' +
+              (s.instagram_profile_url ? '<a href="' + escapeHtml(s.instagram_profile_url) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem; color:var(--text-dim); text-decoration:none;">Ver perfil ↗</a>' : '') +
+            '</td>' +
+            '<td>' +
+              '<div style="font-size:0.8rem; color:var(--text-main);"><strong>' + s.posts_per_run + '</strong> posts / run</div>' +
+              '<div style="font-size:0.75rem; color:var(--text-muted);">' + (s.include_reels ? '✓ Con Reels' : '✕ Sin Reels') + '</div>' +
+            '</td>' +
+            '<td>' +
+              activeBadge +
+            '</td>' +
+            '<td>' +
+              statusBadge +
+              '<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">' + lastTimeStr + '</div>' +
+              (s.last_error ? '<div style="font-size:0.7rem; color:#dc2626; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(s.last_error) + '">' + escapeHtml(s.last_error) + '</div>' : '') +
+            '</td>' +
+            '<td style="text-align:right;">' +
+              '<div style="display:flex; justify-content:flex-end; gap:0.35rem; align-items:center;">' +
+                '<button type="button" class="btn-sm btn-primary" onclick="runSingleSource(' + s.id + ')" title="Lanzar ingesta manual sobre esta fuente" style="background:#059669; border-color:#059669; font-weight:700;">▶ Ingesta</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="toggleSourceActive(' + s.id + ', ' + s.is_active + ')" title="' + (s.is_active ? 'Desactivar fuente' : 'Activar fuente') + '">' + (s.is_active ? 'Pausar' : 'Activar') + '</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openEditSourceModal(' + s.id + ')" title="Editar configuración">✏️</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="deleteSource(' + s.id + ')" style="color:#dc2626; border-color:#fecaca;" title="Eliminar configuración de ingesta (no elimina el venue)">🗑️</button>' +
+              '</div>' +
+            '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      // Mobile cards
+      if (cards) {
+        cards.innerHTML = sources.map(s => {
+          const isChecked = selectedSourceIds.has(s.id);
+          const activeBadge = s.is_active
+            ? '<span class="badge-tag" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700;">Activo</span>'
+            : '<span class="badge-tag" style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1;">Inactivo</span>';
+
+          const statusBadge = s.last_status === 'success'
+            ? '<span class="badge-status badge-published" style="background:#ecfdf5; color:#065f46;">Éxito</span>'
+            : (s.last_status === 'partial'
+              ? '<span class="badge-status" style="background:#fffbeb; color:#92400e; border:1px solid #fde68a;">Parcial</span>'
+              : (s.last_status === 'error'
+                ? '<span class="badge-status badge-danger" style="background:#fef2f2; color:#991b1b;">Error</span>'
+                : '<span class="badge-status" style="background:#f1f5f9; color:#475569;">Sin ejecutar</span>'));
+
+          const lastTimeStr = s.last_ingested_at
+            ? s.last_ingested_at.slice(0, 16).replace('T', ' ')
+            : 'Nunca';
+
+          return '<article style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">' +
+              '<div style="display:flex; align-items:center; gap:0.5rem;">' +
+                '<input type="checkbox" value="' + s.id + '" ' + (isChecked ? 'checked' : '') + ' onchange="toggleSourceSelect(' + s.id + ', this.checked)">' +
+                '<h4 style="margin:0; font-size:1rem; font-weight:800; color:var(--text-main);">' + escapeHtml(s.venue_name || ('Venue #' + s.venue_id)) + '</h4>' +
+              '</div>' +
+              activeBadge +
+            '</div>' +
+            '<div style="font-size:0.875rem; color:var(--primary); font-weight:700; margin-bottom:0.35rem;">@' + escapeHtml(s.instagram_username) + '</div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; color:var(--text-dim); border-top:1px solid var(--border); padding-top:0.5rem; margin-bottom:0.75rem;">' +
+              '<span>⚙️ ' + s.posts_per_run + ' posts' + (s.include_reels ? ' + Reels' : '') + '</span>' +
+              '<span>' + statusBadge + ' ' + lastTimeStr + '</span>' +
+            '</div>' +
+            (s.last_error ? '<div style="font-size:0.75rem; color:#dc2626; background:#fef2f2; padding:0.4rem 0.6rem; border-radius:6px; margin-bottom:0.75rem;">' + escapeHtml(s.last_error) + '</div>' : '') +
+            '<div style="display:flex; gap:0.4rem; justify-content:flex-end; flex-wrap:wrap;">' +
+              '<button type="button" class="btn-sm btn-primary" onclick="runSingleSource(' + s.id + ')" style="background:#059669; border-color:#059669; font-weight:700;">▶ Ingesta</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="toggleSourceActive(' + s.id + ', ' + s.is_active + ')">' + (s.is_active ? 'Pausar' : 'Activar') + '</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openEditSourceModal(' + s.id + ')">Editar</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="deleteSource(' + s.id + ')" style="color:#dc2626;">Eliminar</button>' +
+            '</div>' +
+          '</article>';
+        }).join('');
+      }
+    };
+
+    window.toggleSelectAllSources = function(checked) {
+      if (checked) {
+        cachedSources.forEach(s => selectedSourceIds.add(s.id));
+      } else {
+        selectedSourceIds.clear();
+      }
+      document.querySelectorAll('.source-checkbox').forEach(cb => { cb.checked = checked; });
+      updateSelectedSourcesButtons();
+    };
+
+    window.toggleSourceSelect = function(id, checked) {
+      if (checked) {
+        selectedSourceIds.add(id);
+      } else {
+        selectedSourceIds.delete(id);
+      }
+      updateSelectedSourcesButtons();
+    };
+
+    window.updateSelectedSourcesButtons = function() {
+      const btn = document.getElementById('btn-run-selected-sources');
+      const countSpan = document.getElementById('selected-sources-count');
+      const count = selectedSourceIds.size;
+      if (countSpan) countSpan.innerText = count;
+      if (btn) btn.disabled = count === 0;
+    };
+
+    window.openAddSourceModal = function() {
+      const errBox = document.getElementById('add-source-error');
+      if (errBox) errBox.style.display = 'none';
+
+      document.getElementById('add-source-venue-select').value = '';
+      document.getElementById('add-source-username-input').value = '';
+      document.getElementById('add-source-url-input').value = '';
+      document.getElementById('add-source-posts-limit').value = '5';
+      document.getElementById('add-source-include-reels').checked = true;
+      document.getElementById('add-source-is-active').checked = true;
+
+      openModal('modal-add-source');
+    };
+
+    window.onAddSourceUsernameInput = function(val) {
+      const clean = (val || '').trim().replace(/^@/, '');
+      const urlInput = document.getElementById('add-source-url-input');
+      if (urlInput && (!urlInput.value.includes('instagram.com/') || urlInput.value.includes('instagram.com/' + clean.slice(0, -1)))) {
+        urlInput.value = clean ? 'https://www.instagram.com/' + clean + '/' : '';
+      }
+    };
+
+    window.submitAddSource = async function() {
+      const venueId = parseInt(document.getElementById('add-source-venue-select')?.value, 10);
+      const username = (document.getElementById('add-source-username-input')?.value || '').trim().replace(/^@/, '');
+      const profileUrl = (document.getElementById('add-source-url-input')?.value || '').trim();
+      const postsPerRun = parseInt(document.getElementById('add-source-posts-limit')?.value, 10);
+      const includeReels = document.getElementById('add-source-include-reels')?.checked;
+      const isActive = document.getElementById('add-source-is-active')?.checked;
+
+      const errBox = document.getElementById('add-source-error');
+      if (errBox) errBox.style.display = 'none';
+
+      if (!venueId || isNaN(venueId)) {
+        if (errBox) { errBox.innerText = 'Debes seleccionar un local existente del catálogo.'; errBox.style.display = 'block'; }
+        return;
+      }
+      if (!username) {
+        if (errBox) { errBox.innerText = 'El nombre de usuario de Instagram es obligatorio.'; errBox.style.display = 'block'; }
+        return;
+      }
+      if (isNaN(postsPerRun) || postsPerRun < 1 || postsPerRun > 20) {
+        if (errBox) { errBox.innerText = 'El número de posts debe ser entre 1 y 20.'; errBox.style.display = 'block'; }
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-add-source');
+      if (btn) { btn.disabled = true; btn.innerText = 'Guardando...'; }
+
+      try {
+        const payload = {
+          venue_id: venueId,
+          instagram_username: username,
+          instagram_profile_url: profileUrl || null,
+          posts_per_run: postsPerRun,
+          include_reels: Boolean(includeReels),
+          is_active: Boolean(isActive)
+        };
+
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          if (errBox) { errBox.innerText = data.message || 'Error al guardar fuente.'; errBox.style.display = 'block'; }
+          return;
+        }
+
+        closeModal('modal-add-source');
+        alert('✓ ' + (data.message || 'Fuente configurada con éxito.'));
+        loadAdminSources();
+      } catch (err) {
+        if (errBox) { errBox.innerText = 'Error de conexión: ' + err.message; errBox.style.display = 'block'; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Guardar Fuente'; }
+      }
+    };
+
+    window.openEditSourceModal = function(id) {
+      const source = cachedSources.find(s => s.id === id);
+      if (!source) {
+        alert('Fuente no encontrada.');
+        return;
+      }
+
+      const errBox = document.getElementById('edit-source-error');
+      if (errBox) errBox.style.display = 'none';
+
+      document.getElementById('edit-source-id').value = source.id;
+      document.getElementById('edit-source-venue-name').innerText = source.venue_name || ('Venue #' + source.venue_id);
+      document.getElementById('edit-source-username-input').value = source.instagram_username || '';
+      document.getElementById('edit-source-url-input').value = source.instagram_profile_url || '';
+      document.getElementById('edit-source-posts-limit').value = source.posts_per_run || 5;
+      document.getElementById('edit-source-include-reels').checked = Boolean(source.include_reels);
+      document.getElementById('edit-source-is-active').checked = Boolean(source.is_active);
+
+      openModal('modal-edit-source');
+    };
+
+    window.submitEditSource = async function() {
+      const id = parseInt(document.getElementById('edit-source-id')?.value, 10);
+      const username = (document.getElementById('edit-source-username-input')?.value || '').trim().replace(/^@/, '');
+      const profileUrl = (document.getElementById('edit-source-url-input')?.value || '').trim();
+      const postsPerRun = parseInt(document.getElementById('edit-source-posts-limit')?.value, 10);
+      const includeReels = document.getElementById('edit-source-include-reels')?.checked;
+      const isActive = document.getElementById('edit-source-is-active')?.checked;
+
+      const errBox = document.getElementById('edit-source-error');
+      if (errBox) errBox.style.display = 'none';
+
+      if (!username) {
+        if (errBox) { errBox.innerText = 'El nombre de usuario de Instagram es obligatorio.'; errBox.style.display = 'block'; }
+        return;
+      }
+      if (isNaN(postsPerRun) || postsPerRun < 1 || postsPerRun > 20) {
+        if (errBox) { errBox.innerText = 'El número de posts debe ser entre 1 y 20.'; errBox.style.display = 'block'; }
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-edit-source');
+      if (btn) { btn.disabled = true; btn.innerText = 'Guardando...'; }
+
+      try {
+        const payload = {
+          instagram_username: username,
+          instagram_profile_url: profileUrl || null,
+          posts_per_run: postsPerRun,
+          include_reels: Boolean(includeReels),
+          is_active: Boolean(isActive)
+        };
+
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          if (errBox) { errBox.innerText = data.message || 'Error al actualizar.'; errBox.style.display = 'block'; }
+          return;
+        }
+
+        closeModal('modal-edit-source');
+        alert('✓ ' + (data.message || 'Fuente actualizada.'));
+        loadAdminSources();
+      } catch (err) {
+        if (errBox) { errBox.innerText = 'Error de conexión: ' + err.message; errBox.style.display = 'block'; }
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Guardar Cambios'; }
+      }
+    };
+
+    window.toggleSourceActive = async function(id, currentStatus) {
+      try {
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_active: !currentStatus })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'No se pudo cambiar estado.'));
+          return;
+        }
+        loadAdminSources();
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    };
+
+    window.deleteSource = async function(id) {
+      if (!confirm('¿Eliminar la configuración de ingesta de Instagram para este local?\\n\\n(Aviso: El local/venue del catálogo NO se eliminará ni modificará).')) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/' + id, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'No se pudo eliminar la fuente.'));
+          return;
+        }
+        alert('✓ ' + data.message);
+        loadAdminSources();
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    };
+
+    window.runSingleSource = async function(id) {
+      const source = cachedSources.find(s => s.id === id);
+      const name = source ? (source.venue_name || '@' + source.instagram_username) : ('fuente #' + id);
+
+      if (!confirm('¿Lanzar ingesta manual ahora para ' + name + '?\\n\\nSe descargarán posts, se subirán imágenes a R2 y se crearán propuestas en estado PENDING para revisión humana.')) {
+        return;
+      }
+
+      const alertBox = document.getElementById('sources-alert-box');
+      if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#eff6ff';
+        alertBox.style.color = '#1e40af';
+        alertBox.style.border = '1px solid #bfdbfe';
+        alertBox.innerHTML = '⏳ <strong>Ejecutando ingesta manual para ' + escapeHtml(name) + '...</strong> Por favor, espera unos segundos.';
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/' + id + '/run', {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
+          if (alertBox) alertBox.style.display = 'none';
+          return;
+        }
+
+        loadAdminSources();
+        showIngestionReport(data.report);
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+        if (alertBox) alertBox.style.display = 'none';
+      }
+    };
+
+    window.runSelectedSources = async function() {
+      const ids = Array.from(selectedSourceIds);
+      if (ids.length === 0) {
+        alert('Selecciona al menos una fuente para ejecutar.');
+        return;
+      }
+
+      if (!confirm('¿Lanzar ingesta manual sobre las ' + ids.length + ' fuentes seleccionadas?')) {
+        return;
+      }
+
+      const alertBox = document.getElementById('sources-alert-box');
+      if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#eff6ff';
+        alertBox.style.color = '#1e40af';
+        alertBox.style.border = '1px solid #bfdbfe';
+        alertBox.innerHTML = '⏳ <strong>Ejecutando ingesta manual para ' + ids.length + ' fuentes...</strong>';
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/run-selected', {
+          method: 'POST',
+          body: JSON.stringify({ ids: ids })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
+          if (alertBox) alertBox.style.display = 'none';
+          return;
+        }
+
+        loadAdminSources();
+        showIngestionReport(data.report);
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+        if (alertBox) alertBox.style.display = 'none';
+      }
+    };
+
+    window.runAllActiveSources = async function() {
+      if (!confirm('¿Lanzar ingesta manual sobre TODAS las fuentes activas?')) {
+        return;
+      }
+
+      const alertBox = document.getElementById('sources-alert-box');
+      if (alertBox) {
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#eff6ff';
+        alertBox.style.color = '#1e40af';
+        alertBox.style.border = '1px solid #bfdbfe';
+        alertBox.innerHTML = '⏳ <strong>Ejecutando ingesta manual para todas las fuentes activas...</strong>';
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/run-all-active', {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
+          if (alertBox) alertBox.style.display = 'none';
+          return;
+        }
+
+        loadAdminSources();
+        showIngestionReport(data.report);
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+        if (alertBox) alertBox.style.display = 'none';
+      }
+    };
+
+    window.showIngestionReport = function(rep) {
+      if (!rep) return;
+      const bodyEl = document.getElementById('modal-report-body');
+      if (!bodyEl) return;
+
+      const errorsHtml = (rep.errors && rep.errors.length > 0)
+        ? '<div style="margin-top:1rem; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:0.75rem;">' +
+            '<div style="font-weight:800; color:#991b1b; font-size:0.875rem; margin-bottom:0.35rem;">Errores registrados (' + rep.errors.length + ')</div>' +
+            '<ul style="margin:0; padding-left:1.25rem; font-size:0.8rem; color:#7f1d1d;">' +
+              rep.errors.map(e => '<li><strong>@' + escapeHtml(e.username) + ':</strong> ' + escapeHtml(e.error) + '</li>').join('') +
+            '</ul>' +
+          '</div>'
+        : '';
+
+      const sourcesListHtml = (rep.resultsBySource && rep.resultsBySource.length > 0)
+        ? '<div style="margin-top:1rem;"><div style="font-weight:800; font-size:0.875rem; color:var(--text-main); margin-bottom:0.5rem;">Desglose por Fuente</div>' +
+            '<div style="display:flex; flex-direction:column; gap:0.4rem;">' +
+              rep.resultsBySource.map(s => {
+                const sColor = s.status === 'success' ? '#059669' : (s.status === 'partial' ? '#d97706' : '#dc2626');
+                return '<div style="background:#ffffff; border:1px solid var(--border); border-radius:6px; padding:0.5rem 0.75rem; display:flex; justify-content:space-between; align-items:center; font-size:0.8125rem;">' +
+                  '<span><strong>@' + escapeHtml(s.username) + '</strong></span>' +
+                  '<span>Posts: ' + s.postsExtracted + ' | Propuestas creadas: <strong style="color:#059669;">' + s.proposalsCreated + '</strong></span>' +
+                  '<span style="font-weight:700; color:' + sColor + ';">' + s.status.toUpperCase() + '</span>' +
+                '</div>';
+              }).join('') +
+            '</div>' +
+          '</div>'
+        : '';
+
+      bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; gap:0.75rem;">' +
+        '<div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:1rem;">' +
+          '<div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:0.5rem;">ID de Ejecución: <code>' + escapeHtml(rep.executionId) + '</code> (' + (rep.durationMs ? Math.round(rep.durationMs / 100) / 10 : 0) + 's)</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.5rem; text-align:center;">' +
+            '<div style="background:#ffffff; border:1px solid var(--border); border-radius:6px; padding:0.6rem;">' +
+              '<div style="font-size:1.25rem; font-weight:800; color:var(--primary);">' + rep.sourcesProcessed + '</div>' +
+              '<div style="font-size:0.7rem; color:var(--text-muted);">Fuentes procesadas</div>' +
+            '</div>' +
+            '<div style="background:#ffffff; border:1px solid var(--border); border-radius:6px; padding:0.6rem;">' +
+              '<div style="font-size:1.25rem; font-weight:800; color:#059669;">+' + rep.proposalsCreated + '</div>' +
+              '<div style="font-size:0.7rem; color:var(--text-muted);">Propuestas creadas (PENDING)</div>' +
+            '</div>' +
+            '<div style="background:#ffffff; border:1px solid var(--border); border-radius:6px; padding:0.6rem;">' +
+              '<div style="font-size:1.25rem; font-weight:800; color:var(--text-main);">' + rep.duplicatesSkipped + '</div>' +
+              '<div style="font-size:0.7rem; color:var(--text-muted);">Duplicados omitidos</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:0.75rem; font-size:0.8rem; color:#1e40af;">' +
+          'ℹ️ Las propuestas creadas quedan en estado <strong>PENDING</strong> en la Bandeja de Curación para revisión humana. Ningún evento se ha creado ni publicado automáticamente.' +
+        '</div>' +
+        errorsHtml +
+        sourcesListHtml +
+      '</div>';
+
+      openModal('modal-source-report');
+    };
 
     function escapeHtml(str) {
       if (!str) return '';
