@@ -2738,6 +2738,7 @@ export function renderAdminHtml(): string {
           <button type="button" id="prop-tab-venue-content" class="subfilter-pill" onclick="switchProposalTab('venue_content')" style="font-weight:700;">🍸 4. Contenido de venues</button>
           <button type="button" id="prop-tab-continuous" class="subfilter-pill" onclick="switchProposalTab('continuous')" style="font-weight:700;">🏛️ Eventos continuos</button>
           <button type="button" id="prop-tab-ateneo" class="subfilter-pill" onclick="switchProposalTab('ateneo')" style="font-weight:700;">🏛️ Programación Ateneo</button>
+          <button type="button" id="prop-tab-biblioteca" class="subfilter-pill" onclick="switchProposalTab('biblioteca')" style="font-weight:700;">📚 Imágenes Biblioteca Pública</button>
           <button type="button" id="prop-tab-archived" class="subfilter-pill" onclick="switchProposalTab('archived')" style="font-weight:700;">📦 5. Archivadas</button>
         </div>
 
@@ -4166,6 +4167,32 @@ export function renderAdminHtml(): string {
       </div>
       <div class="modal-footer" style="flex-shrink:0;">
         <button type="button" class="btn-secondary" onclick="closeModal('modal-proposal-caption')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DECISIÓN EDITORIAL DE IMAGEN DE BIBLIOTECA PÚBLICA -->
+  <div id="modal-biblioteca-decision" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-biblioteca-decision')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-bib-decision-title" style="max-width:540px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-bib-decision-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main);">Decisión Editorial — Imagen Oficial</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-biblioteca-decision')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding:1.25rem;">
+        <input type="hidden" id="bib-decision-event-id" value="">
+        <input type="hidden" id="bib-decision-action" value="">
+        <input type="hidden" id="bib-decision-image-url" value="">
+        <input type="hidden" id="bib-decision-r2-key" value="">
+        <input type="hidden" id="bib-decision-credit" value="">
+        <p id="bib-decision-description-text" style="font-weight:600; font-size:0.925rem; margin:0 0 1rem 0; color:var(--text-main);"></p>
+        <div id="bib-decision-preview-box" style="margin-bottom:1rem; border:1px solid var(--border); border-radius:8px; padding:0.75rem; background:var(--bg-subtle);"></div>
+        <div id="bib-decision-alert" class="alert-box" style="display:none; margin-bottom:1rem; background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; padding:0.6rem; border-radius:6px; font-size:0.875rem;"></div>
+        <label for="bib-decision-notes" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Notas de auditoría editorial (opcional)</label>
+        <textarea id="bib-decision-notes" rows="2" style="width:100%; font-size:0.875rem;" placeholder="Observaciones sobre la decisión..."></textarea>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:0.5rem;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-biblioteca-decision')">Cancelar</button>
+        <button type="button" id="btn-submit-bib-decision" class="btn-primary" onclick="submitBibliotecaDecision()">Confirmar Decisión</button>
       </div>
     </div>
   </div>
@@ -9680,6 +9707,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         venue_content: 'prop-tab-venue-content',
         continuous: 'prop-tab-continuous',
         ateneo: 'prop-tab-ateneo',
+        biblioteca: 'prop-tab-biblioteca',
         archived: 'prop-tab-archived'
       };
       Object.keys(tabIds).forEach(t => {
@@ -9696,7 +9724,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           }
         }
       });
-      renderProposalsList(cachedProposals);
+      if (tab === 'biblioteca') {
+        loadBibliotecaImageProposals();
+      } else {
+        renderProposalsList(cachedProposals);
+      }
     };
 
     window.onProposalFilterChange = function() {
@@ -10674,6 +10706,254 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       '</div>';
 
       openModal('modal-proposal-caption');
+    };
+
+    // ==============================================================================
+    // GESTIÓN EDITORIAL DE IMÁGENES OFICIALES — BIBLIOTECA PÚBLICA
+    // ==============================================================================
+    let cachedBibliotecaProposals = [];
+
+    window.loadBibliotecaImageProposals = async function() {
+      const tbody = document.getElementById('proposals-tbody');
+      const cards = document.getElementById('proposals-cards-container');
+      const badge = document.getElementById('proposals-count-badge');
+
+      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas de imágenes de Biblioteca Pública...</td></tr>';
+      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando...</div>';
+
+      try {
+        const res = await apiFetch('/api/v1/admin/biblioteca-images/proposals');
+        const data = await res.json();
+        cachedBibliotecaProposals = data.proposals || [];
+        renderBibliotecaImagesList(cachedBibliotecaProposals);
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-danger);">Error al cargar propuestas de biblioteca: ' + escapeHtml(err.message) + '</td></tr>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas.</div>';
+      }
+    };
+
+    window.renderBibliotecaImagesList = function(proposals) {
+      const tbody = document.getElementById('proposals-tbody');
+      const cards = document.getElementById('proposals-cards-container');
+      const badge = document.getElementById('proposals-count-badge');
+
+      let list = proposals || [];
+      if (proposalSearchQuery) {
+        list = list.filter(function(p) {
+          const t = (p.eventTitle || '').toLowerCase();
+          const idStr = String(p.eventId);
+          return t.includes(proposalSearchQuery) || idStr === proposalSearchQuery;
+        });
+      }
+
+      if (badge) {
+        badge.innerText = list.length + (list.length === 1 ? ' evento pendiente' : ' eventos pendientes');
+        badge.style.display = 'inline-block';
+      }
+
+      if (list.length === 0) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">No se encontraron imágenes pendientes para la Biblioteca Pública.</td></tr>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No se encontraron imágenes pendientes.</div>';
+        return;
+      }
+
+      if (tbody) {
+        tbody.innerHTML = list.map(function(item) {
+          const currentImgHtml = item.currentImageUrl
+            ? '<div style="display:flex; flex-direction:column; align-items:center;"><a href="' + escapeHtml(item.currentImageUrl) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(item.currentImageUrl) + '" alt="Actual" style="width:72px; height:72px; object-fit:cover; border-radius:6px; border:1px solid var(--border);"></a><span style="font-size:0.7rem; color:' + (item.currentImageStatus === 'IMAGEN_GENERICA' ? '#d97706' : '#64748b') + '; font-weight:700; margin-top:0.25rem;">' + (item.currentImageStatus === 'IMAGEN_GENERICA' ? '⚠️ Genérica' : 'Existente') + '</span></div>'
+            : '<div style="width:72px; height:72px; border-radius:6px; border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; background:#f8fafc; font-size:0.7rem; color:var(--text-muted); text-align:center; padding:0.25rem;">Sin Imagen</div>';
+
+          const proposedImgHtml = item.proposedImageUrl
+            ? '<div style="display:flex; flex-direction:column; align-items:center;"><a href="' + escapeHtml(item.proposedImageUrl) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(item.proposedImageUrl) + '" alt="Oficial R2" style="width:72px; height:72px; object-fit:cover; border-radius:6px; border:2px solid #059669; box-shadow:0 1px 3px rgba(5,150,105,0.2);"></a><span style="font-size:0.7rem; color:#059669; font-weight:800; margin-top:0.25rem;">✨ Oficial R2</span><span style="font-size:0.65rem; color:var(--text-muted);">' + item.imageWidth + 'x' + item.imageHeight + ' (' + Math.round(item.sizeBytes / 1024) + ' KB)</span></div>'
+            : '<span style="color:var(--text-muted); font-size:0.75rem;">No disponible</span>';
+
+          const recBadge = item.recommendedAction === 'ADOPTAR_IMAGEN_OFICIAL'
+            ? '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🟢 Adoptar imagen oficial</span>'
+            : (item.recommendedAction === 'PROPONER_ALTERNATIVA'
+              ? '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">🟡 Proponer alternativa</span>'
+              : '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">⚪ Mantener actual</span>');
+
+          const datesText = item.endDate && item.endDate !== item.editorialDate
+            ? 'Del ' + escapeHtml(item.editorialDate) + ' al ' + escapeHtml(item.endDate)
+            : escapeHtml(item.editorialDate);
+
+          return '<tr id="bib-row-' + item.eventId + '">' +
+            '<td style="min-width:240px;">' +
+              '<div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.25rem;">' +
+                '<span style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">#' + item.eventId + '</span>' +
+                '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35;">' + escapeHtml(item.eventTitle) + '</div>' +
+              '</div>' +
+              '<div style="font-size:0.8rem; color:var(--text-dim); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">' +
+                '<span>📅 <strong>' + datesText + '</strong></span>' +
+                '<span>📍 <strong>' + escapeHtml(item.venueName) + '</strong></span>' +
+              '</div>' +
+            '</td>' +
+            '<td style="text-align:center;">' + currentImgHtml + '</td>' +
+            '<td style="text-align:center;">' + proposedImgHtml + '</td>' +
+            '<td style="font-size:0.8125rem;">' +
+              '<div style="font-weight:700; color:var(--text-main);">' + escapeHtml(item.sourceName) + '</div>' +
+              '<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Crédito: ' + escapeHtml(item.credit) + '</div>' +
+              '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(item.sourcePageUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--primary); font-size:0.75rem; font-weight:700; text-decoration:none;">Ficha Oficial ↗</a></div>' +
+            '</td>' +
+            '<td>' + recBadge + '</td>' +
+            '<td style="text-align:right;">' +
+              '<div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">' +
+                '<button type="button" class="btn-sm btn-primary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;adopt&quot;)" style="background:#059669; border-color:#059669; font-weight:700;">✓ Adoptar Oficial</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;keep_current&quot;)">Mantener Actual</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;discard&quot;)" style="color:#dc2626; border-color:#fecaca;">Descartar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;request_search&quot;)" style="color:#2563eb; border-color:#bfdbfe;">Solicitar Búsqueda</button>' +
+              '</div>' +
+            '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      if (cards) {
+        cards.innerHTML = list.map(function(item) {
+          const recBadge = item.recommendedAction === 'ADOPTAR_IMAGEN_OFICIAL'
+            ? '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🟢 Adoptar imagen oficial</span>'
+            : (item.recommendedAction === 'PROPONER_ALTERNATIVA'
+              ? '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">🟡 Proponer alternativa</span>'
+              : '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">⚪ Mantener actual</span>');
+
+          const datesText = item.endDate && item.endDate !== item.editorialDate
+            ? 'Del ' + escapeHtml(item.editorialDate) + ' al ' + escapeHtml(item.endDate)
+            : escapeHtml(item.editorialDate);
+
+          return '<div class="proposal-card" id="bib-card-' + item.eventId + '" style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:1rem; margin-bottom:1rem;">' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.75rem;">' +
+              '<div>' +
+                '<div style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">#' + item.eventId + '</div>' +
+                '<div style="font-weight:700; font-size:1rem; color:var(--text-main);">' + escapeHtml(item.eventTitle) + '</div>' +
+                '<div style="font-size:0.8125rem; color:var(--text-dim); margin-top:0.2rem;">📅 ' + datesText + ' | 📍 ' + escapeHtml(item.venueName) + '</div>' +
+              '</div>' +
+              recBadge +
+            '</div>' +
+            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; background:var(--bg-subtle); border-radius:8px; padding:0.75rem; margin-bottom:0.75rem; text-align:center;">' +
+              '<div>' +
+                '<div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:0.35rem;">Actual:</div>' +
+                (item.currentImageUrl
+                  ? '<a href="' + escapeHtml(item.currentImageUrl) + '" target="_blank"><img src="' + escapeHtml(item.currentImageUrl) + '" style="width:100%; max-height:100px; object-fit:cover; border-radius:6px; border:1px solid var(--border);"></a>'
+                  : '<div style="height:80px; display:flex; align-items:center; justify-content:center; border:1px dashed var(--border); border-radius:6px; font-size:0.75rem; color:var(--text-muted);">Sin Imagen</div>') +
+              '</div>' +
+              '<div>' +
+                '<div style="font-size:0.75rem; font-weight:700; color:#059669; margin-bottom:0.35rem;">Oficial R2:</div>' +
+                '<a href="' + escapeHtml(item.proposedImageUrl) + '" target="_blank"><img src="' + escapeHtml(item.proposedImageUrl) + '" style="width:100%; max-height:100px; object-fit:cover; border-radius:6px; border:2px solid #059669;"></a>' +
+              '</div>' +
+            '</div>' +
+            '<div style="font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem;">' +
+              '<div><strong>Fuente:</strong> ' + escapeHtml(item.sourceName) + '</div>' +
+              '<div><strong>Crédito:</strong> ' + escapeHtml(item.credit) + '</div>' +
+            '</div>' +
+            '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
+              '<button type="button" class="btn-sm btn-primary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;adopt&quot;)" style="background:#059669; border-color:#059669; font-weight:700;">✓ Adoptar Oficial</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;keep_current&quot;)">Mantener</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;discard&quot;)" style="color:#dc2626;">Descartar</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;request_search&quot;)" style="color:#2563eb;">Buscar</button>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+    };
+
+    window.openBibliotecaDecisionModal = function(eventId, action) {
+      const item = cachedBibliotecaProposals.find(function(p) { return p.eventId === eventId; });
+      if (!item) {
+        alert('Evento no encontrado en propuestas de biblioteca.');
+        return;
+      }
+
+      document.getElementById('bib-decision-event-id').value = String(item.eventId);
+      document.getElementById('bib-decision-action').value = action;
+      document.getElementById('bib-decision-image-url').value = item.proposedImageUrl || '';
+      document.getElementById('bib-decision-r2-key').value = item.r2Key || '';
+      document.getElementById('bib-decision-credit').value = item.credit || '';
+      document.getElementById('bib-decision-notes').value = '';
+
+      const alertEl = document.getElementById('bib-decision-alert');
+      if (alertEl) alertEl.style.display = 'none';
+
+      const actionLabels = {
+        adopt: '✓ Adoptar Imagen Oficial en R2',
+        keep_current: 'Mantener Imagen Actual',
+        discard: 'Descartar Propuesta de Imagen',
+        request_search: 'Solicitar Nueva Búsqueda'
+      };
+
+      const actionDesc = {
+        adopt: 'Se aplicará la imagen oficial optimizada en Cloudflare R2 al evento #' + item.eventId + '. La imagen anterior se conservará en el histórico.',
+        keep_current: 'Se conservará la imagen actual del evento #' + item.eventId + ' sin cambios.',
+        discard: 'Se descartará la propuesta oficial para el evento #' + item.eventId + ' registrando la decisión.',
+        request_search: 'Se registrará la solicitud de búsqueda alternativa para el evento #' + item.eventId + '.'
+      };
+
+      document.getElementById('modal-bib-decision-title').innerText = actionLabels[action] || 'Decisión Editorial';
+      document.getElementById('bib-decision-description-text').innerText = actionDesc[action] || '';
+
+      const previewBox = document.getElementById('bib-decision-preview-box');
+      if (previewBox) {
+        previewBox.innerHTML = '<div style="font-weight:700; margin-bottom:0.5rem; font-size:0.9rem;">' + escapeHtml(item.eventTitle) + '</div>' +
+          '<div style="display:flex; gap:1rem; align-items:center;">' +
+            '<div style="text-align:center;">' +
+              '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.25rem;">Actual:</div>' +
+              (item.currentImageUrl ? '<img src="' + escapeHtml(item.currentImageUrl) + '" style="width:80px; height:80px; object-fit:cover; border-radius:6px; border:1px solid var(--border);">' : '<div style="width:80px; height:80px; display:flex; align-items:center; justify-content:center; border:1px dashed var(--border); border-radius:6px; font-size:0.75rem;">Sin Imagen</div>') +
+            '</div>' +
+            '<div style="font-size:1.25rem; color:var(--text-muted);">➔</div>' +
+            '<div style="text-align:center;">' +
+              '<div style="font-size:0.75rem; color:#059669; font-weight:700; margin-bottom:0.25rem;">Propuesta R2:</div>' +
+              '<img src="' + escapeHtml(item.proposedImageUrl) + '" style="width:80px; height:80px; object-fit:cover; border-radius:6px; border:2px solid #059669;">' +
+            '</div>' +
+          '</div>';
+      }
+
+      openModal('modal-biblioteca-decision');
+    };
+
+    window.submitBibliotecaDecision = async function() {
+      const eventId = parseInt(document.getElementById('bib-decision-event-id').value, 10);
+      const action = document.getElementById('bib-decision-action').value;
+      const adoptedImageUrl = document.getElementById('bib-decision-image-url').value;
+      const adoptedR2Key = document.getElementById('bib-decision-r2-key').value;
+      const adoptedCredit = document.getElementById('bib-decision-credit').value;
+      const notes = document.getElementById('bib-decision-notes').value.trim();
+
+      const btn = document.getElementById('btn-submit-bib-decision');
+      if (btn) { btn.disabled = true; btn.innerText = 'Guardando...'; }
+
+      const alertEl = document.getElementById('bib-decision-alert');
+      if (alertEl) alertEl.style.display = 'none';
+
+      try {
+        const payload = {
+          eventId: eventId,
+          action: action,
+          adoptedImageUrl: adoptedImageUrl,
+          adoptedR2Key: adoptedR2Key,
+          adoptedCredit: adoptedCredit,
+          notes: notes
+        };
+
+        const res = await apiFetch('/api/v1/admin/biblioteca-images/decision', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Error al guardar la decisión');
+        }
+
+        closeModal('modal-biblioteca-decision');
+        alert('Decisión guardada con éxito para el evento #' + eventId + '.');
+        loadBibliotecaImageProposals();
+      } catch (err) {
+        if (alertEl) {
+          alertEl.innerText = err.message;
+          alertEl.style.display = 'block';
+        }
+      } finally {
+        if (btn) { btn.disabled = false; btn.innerText = 'Confirmar Decisión'; }
+      }
     };
 
     // ==============================================================================
