@@ -7,6 +7,29 @@ import {
   normalizePrice,
 } from '@vayaplan/shared';
 import type { AdminUser } from '@vayaplan/types';
+import {
+  SALA_INFINITY_VENUE_ID,
+  contrastProposalWithTaquilla,
+  fetchSalaInfinityTaquillaEvents,
+  type TaquillaEventMetadata,
+} from '../../services/bar-instagram-import/taquilla-contrast';
+
+let cachedTaquillaEvents: TaquillaEventMetadata[] | null = null;
+let lastTaquillaFetch = 0;
+const TAQUILLA_CACHE_TTL = 5 * 60 * 1000; // 5 minutos de caché en memoria
+
+export async function getCachedTaquillaEvents(): Promise<TaquillaEventMetadata[]> {
+  const now = Date.now();
+  if (cachedTaquillaEvents && now - lastTaquillaFetch < TAQUILLA_CACHE_TTL) {
+    return cachedTaquillaEvents;
+  }
+  const events = await fetchSalaInfinityTaquillaEvents();
+  if (events.length > 0) {
+    cachedTaquillaEvents = events;
+    lastTaquillaFetch = now;
+  }
+  return events;
+}
 
 export const adminProposalsRoutes = new Hono<{
   Variables: {
@@ -188,9 +211,36 @@ adminProposalsRoutes.get('/proposals', async (c) => {
   `;
 
   const result = await query(sql, params);
+  const rows = result.rows;
+
+  // Enriquecer con contraste de Taquilla.com para propuestas de Sala Infinity (ID 10052)
+  const hasInfinity = rows.some((r) => r.venue_id === SALA_INFINITY_VENUE_ID);
+  if (hasInfinity) {
+    try {
+      const taquillaEvents = await getCachedTaquillaEvents();
+      for (const p of rows) {
+        if (p.venue_id === SALA_INFINITY_VENUE_ID) {
+          p.taquilla_contrast = contrastProposalWithTaquilla(
+            {
+              venueId: p.venue_id,
+              title: p.title,
+              proposedDate: p.proposed_date,
+              proposedTime: p.proposed_time,
+              price: p.price,
+              caption: p.caption,
+            },
+            taquillaEvents
+          );
+        }
+      }
+    } catch {
+      // Degradar graciosamente sin bloquear la consulta administrativa
+    }
+  }
+
   return c.json({
-    proposals: result.rows,
-    total: result.rows.length,
+    proposals: rows,
+    total: rows.length,
   });
 });
 
@@ -220,7 +270,69 @@ adminProposalsRoutes.get('/proposals/:id', async (c) => {
     return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
   }
 
-  return c.json({ proposal: result.rows[0] });
+  const proposal = result.rows[0];
+  if (proposal.venue_id === SALA_INFINITY_VENUE_ID) {
+    try {
+      const taquillaEvents = await getCachedTaquillaEvents();
+      proposal.taquilla_contrast = contrastProposalWithTaquilla(
+        {
+          venueId: proposal.venue_id,
+          title: proposal.title,
+          proposedDate: proposal.proposed_date,
+          proposedTime: proposal.proposed_time,
+          price: proposal.price,
+          caption: proposal.caption,
+        },
+        taquillaEvents
+      );
+    } catch {
+      // Degradar graciosamente
+    }
+  }
+
+  return c.json({ proposal });
+});
+
+/**
+ * GET /api/v1/admin/proposals/:id/taquilla-contrast
+ * Devuelve el contraste editorial específico para una propuesta frente a Taquilla.com
+ */
+adminProposalsRoutes.get('/proposals/:id/taquilla-contrast', async (c) => {
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) {
+    return c.json({ error: 'invalid_id', message: 'ID de propuesta no válido' }, 400);
+  }
+
+  const res = await query(`SELECT * FROM curation_proposals WHERE id = $1;`, [id]);
+  if (res.rows.length === 0) {
+    return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
+  }
+  const prop = res.rows[0];
+
+  if (prop.venue_id !== SALA_INFINITY_VENUE_ID) {
+    return c.json({
+      isApplicableVenue: false,
+      message: 'La fuente de contraste Taquilla.com está asociada exclusivamente al venue Sala Infinity (ID 10052).',
+    });
+  }
+
+  const taquillaEvents = await getCachedTaquillaEvents();
+  const contrast = contrastProposalWithTaquilla(
+    {
+      venueId: prop.venue_id,
+      title: prop.title,
+      proposedDate: prop.proposed_date,
+      proposedTime: prop.proposed_time,
+      price: prop.price,
+      caption: prop.caption,
+    },
+    taquillaEvents
+  );
+
+  return c.json({
+    proposalId: id,
+    contrast,
+  });
 });
 
 /**
