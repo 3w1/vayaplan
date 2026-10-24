@@ -8,6 +8,7 @@ const INTERNAL_CRON_SECRET = process.env.INTERNAL_CRON_SECRET || 'vp_internal_cr
 
 /**
  * Middleware de seguridad para endpoints internos
+ * Autenticación exclusiva mediante secreto interno (cabecera Bearer o X-Internal-Cron-Key)
  */
 internalInstagramIngestionRoutes.use('*', async (c, next) => {
   const authHeader = c.req.header('authorization') || '';
@@ -18,13 +19,13 @@ internalInstagramIngestionRoutes.use('*', async (c, next) => {
     return next();
   }
 
-  // Permitir también si se ejecuta desde localhost o loopback con cabecera interna
-  const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
-  if ((clientIp === '127.0.0.1' || clientIp === '::1') && (cronKeyHeader || token)) {
-    return next();
-  }
-
-  return c.json({ error: 'unauthorized', message: 'Acceso no autorizado al servicio interno de tareas programadas.' }, 401);
+  return c.json(
+    {
+      error: 'unauthorized',
+      message: 'Acceso no autorizado al servicio interno.',
+    },
+    401
+  );
 });
 
 /**

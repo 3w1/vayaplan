@@ -435,4 +435,98 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
       expect(proposal.image_url).not.toContain('fbcdn.net');
     }
   });
+
+  // 13. Seguridad de endpoint interno del cron (sin dependencia de IP, exclusivamente por secreto)
+  describe('Seguridad y Autenticación Exclusiva por Secreto en Endpoint Interno de Cron', () => {
+    test('Bloquea petición sin secreto con 401 Unauthorized y mensaje genérico', async () => {
+      const res = await app.request('/api/v1/internal/instagram-ingestion/run-scheduled', {
+        method: 'POST',
+      });
+
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.error).toBe('unauthorized');
+      expect(body.message).toBe('Acceso no autorizado al servicio interno.');
+    });
+
+    test('Bloquea petición con secreto incorrecto con 401 sin revelar detalles', async () => {
+      const res = await app.request('/api/v1/internal/instagram-ingestion/run-scheduled', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer invalid_wrong_cron_token_123',
+        },
+      });
+
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.error).toBe('unauthorized');
+      expect(body.message).toBe('Acceso no autorizado al servicio interno.');
+    });
+
+    test('Bloquea petición con IP loopback 127.0.0.1 si no proporciona el secreto correcto (401)', async () => {
+      // Intento de spoofing de IP local con token o clave inválida
+      const res1 = await app.request('/api/v1/internal/instagram-ingestion/run-scheduled', {
+        method: 'POST',
+        headers: {
+          'X-Forwarded-For': '127.0.0.1',
+          'X-Internal-Cron-Key': 'random_spoofed_key',
+        },
+      });
+      expect(res1.status).toBe(401);
+
+      const res2 = await app.request('/api/v1/internal/instagram-ingestion/run-scheduled', {
+        method: 'POST',
+        headers: {
+          'X-Forwarded-For': '127.0.0.1',
+        },
+      });
+      expect(res2.status).toBe(401);
+    });
+
+    test('Permite autenticación válida con Authorization: Bearer INTERNAL_CRON_SECRET desde IP externa', async () => {
+      // Tomar lock para comprobar que el middleware pasa la petición al handler
+      await acquirePersistentLock({
+        lockKey: DEFAULT_LOCK_KEY,
+        lockedBy: 'test_auth_check',
+        ttlMinutes: 15,
+      });
+
+      const res = await app.request('/api/v1/internal/instagram-ingestion/run-scheduled', {
+        method: 'POST',
+        headers: {
+          'X-Forwarded-For': '198.51.100.50', // IP pública externa
+          Authorization: `Bearer ${cronSecret}`,
+        },
+      });
+
+      // El middleware permite la entrada y el handler ejecuta (devolviendo 409 por el lock activo)
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error).toBe('execution_locked');
+
+      await releasePersistentLock(DEFAULT_LOCK_KEY);
+    });
+
+    test('Permite autenticación válida con X-Internal-Cron-Key: INTERNAL_CRON_SECRET desde IP externa', async () => {
+      await acquirePersistentLock({
+        lockKey: DEFAULT_LOCK_KEY,
+        lockedBy: 'test_auth_check_2',
+        ttlMinutes: 15,
+      });
+
+      const res = await app.request('/api/v1/internal/instagram-ingestion/run-scheduled', {
+        method: 'POST',
+        headers: {
+          'X-Forwarded-For': '203.0.113.88', // IP pública externa
+          'X-Internal-Cron-Key': cronSecret,
+        },
+      });
+
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error).toBe('execution_locked');
+
+      await releasePersistentLock(DEFAULT_LOCK_KEY);
+    });
+  });
 });
