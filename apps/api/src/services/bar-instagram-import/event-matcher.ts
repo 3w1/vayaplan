@@ -83,12 +83,28 @@ export function calculateKeywordSimilarity(setA: Set<string>, setB: Set<string>)
   return union > 0 ? intersection / union : 0;
 }
 
+export const MADRID_TIMEZONE = 'Europe/Madrid';
+
+const madridTimeFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: MADRID_TIMEZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+const madridDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: MADRID_TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 /**
- * Normaliza cualquier representación temporal a formato de hora "HH:mm".
+ * Normaliza cualquier representación temporal a formato de hora "HH:mm" en la zona horaria 'Europe/Madrid'.
  * Soporta de manera defensiva:
- * - Instancias de Date (usando UTC: value.toISOString().substring(11, 16))
- * - Strings ISO completos (ej. "2026-10-24T21:00:00Z" o "2026-10-24 21:00:00")
- * - Strings de hora (ej. "21:00", "21:00:00", "9:30")
+ * - Instancias de Date (convierte a Europe/Madrid usando Intl.DateTimeFormat)
+ * - Strings ISO completos (con 'Z' o con offset, convirtiendo a Europe/Madrid)
+ * - Strings solo con hora (ej. "23:30", "9:30") interpretados como hora de pared local
  * - null, undefined o valores no válidos (retorna null sin lanzar excepción)
  */
 export function toTimeString(value: unknown): string | null {
@@ -97,7 +113,7 @@ export function toTimeString(value: unknown): string | null {
   if (value instanceof Date) {
     if (isNaN(value.getTime())) return null;
     try {
-      return value.toISOString().substring(11, 16);
+      return madridTimeFormatter.format(value);
     } catch {
       return null;
     }
@@ -107,31 +123,26 @@ export function toTimeString(value: unknown): string | null {
     const str = value.trim();
     if (!str) return null;
 
-    // Formato ISO o datetime completo (longitud >= 16 con T o espacio)
-    if (str.length >= 16 && (str.includes('T') || str.includes(' '))) {
-      const sub = str.substring(11, 16);
-      if (/^\d{2}:\d{2}$/.test(sub)) {
-        return sub;
+    // Si ya viene solo como hora local de pared (HH:mm, HH:mm:ss o H:mm) sin componentes de fecha
+    if (!str.includes('-') && !str.includes('/') && !str.includes('T')) {
+      const match = str.match(/^(\d{1,2}):(\d{2})/);
+      if (match) {
+        const h = match[1].padStart(2, '0');
+        const m = match[2];
+        const hNum = parseInt(h, 10);
+        const mNum = parseInt(m, 10);
+        if (hNum >= 0 && hNum <= 23 && mNum >= 0 && mNum <= 59) {
+          return `${h}:${m}`;
+        }
       }
+      return null;
     }
 
-    // Formato directo de hora HH:mm o H:mm
-    const match = str.match(/^(\d{1,2}):(\d{2})/);
-    if (match) {
-      const h = match[1].padStart(2, '0');
-      const m = match[2];
-      const hNum = parseInt(h, 10);
-      const mNum = parseInt(m, 10);
-      if (hNum >= 0 && hNum <= 23 && mNum >= 0 && mNum <= 59) {
-        return `${h}:${m}`;
-      }
-    }
-
-    // Si es otro string parseable como fecha válida
+    // Si tiene formato ISO completo o con fecha (ej. "2026-10-24T21:30:00Z" o "2026-10-24 23:30:00+02:00")
     const parsed = new Date(str);
     if (!isNaN(parsed.getTime())) {
       try {
-        return parsed.toISOString().substring(11, 16);
+        return madridTimeFormatter.format(parsed);
       } catch {
         return null;
       }
@@ -144,27 +155,76 @@ export function toTimeString(value: unknown): string | null {
 }
 
 /**
- * Comprueba si dos fechas YYYY-MM-DD son idénticas o adyacentes (+/- 1 día natural).
+ * Normaliza cualquier representación temporal a formato de fecha "YYYY-MM-DD" en la zona horaria 'Europe/Madrid'.
+ * Soporta de manera defensiva:
+ * - Instancias de Date (convierte a Europe/Madrid usando Intl.DateTimeFormat)
+ * - Strings ISO completos (con 'Z' o con offset, convirtiendo a la fecha en Europe/Madrid)
+ * - Strings solo con fecha (ej. "2026-10-24") interpretados como fecha de pared local
+ * - null, undefined o valores no válidos (retorna null sin lanzar excepción)
+ */
+export function toDateString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    try {
+      return madridDateFormatter.format(value);
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value === 'string') {
+    const str = value.trim();
+    if (!str) return null;
+
+    // Si ya es un formato simple YYYY-MM-DD sin hora ni zona
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+
+    // Si es un ISO datetime completo
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      try {
+        return madridDateFormatter.format(parsed);
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Comprueba si dos fechas YYYY-MM-DD son idénticas o adyacentes (+/- 1 día natural),
+ * normalizando ambas fechas en la zona horaria 'Europe/Madrid'.
  */
 export function evaluateDateProximity(
-  dateA: string | Date | null | undefined,
-  dateB: string | Date | null | undefined
+  dateA: unknown,
+  dateB: unknown
 ): { sameDate: boolean; daysDiff: number } {
-  if (!dateA || !dateB) return { sameDate: false, daysDiff: 999 };
-  const strA = dateA instanceof Date ? dateA.toISOString().split('T')[0] : String(dateA).split('T')[0].trim();
-  const strB = dateB instanceof Date ? dateB.toISOString().split('T')[0] : String(dateB).split('T')[0].trim();
-  if (strA === strB) return { sameDate: true, daysDiff: 0 };
+  const normA = toDateString(dateA);
+  const normB = toDateString(dateB);
+  if (!normA || !normB) return { sameDate: false, daysDiff: 999 };
+  if (normA === normB) return { sameDate: true, daysDiff: 0 };
 
-  const msA = new Date(`${strA}T12:00:00Z`).getTime();
-  const msB = new Date(`${strB}T12:00:00Z`).getTime();
-  if (isNaN(msA) || isNaN(msB)) return { sameDate: false, daysDiff: 999 };
+  const [yA, mA, dA] = normA.split('-').map(Number);
+  const [yB, mB, dB] = normB.split('-').map(Number);
+  if (!yA || !mA || !dA || !yB || !mB || !dB) return { sameDate: false, daysDiff: 999 };
 
+  const msA = Date.UTC(yA, mA - 1, dA, 12, 0, 0);
+  const msB = Date.UTC(yB, mB - 1, dB, 12, 0, 0);
   const daysDiff = Math.abs(Math.round((msA - msB) / (1000 * 60 * 60 * 24)));
   return { sameDate: daysDiff === 0, daysDiff };
 }
 
 /**
- * Comprueba si dos horas HH:mm están dentro de una ventana de tolerancia en minutos.
+ * Comprueba si dos horas HH:mm están dentro de una ventana de tolerancia en minutos,
+ * normalizando ambas horas en la zona horaria 'Europe/Madrid'.
  */
 export function isTimeSimilar(timeA: unknown, timeB: unknown, maxMinutes = 60): boolean {
   const normA = toTimeString(timeA);
@@ -232,12 +292,14 @@ export function matchPostWithPublishedEvents(
 
     // 2. Fecha
     const dateProx = evaluateDateProximity(candidate.proposedDate, ev.editorial_date);
+    const evDateStr = toDateString(ev.editorial_date);
+    const candDateStr = toDateString(candidate.proposedDate);
     if (dateProx.sameDate) {
       score += 35;
-      signals.push(`Misma fecha editorial (${ev.editorial_date})`);
+      signals.push(`Misma fecha editorial (${evDateStr || ev.editorial_date})`);
     } else if (dateProx.daysDiff === 1) {
       score += 15;
-      signals.push(`Fecha adyacente (diferencia de 1 día: ${candidate.proposedDate} vs ${ev.editorial_date})`);
+      signals.push(`Fecha adyacente (diferencia de 1 día: ${candDateStr} vs ${evDateStr})`);
     }
 
     // 3. Título del evento
@@ -258,12 +320,12 @@ export function matchPostWithPublishedEvents(
       signals.push(`Caption contiene palabras clave del evento existente (${ev.title})`);
     }
 
-    // 5. Hora
+    // 5. Hora (evaluada en Europe/Madrid)
     const evTime = toTimeString(ev.start_time);
     const candidateTime = toTimeString(candidate.proposedTime);
     if (candidateTime && evTime && isTimeSimilar(candidateTime, evTime, 60)) {
       score += 10;
-      signals.push(`Hora similar (${candidateTime} vs ${evTime})`);
+      signals.push(`Hora similar en Europe/Madrid (${candidateTime} vs ${evTime})`);
     }
 
     // Determinar nivel de coincidencia según señales ponderadas

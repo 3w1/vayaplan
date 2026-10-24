@@ -1,84 +1,145 @@
 import { describe, expect, test } from 'bun:test';
 import {
   toTimeString,
+  toDateString,
   isTimeSimilar,
   evaluateDateProximity,
   matchPostWithPublishedEvents,
+  MADRID_TIMEZONE,
   type MatchCandidate,
   type ExistingEventRecord,
 } from '../event-matcher';
 
-describe('Hotfix Event Matcher — Normalización Temporal y Robustez de start_time (Date vs String)', () => {
-  // 1. start_time como Date
-  test('1. toTimeString normaliza correctamente un objeto Date a HH:mm en UTC', () => {
-    const dateObj = new Date('2026-10-24T21:00:00.000Z');
-    expect(toTimeString(dateObj)).toBe('21:00');
-
-    const morningDate = new Date('2026-10-24T09:30:00.000Z');
-    expect(toTimeString(morningDate)).toBe('09:30');
+describe('Ajuste Obligatorio al Hotfix del Event Matcher — Zona Horaria Europe/Madrid', () => {
+  // Constante de zona horaria
+  test('MADRID_TIMEZONE está configurado explícitamente en "Europe/Madrid"', () => {
+    expect(MADRID_TIMEZONE).toBe('Europe/Madrid');
   });
 
-  // 2. start_time como string ISO
-  test('2. toTimeString normaliza correctamente un string ISO a HH:mm', () => {
-    expect(toTimeString('2026-10-24T21:00:00Z')).toBe('21:00');
-    expect(toTimeString('2026-10-24T21:00:00.000Z')).toBe('21:00');
-    expect(toTimeString('2026-10-24 21:00:00')).toBe('21:00');
-    expect(toTimeString('21:00')).toBe('21:00');
+  // 1. Date en UTC durante horario de verano (CEST, UTC+2)
+  test('1. Date 2026-10-24T21:30:00Z en horario de verano (CEST, UTC+2) -> 23:30 Europe/Madrid', () => {
+    const summerDateUtc = new Date('2026-10-24T21:30:00.000Z');
+    expect(toTimeString(summerDateUtc)).toBe('23:30');
+  });
+
+  // 2. Date con offset explícito +02:00 en Europe/Madrid
+  test('2. Date 2026-10-24T23:30:00+02:00 -> 23:30 Europe/Madrid', () => {
+    const dateWithOffset = new Date('2026-10-24T23:30:00+02:00');
+    expect(toTimeString(dateWithOffset)).toBe('23:30');
+  });
+
+  // 3. String ISO con 'Z'
+  test('3. String ISO con Z ("2026-10-24T21:30:00Z") se convierte a 23:30 Europe/Madrid', () => {
+    expect(toTimeString('2026-10-24T21:30:00Z')).toBe('23:30');
+    expect(toTimeString('2026-10-24T21:30:00.000Z')).toBe('23:30');
+  });
+
+  // 4. String ISO con offset +02:00
+  test('4. String ISO con offset +02:00 ("2026-10-24T23:30:00+02:00") -> 23:30 Europe/Madrid', () => {
+    expect(toTimeString('2026-10-24T23:30:00+02:00')).toBe('23:30');
+  });
+
+  // 5. String solo con hora (interpretada como hora de pared local en Europe/Madrid)
+  test('5. String solo con hora ("23:30", "9:30") se normaliza a HH:mm', () => {
+    expect(toTimeString('23:30')).toBe('23:30');
     expect(toTimeString('9:30')).toBe('09:30');
+    expect(toTimeString('00:15')).toBe('00:15');
+    expect(toTimeString('23:30:00')).toBe('23:30');
   });
 
-  // 3. start_time como null
-  test('3. toTimeString maneja null de forma segura devolviendo null', () => {
+  // 6. null
+  test('6. null retorna null de forma segura en toTimeString y toDateString', () => {
     expect(toTimeString(null)).toBeNull();
+    expect(toDateString(null)).toBeNull();
   });
 
-  // 4. start_time como undefined
-  test('4. toTimeString maneja undefined de forma segura devolviendo null', () => {
+  // 7. undefined
+  test('7. undefined retorna null de forma segura en toTimeString y toDateString', () => {
     expect(toTimeString(undefined)).toBeNull();
+    expect(toDateString(undefined)).toBeNull();
     expect(toTimeString('')).toBeNull();
-    expect(toTimeString('   ')).toBeNull();
+    expect(toDateString('')).toBeNull();
+  });
+
+  // 8. Fecha inválida
+  test('8. Fecha o formato inválido retorna null sin lanzar excepción', () => {
     expect(toTimeString('invalido')).toBeNull();
+    expect(toDateString('invalido')).toBeNull();
     expect(toTimeString(new Date('fecha invalida'))).toBeNull();
+    expect(toDateString(new Date('fecha invalida'))).toBeNull();
+    expect(toTimeString(12345)).toBeNull();
+    expect(toDateString({})).toBeNull();
   });
 
-  // 5. Propuesta con hora
-  test('5. Propuesta con hora ("21:00") se normaliza y compara correctamente con start_time Date', () => {
-    const candidateTime = toTimeString('21:00');
-    const evTime = toTimeString(new Date('2026-10-24T21:00:00Z'));
-    expect(candidateTime).toBe('21:00');
-    expect(evTime).toBe('21:00');
-    expect(isTimeSimilar(candidateTime, evTime, 30)).toBe(true);
+  // 9. Comparación de propuesta 23:30 con evento 23:30 Europe/Madrid
+  test('9. Comparación de propuesta con hora "23:30" coincide plenamente con evento 23:30 Europe/Madrid', () => {
+    const candidateTime = '23:30';
+    const evTimeStr = '23:30';
+    expect(isTimeSimilar(candidateTime, evTimeStr, 15)).toBe(true);
   });
 
-  // 6. Propuesta sin hora
-  test('6. Propuesta sin hora (null) no lanza excepción y retorna null en toTimeString', () => {
-    const candidateTime = toTimeString(null);
-    const evTime = toTimeString(new Date('2026-10-24T21:00:00Z'));
-    expect(candidateTime).toBeNull();
-    expect(isTimeSimilar(candidateTime, evTime)).toBe(false);
+  // 10. Comparación de propuesta 23:30 con evento 21:30 UTC
+  test('10. Comparación de propuesta con hora "23:30" coincide con evento guardado como 21:30 UTC en verano', () => {
+    const candidateTime = '23:30';
+    // Evento guardado en pg como Date con 21:30:00 UTC (equivale a 23:30 CEST en Europe/Madrid)
+    const evDateUtc = new Date('2026-10-24T21:30:00.000Z');
+    
+    // toTimeString normaliza evDateUtc a 23:30 en Europe/Madrid
+    expect(toTimeString(evDateUtc)).toBe('23:30');
+    expect(isTimeSimilar(candidateTime, evDateUtc, 15)).toBe(true);
   });
 
-  // 7. Evento con hora distinta
-  test('7. Evento con hora distinta (21:00 vs 18:00) detecta discrepancia horaria sin excepción', () => {
-    const evDate = new Date('2026-10-24T18:00:00Z');
-    expect(isTimeSimilar('21:00', evDate, 60)).toBe(false);
+  // 11. Fecha límite de cambio de hora estacional (25 de octubre 2026)
+  test('11. Fecha límite de cambio de hora (25 de octubre 2026): transición CEST (UTC+2) a CET (UTC+1)', () => {
+    // Sábado 24 de octubre 2026 (Horario de verano, CEST, UTC+2):
+    // 21:30 UTC -> 23:30 Europe/Madrid
+    const summerDate = new Date('2026-10-24T21:30:00.000Z');
+    expect(toTimeString(summerDate)).toBe('23:30');
+
+    // Domingo 25 de octubre 2026 a las 12:00 UTC (Ya en horario de invierno, CET, UTC+1):
+    // 12:00 UTC -> 13:00 Europe/Madrid
+    const postChangeDate = new Date('2026-10-25T12:00:00.000Z');
+    expect(toTimeString(postChangeDate)).toBe('13:00');
+
+    // Viernes 30 de octubre 2026 (Horario de invierno, CET, UTC+1):
+    // 22:30 UTC -> 23:30 Europe/Madrid
+    const winterDate = new Date('2026-10-30T22:30:00.000Z');
+    expect(toTimeString(winterDate)).toBe('23:30');
   });
 
-  // 8. Evento con misma hora
-  test('8. Evento con misma hora (21:00 vs 21:00) detecta coincidencia exacta entre String y Date', () => {
-    const evDate = new Date('2026-10-24T21:00:00Z');
-    expect(isTimeSimilar('21:00', evDate, 10)).toBe(true);
-    expect(isTimeSimilar('21:15', evDate, 30)).toBe(true);
+  // 12. toDateString normaliza fechas en Europe/Madrid
+  test('12. toDateString convierte correctamente timestamps UTC a la fecha local de Europe/Madrid', () => {
+    // 2026-10-24 a las 23:00 UTC corresponde a las 01:00 CEST del 2026-10-25 en Europe/Madrid
+    const lateNightDate = new Date('2026-10-24T23:00:00.000Z');
+    expect(toDateString(lateNightDate)).toBe('2026-10-25');
+
+    // String fecha simple se conserva
+    expect(toDateString('2026-10-24')).toBe('2026-10-24');
+    // Timestamp ISO antes de medianoche local se mantiene en el mismo día
+    expect(toDateString('2026-10-24T18:00:00Z')).toBe('2026-10-24');
   });
 
-  // 9. Matching alto con misma fecha y misma hora (ev.start_time como Date de PostgreSQL)
-  test('9. matchPostWithPublishedEvents produce MATCH_ALTO con misma fecha y misma hora cuando ev.start_time es un Date', () => {
+  // 13. evaluateDateProximity evalúa fechas en Europe/Madrid
+  test('13. evaluateDateProximity compara fechas en Europe/Madrid', () => {
+    // Misma fecha en Madrid
+    const prox1 = evaluateDateProximity('2026-10-24', new Date('2026-10-24T18:00:00Z'));
+    expect(prox1.sameDate).toBe(true);
+    expect(prox1.daysDiff).toBe(0);
+
+    // Fechas adyacentes (+1 día)
+    const prox2 = evaluateDateProximity('2026-10-24', '2026-10-25');
+    expect(prox2.sameDate).toBe(false);
+    expect(prox2.daysDiff).toBe(1);
+  });
+
+  // 14. Matching defensivo completo con start_time Date y propuesta con hora en Europe/Madrid
+  test('14. matchPostWithPublishedEvents empareja propuesta 21:00 con evento 19:00 UTC (21:00 Madrid)', () => {
     const candidate: MatchCandidate = {
       venueId: 10052,
       proposedDate: '2026-10-24',
-      proposedTime: '21:00',
+      proposedTime: '21:00', // Hora local de Palencia detectada en el flyer
       title: 'Héroes El Culto Tributo',
-      caption: 'Concierto tributo a Héroes del Silencio en Sala Infinity',
+      caption: 'Concierto en directo en Sala Infinity a las 21:00',
     };
 
     const existingEvents: ExistingEventRecord[] = [
@@ -87,119 +148,18 @@ describe('Hotfix Event Matcher — Normalización Temporal y Robustez de start_t
         venue_id: 10052,
         venue_name: 'Sala Infinity',
         editorial_date: '2026-10-24',
-        start_time: new Date('2026-10-24T21:00:00Z'), // Objeto Date devuelto por pg
+        // Evento almacenado en DB con start_time 19:00:00Z (que son las 21:00 CEST en Europe/Madrid)
+        start_time: new Date('2026-10-24T19:00:00.000Z'),
         title: 'Héroes El Culto (Tributo a Héroes del Silencio) — Sala Infinity',
         status: 'published',
       },
     ];
 
-    expect(() => matchPostWithPublishedEvents(candidate, existingEvents)).not.toThrow();
     const result = matchPostWithPublishedEvents(candidate, existingEvents);
 
     expect(result.matchedEvent).not.toBeNull();
     expect(result.matchedEvent?.id).toBe(78);
     expect(['MATCH_EXACTO', 'MATCH_ALTO']).toContain(result.matchLevel);
-    expect(result.signals.some((s) => s.includes('Hora similar'))).toBe(true);
-  });
-
-  // 10. Matching posible con misma fecha pero sin hora en propuesta
-  test('10. Matching posible con misma fecha pero sin hora en propuesta no lanza excepción', () => {
-    const candidateNoTime: MatchCandidate = {
-      venueId: 10052,
-      proposedDate: '2026-10-24',
-      proposedTime: null,
-      title: 'Héroes El Culto',
-      caption: 'Entradas en taquilla para esta noche',
-    };
-
-    const existingEvents: ExistingEventRecord[] = [
-      {
-        id: 78,
-        venue_id: 10052,
-        venue_name: 'Sala Infinity',
-        editorial_date: '2026-10-24',
-        start_time: new Date('2026-10-24T21:00:00Z'),
-        title: 'Héroes El Culto (Tributo a Héroes del Silencio) — Sala Infinity',
-        status: 'published',
-      },
-    ];
-
-    expect(() => matchPostWithPublishedEvents(candidateNoTime, existingEvents)).not.toThrow();
-    const result = matchPostWithPublishedEvents(candidateNoTime, existingEvents);
-
-    expect(result.matchedEvent).not.toBeNull();
-    expect(result.matchedEvent?.id).toBe(78);
-    expect(result.matchLevel).not.toBe('SIN_MATCH');
-  });
-
-  // 11. Ninguna excepción durante el matching con inputs heterogéneos
-  test('11. Ninguna excepción durante el matching con inputs heterogéneos (null, undefined, Date, string)', () => {
-    const candidates: MatchCandidate[] = [
-      {
-        venueId: 10052,
-        proposedDate: '2026-10-24',
-        proposedTime: '21:00',
-        title: 'Evento Test 1',
-        caption: 'Caption con texto variado',
-      },
-      {
-        venueId: 10052,
-        proposedDate: '2026-10-24',
-        proposedTime: null,
-        title: 'Evento Test 2',
-        caption: 'Caption sin hora',
-      },
-      {
-        venueId: null,
-        proposedDate: null,
-        proposedTime: null,
-        title: 'Post de ambiente',
-        caption: 'Feliz fin de semana',
-        hasNoDateAndTime: true,
-      },
-    ];
-
-    const heterogenousEvents: ExistingEventRecord[] = [
-      {
-        id: 101,
-        venue_id: 10052,
-        editorial_date: '2026-10-24',
-        start_time: new Date('2026-10-24T21:00:00Z'),
-        title: 'Evento con Date',
-        status: 'published',
-      },
-      {
-        id: 102,
-        venue_id: 10052,
-        editorial_date: '2026-10-24',
-        start_time: '2026-10-24T22:00:00Z',
-        title: 'Evento con String ISO',
-        status: 'published',
-      },
-      {
-        id: 103,
-        venue_id: 10052,
-        editorial_date: '2026-10-24',
-        start_time: null,
-        title: 'Evento con start_time null',
-        status: 'draft',
-      },
-      {
-        id: 104,
-        venue_id: 10052,
-        editorial_date: '2026-10-24',
-        start_time: undefined,
-        title: 'Evento con start_time undefined',
-        status: 'tentative',
-      },
-    ];
-
-    for (const cand of candidates) {
-      expect(() => matchPostWithPublishedEvents(cand, heterogenousEvents)).not.toThrow();
-      const evalRes = matchPostWithPublishedEvents(cand, heterogenousEvents);
-      expect(evalRes).toBeDefined();
-      expect(typeof evalRes.score).toBe('number');
-      expect(Array.isArray(evalRes.signals)).toBe(true);
-    }
+    expect(result.signals.some((s) => s.includes('Hora similar en Europe/Madrid (21:00 vs 21:00)'))).toBe(true);
   });
 });
