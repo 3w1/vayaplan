@@ -24,6 +24,7 @@ export type EventTimeStatus =
 
 export type EventStatus =
   | 'tentative'
+  | 'draft'
   | 'published'
   | 'outdated'
   | 'cancelled'

@@ -100,6 +100,10 @@ describe('Piloto de Ampliación de Agenda — Categorías y Etiquetas', () => {
     expect(VALID_EVENT_CATEGORIES).toContain('futbol');
     expect(VALID_EVENT_CATEGORIES).toContain('rugby');
     expect(VALID_EVENT_CATEGORIES).toContain('conferencia');
+    const { VALID_EVENT_STATUSES } = require('./index');
+    expect(VALID_EVENT_STATUSES).toContain('draft');
+    expect(VALID_EVENT_STATUSES).toContain('tentative');
+    expect(VALID_EVENT_STATUSES).toContain('published');
   });
 
   test('computeEditorialLabel devuelve el nombre del día sin errores cuando startTimeIso es null o indefinido', () => {

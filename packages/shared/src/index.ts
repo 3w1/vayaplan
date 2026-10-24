@@ -57,6 +57,7 @@ export const VALID_EVENT_CATEGORIES: readonly EventCategory[] = [
  */
 export const VALID_EVENT_STATUSES: readonly EventStatus[] = [
   'tentative',
+  'draft',
   'published',
   'outdated',
   'cancelled',

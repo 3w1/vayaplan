@@ -10,9 +10,16 @@ let poolInstance: Pool | null = null;
  */
 export function getDbPool(): Pool {
   if (!poolInstance) {
+    const isProduction = (process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+    const dbUrl = process.env.DATABASE_URL?.trim();
+
+    if (isProduction && !dbUrl) {
+      throw new Error('DATABASE_URL is required in production');
+    }
+
     const connectionString =
-      process.env.DATABASE_URL ||
-      `postgresql://${process.env.POSTGRES_USER || 'vayaplan_user'}:${process.env.POSTGRES_PASSWORD || 'cambia-esta-clave-segura'}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'vayaplan'}`;
+      dbUrl ||
+      `postgresql://${process.env.POSTGRES_USER || 'vayaplan_user'}:${process.env.POSTGRES_PASSWORD || ''}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'vayaplan'}`;
 
     poolInstance = new Pool({
       connectionString,

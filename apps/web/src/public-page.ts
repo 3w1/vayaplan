@@ -2489,7 +2489,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
     function filterEvents(events) {
       if (!events || events.length === 0) return [];
-      let result = events;
+      // Defensa en profundidad: solo mostrar eventos con status 'published' en la agenda pública
+      let result = events.filter((ev) => ev.status === 'published');
 
       if (currentFilter === 'musica') {
         result = result.filter((ev) => ev.category === 'musica_directo');

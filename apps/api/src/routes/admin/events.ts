@@ -102,16 +102,129 @@ adminEventsRoutes.post('/festivals', async (c) => {
 
 /**
  * GET /api/v1/admin/events
- * Lista todos los eventos para el panel de curación con filtros por estado, fecha y local
+ * Lista todos los eventos para el panel de curación con filtros por estado, categoría, búsqueda por texto, fecha y local
  */
 adminEventsRoutes.get('/events', async (c) => {
   const statusFilter = c.req.query('status')?.trim();
   const dateFilter = c.req.query('date')?.trim();
   const venueIdFilter = c.req.query('venue_id')?.trim();
   const hasCollision = c.req.query('has_collision')?.trim() === 'true';
+  const categoryFilter = c.req.query('category')?.trim()?.toLowerCase();
+  const searchFilter = c.req.query('q')?.trim();
+  const pageParam = Number(c.req.query('page'));
+  const limitParam = Number(c.req.query('limit'));
+  const page = !Number.isNaN(pageParam) && pageParam > 0 ? pageParam : 1;
+  const limit = !Number.isNaN(limitParam) && limitParam > 0 ? Math.min(limitParam, 200) : 200;
+  const offset = (page - 1) * limit;
 
   const queryParams: any[] = [];
-  let sql = `
+  const whereClauses: string[] = ['1=1'];
+
+  if (statusFilter === 'draft' || statusFilter === 'tentative') {
+    whereClauses.push(`e.status IN ('draft', 'tentative')`);
+  } else if (statusFilter && VALID_EVENT_STATUSES.includes(statusFilter as EventStatus)) {
+    queryParams.push(statusFilter);
+    whereClauses.push(`e.status = $${queryParams.length}`);
+  }
+
+  if (dateFilter && isValidDateString(dateFilter)) {
+    queryParams.push(dateFilter);
+    whereClauses.push(`e.editorial_date = $${queryParams.length}`);
+  }
+
+  if (venueIdFilter === 'unassigned' || venueIdFilter === 'null' || venueIdFilter === '9999') {
+    whereClauses.push(`(e.venue_id IS NULL OR e.venue_id = 9999)`);
+  } else if (venueIdFilter && !Number.isNaN(Number(venueIdFilter))) {
+    queryParams.push(Number(venueIdFilter));
+    whereClauses.push(`e.venue_id = $${queryParams.length}`);
+  }
+
+  // Filtro por tipo de actividad / categoría
+  if (categoryFilter) {
+    if (categoryFilter === 'deporte') {
+      whereClauses.push(`e.category IN ('baloncesto', 'futbol', 'rugby', 'deporte')`);
+    } else if (categoryFilter === 'musica') {
+      whereClauses.push(`e.category IN ('musica_directo', 'dj_tardeo', 'musica')`);
+    } else if (categoryFilter === 'cultura') {
+      whereClauses.push(`e.category IN ('cultura', 'teatro', 'exposicion', 'monologo', 'conferencia')`);
+    } else if (categoryFilter === 'gastronomia') {
+      whereClauses.push(`e.category IN ('gastronomia', 'cata')`);
+    } else if (categoryFilter === 'familia') {
+      whereClauses.push(`e.category IN ('familia', 'infantil')`);
+    } else if (categoryFilter === 'ocio') {
+      whereClauses.push(`e.category IN ('ocio', 'dj_tardeo')`);
+    } else if (categoryFilter === 'otros') {
+      whereClauses.push(`e.category NOT IN ('musica_directo', 'dj_tardeo', 'baloncesto', 'futbol', 'rugby', 'deporte', 'cultura', 'teatro', 'exposicion', 'monologo', 'cine', 'conferencia')`);
+    } else if (VALID_EVENT_CATEGORIES.includes(categoryFilter as EventCategory)) {
+      queryParams.push(categoryFilter);
+      whereClauses.push(`e.category = $${queryParams.length}`);
+    }
+  }
+
+  // Búsqueda insensible a mayúsculas multi-término
+  if (searchFilter) {
+    const qClean = searchFilter.slice(0, 100).trim();
+    if (qClean) {
+      const tokens = qClean.split(/\s+/).filter(Boolean).slice(0, 5);
+      for (const token of tokens) {
+        queryParams.push(`%${token}%`);
+        const pIdx = queryParams.length;
+        whereClauses.push(`(
+          e.title ILIKE $${pIdx} OR 
+          v.name ILIKE $${pIdx} OR 
+          e.category ILIKE $${pIdx} OR 
+          EXISTS (
+            SELECT 1 FROM event_festivals ef 
+            INNER JOIN festivals f ON ef.festival_id = f.id 
+            WHERE ef.event_id = e.id AND f.name ILIKE $${pIdx}
+          )
+        )`);
+      }
+    }
+  }
+
+  if (hasCollision) {
+    whereClauses.push(`EXISTS (
+      SELECT 1 FROM events c
+      WHERE c.venue_id = e.venue_id
+        AND c.editorial_date = e.editorial_date
+        AND c.id != e.id
+        AND c.status NOT IN ('cancelled', 'duplicate')
+        AND e.venue_id IS NOT NULL
+        AND e.venue_id != 9999
+        AND e.start_time IS NOT NULL
+        AND c.start_time IS NOT NULL
+        AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
+    )`);
+  }
+
+  const whereSql = whereClauses.join(' AND ');
+
+  // Conteo total para paginación
+  const countRes = await query(
+    `SELECT count(DISTINCT e.id) AS total
+     FROM events e
+     LEFT JOIN venues v ON e.venue_id = v.id
+     WHERE ${whereSql}`,
+    queryParams
+  );
+  const totalCount = Number(countRes.rows[0]?.total || 0);
+
+  // Orden cronológico
+  let orderSql = '';
+  if (statusFilter === 'tentative' || statusFilter === 'draft') {
+    orderSql = `ORDER BY e.start_time ASC NULLS LAST, e.id ASC`;
+  } else {
+    orderSql = `ORDER BY CASE WHEN e.status IN ('tentative', 'draft') THEN 0 ELSE 1 END ASC, e.editorial_date DESC, e.start_time ASC NULLS LAST`;
+  }
+
+  const paginationParams = [...queryParams];
+  paginationParams.push(limit);
+  paginationParams.push(offset);
+  const limitIdx = paginationParams.length - 1;
+  const offsetIdx = paginationParams.length;
+
+  const selectSql = `
     SELECT 
       e.*,
       v.name AS venue_name,
@@ -154,60 +267,12 @@ adminEventsRoutes.get('/events', async (c) => {
     FROM events e
     LEFT JOIN venues v ON e.venue_id = v.id
     LEFT JOIN promotions p ON p.event_id = e.id AND p.status = 'active'
-    WHERE 1=1
+    WHERE ${whereSql}
+    ${orderSql}
+    LIMIT $${limitIdx} OFFSET $${offsetIdx};
   `;
 
-  if (statusFilter && VALID_EVENT_STATUSES.includes(statusFilter as EventStatus)) {
-    queryParams.push(statusFilter);
-    sql += ` AND e.status = $${queryParams.length}`;
-  }
-
-  if (dateFilter && isValidDateString(dateFilter)) {
-    queryParams.push(dateFilter);
-    sql += ` AND e.editorial_date = $${queryParams.length}`;
-  }
-
-  if (venueIdFilter === 'unassigned' || venueIdFilter === 'null' || venueIdFilter === '9999') {
-    sql += ` AND (e.venue_id IS NULL OR e.venue_id = 9999)`;
-  } else if (venueIdFilter && !Number.isNaN(Number(venueIdFilter))) {
-    queryParams.push(Number(venueIdFilter));
-    sql += ` AND e.venue_id = $${queryParams.length}`;
-  }
-
-  if (hasCollision) {
-    sql += ` AND EXISTS (
-      SELECT 1 FROM events c
-      WHERE c.venue_id = e.venue_id
-        AND c.editorial_date = e.editorial_date
-        AND c.id != e.id
-        AND c.status NOT IN ('cancelled', 'duplicate')
-        AND e.venue_id IS NOT NULL
-        AND e.venue_id != 9999
-        AND e.start_time IS NOT NULL
-        AND c.start_time IS NOT NULL
-        AND ABS(EXTRACT(EPOCH FROM (c.start_time - e.start_time))) <= 7200
-    )`;
-  }
-
-  // Ordenar cronológicamente ascendente si son borradores tentative, o priorizando tentative
-  if (statusFilter === 'tentative') {
-    sql += `
-      ORDER BY 
-        e.start_time ASC NULLS LAST,
-        e.id ASC
-      LIMIT 200;
-    `;
-  } else {
-    sql += `
-      ORDER BY 
-        CASE WHEN e.status = 'tentative' THEN 0 ELSE 1 END ASC,
-        e.editorial_date DESC,
-        e.start_time ASC NULLS LAST
-      LIMIT 200;
-    `;
-  }
-
-  const result = await query(sql, queryParams);
+  const result = await query(selectSql, paginationParams);
 
   const events: AdminEventItem[] = result.rows.map((row) => ({
     id: Number(row.id),
@@ -251,8 +316,14 @@ adminEventsRoutes.get('/events', async (c) => {
   }));
 
   return c.json({
-    total: events.length,
+    total: totalCount,
     events,
+    pagination: {
+      page,
+      limit,
+      total: totalCount,
+      total_pages: Math.ceil(totalCount / limit) || 1,
+    },
   });
 });
 
