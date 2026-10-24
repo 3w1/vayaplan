@@ -4,7 +4,7 @@ import type {
   PostClassificationResult,
   ApifyInstagramRawPost,
 } from './bar-types';
-import { normalizePrice } from '@vayaplan/shared';
+import { normalizePrice, detectPriceFromText } from '@vayaplan/shared';
 
 /**
  * Expresiones regulares para detección de señales
@@ -199,26 +199,21 @@ export function classifyBarPost(
     signals.push(`Lugar identificable: ${matched ? matched[0] : venueName}`);
   }
 
-  // E. Detectar ENTRADA / CONDICIÓN Y PRECIO
-  let estimatedPriceCents: number | null = null;
-  const isFree = /\b(?:entrada\s+(?:libre|gratuita|gratis)|acceso\s+libre|gratis|gratuita)\b/i.test(caption);
-  if (isFree) {
-    estimatedPriceCents = 0;
+  // E. Detectar ENTRADA / CONDICIÓN Y PRECIO mediante reglas canónicas
+  const priceResult = detectPriceFromText(caption);
+  const estimatedPriceCents = priceResult.priceCents;
+  const priceStatus = priceResult.priceStatus;
+  const priceNote = priceResult.priceNote || null;
+
+  if (priceStatus === 'FREE') {
     signals.push('Acceso gratuito detectado');
-  } else {
-    const priceMatch = caption.match(/\b(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros)\b/i);
-    if (priceMatch) {
-      try {
-        const norm = normalizePrice(priceMatch[1]);
-        estimatedPriceCents = norm.priceCents;
-        signals.push(`Precio estimado detectado: ${norm.formatted}`);
-      } catch {
-        // Ignorar si no se puede normalizar
-      }
-    }
+  } else if (priceStatus === 'CONFIRMED' && priceResult.formatted) {
+    signals.push(`Precio estimado detectado: ${priceResult.formatted}`);
+  } else if (priceStatus === 'CHECK_BOX_OFFICE') {
+    signals.push('Condición de entrada: consultar en taquilla');
   }
 
-  if (PATTERNS.ticketOrBooking.test(caption) && !signals.some(s => s.includes('Precio') || s.includes('gratuito'))) {
+  if (PATTERNS.ticketOrBooking.test(caption) && !signals.some(s => s.includes('Precio') || s.includes('gratuito') || s.includes('taquilla'))) {
     const matched = caption.match(PATTERNS.ticketOrBooking);
     signals.push(`Condición o acceso detectado: "${matched ? matched[0] : ''}"`);
   }
@@ -237,6 +232,8 @@ export function classifyBarPost(
       inferredTime: detectedTime,
       candidateCategory: provisionalCategory,
       estimatedPriceCents,
+      priceStatus,
+      priceNote,
     };
   }
 
@@ -255,6 +252,8 @@ export function classifyBarPost(
       provisionalCategory,
       candidateCategory: provisionalCategory || 'dj_tardeo',
       estimatedPriceCents,
+      priceStatus,
+      priceNote,
     };
   }
 
@@ -276,6 +275,8 @@ export function classifyBarPost(
       provisionalTitle,
       candidateTitle: provisionalTitle,
       estimatedPriceCents,
+      priceStatus,
+      priceNote,
     };
   }
 
@@ -298,6 +299,8 @@ export function classifyBarPost(
       provisionalTitle,
       candidateTitle: provisionalTitle,
       estimatedPriceCents,
+      priceStatus,
+      priceNote,
     };
   }
 

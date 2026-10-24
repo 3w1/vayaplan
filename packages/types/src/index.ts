@@ -22,6 +22,13 @@ export type EventTimeStatus =
   | 'tentative_date'
   | 'continuous';
 
+export type PriceStatus =
+  | 'UNKNOWN'
+  | 'FREE'
+  | 'NOT_INFORMED'
+  | 'CHECK_BOX_OFFICE'
+  | 'CONFIRMED';
+
 export type EventStatus =
   | 'tentative'
   | 'draft'
@@ -181,7 +188,11 @@ export interface Event {
   end_date?: string | null;
   schedule_text?: string | null;
   approximate_schedule?: string | null;
-  price_cents: number;
+  price_cents: number | null;
+  price_status?: PriceStatus;
+  price_note?: string | null;
+  price_source?: string | null;
+  price_checked_at?: string | null;
   is_free: boolean;
   image_url: string | null;
   image_thumb_url?: string | null;
@@ -296,9 +307,11 @@ export interface VenueSummary {
 }
 
 export interface EventPriceInfo {
-  amount_cents: number;
+  amount_cents: number | null;
   is_free: boolean;
   label: string;
+  status?: PriceStatus;
+  note?: string | null;
 }
 
 export interface EventActionInfo {

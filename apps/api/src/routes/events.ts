@@ -92,6 +92,10 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       e.schedule_text,
       e.approximate_schedule,
       e.price_cents,
+      e.price_status,
+      e.price_note,
+      e.price_source,
+      e.price_checked_at,
       e.is_free,
       e.image_url,
       ${variantsEventCols}
@@ -168,9 +172,16 @@ eventsRoutes.get('/cities/:citySlug/events', async (c) => {
       schedule_text: row.schedule_text || null,
       approximate_schedule: row.approximate_schedule || null,
       price: {
-        amount_cents: Number(row.price_cents),
+        amount_cents: row.price_cents !== null && row.price_cents !== undefined ? Number(row.price_cents) : null,
         is_free: Boolean(row.is_free),
-        label: formatPriceLabel(Number(row.price_cents), Boolean(row.is_free)),
+        status: (row.price_status || 'UNKNOWN') as any,
+        note: row.price_note || null,
+        label: formatPriceLabel(
+          row.price_cents !== null && row.price_cents !== undefined ? Number(row.price_cents) : null,
+          Boolean(row.is_free),
+          row.price_status || 'UNKNOWN',
+          Boolean(row.source_url || mapsUrl)
+        ),
       },
       status: row.status,
       venue: {

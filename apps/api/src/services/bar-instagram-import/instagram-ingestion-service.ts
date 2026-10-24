@@ -375,12 +375,18 @@ export async function runInstagramIngestion(options: {
                 matched_event_id,
                 match_level,
                 match_reasons,
+                price_status,
+                price_note,
+                price_source,
+                price_checked_at,
                 created_at,
                 updated_at
               ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, 'instagram',
                 $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                $18, $19, $20, $21, $22, $23, $24, NOW(), NOW()
+                $18, $19, $20, $21, $22, $23, $24,
+                $25, $26, $27, NOW(),
+                NOW(), NOW()
               ) RETURNING id;
             `;
 
@@ -411,6 +417,9 @@ export async function runInstagramIngestion(options: {
               matchedEventId,
               matchLevel,
               matchReasons,
+              classificationResult.priceStatus || 'NOT_INFORMED',
+              classificationResult.priceNote || null,
+              'instagram',
             ]);
 
             sourceResult.proposalsCreated++;

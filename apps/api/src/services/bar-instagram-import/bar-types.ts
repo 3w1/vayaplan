@@ -3,6 +3,8 @@
  * usando Apify Instagram Post Scraper, Cloudflare R2 y Curación Humana en VayaPlan.
  */
 
+import type { PriceStatus } from '@vayaplan/shared';
+
 export type BarPostClassification =
   | 'EVENTO_POSIBLE'
   | 'EVENTO_POSIBLE_SIN_HORA'
@@ -89,6 +91,8 @@ export interface PostClassificationResult {
   candidateCategory?: string | null;
   candidateTitle?: string | null;
   estimatedPriceCents?: number | null;
+  priceStatus?: PriceStatus;
+  priceNote?: string | null;
   matchedEventId?: number | null;
   matchLevel?: EventMatchLevel | null;
   matchReasons?: string[] | null;

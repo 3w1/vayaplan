@@ -332,6 +332,76 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .secondary-filters-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .secondary-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: var(--color-bg-app);
+      color: var(--color-text-main);
+      border: 1.5px solid var(--color-border);
+      border-radius: var(--radius-pill);
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .secondary-filter-chip:hover {
+      border-color: var(--color-border-subtle);
+      background: var(--color-bg-subtle);
+    }
+
+    .secondary-filter-chip:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: 2px;
+    }
+
+    .secondary-filter-chip[aria-pressed="true"],
+    .secondary-filter-chip.active {
+      background: #EFF6FF;
+      color: #1D4ED8;
+      border-color: #3B82F6;
+      font-weight: 800;
+      box-shadow: 0 2px 6px rgba(59, 130, 246, 0.2);
+    }
+
+    .secondary-filter-chip-status {
+      display: none;
+      margin-left: 0.15rem;
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+
+    .secondary-filter-chip[aria-pressed="true"] .secondary-filter-chip-status,
+    .secondary-filter-chip.active .secondary-filter-chip-status {
+      display: inline;
+    }
+
+    .card-price-note {
+      font-size: 0.6875rem;
+      color: var(--color-text-muted);
+      margin-top: 1px;
+      line-height: 1.2;
+    }
+
+    .modal-price-note {
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+      margin-top: 2px;
     }
 
     .btn-filter-free {
@@ -1866,12 +1936,32 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       </button>
     </section>
 
-    <!-- Barra de Filtros Secundarios (Modificador Gratis) -->
+    <!-- Barra de Filtros Secundarios (Modificador de precio y exposiciones) -->
     <div class="secondary-filters-bar" aria-label="Filtros adicionales">
       <button type="button" class="btn-filter-free" id="btn-filter-free" data-action="toggle-free" aria-pressed="false" aria-label="Filtrar solo planes gratis">
         <svg class="btn-filter-free-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
         <span class="btn-filter-free-label">Gratis</span>
         <span class="btn-filter-free-status" aria-hidden="true">✓</span>
+      </button>
+
+      <button type="button" class="secondary-filter-chip" id="btn-filter-price-confirmed" data-action="toggle-price-confirmed" aria-pressed="false" aria-label="Filtrar eventos con precio confirmado">
+        <span>💶 Confirmado</span>
+        <span class="secondary-filter-chip-status" aria-hidden="true">✓</span>
+      </button>
+
+      <button type="button" class="secondary-filter-chip" id="btn-filter-box-office" data-action="toggle-box-office" aria-pressed="false" aria-label="Filtrar eventos para consultar en taquilla">
+        <span>🎟️ Taquilla</span>
+        <span class="secondary-filter-chip-status" aria-hidden="true">✓</span>
+      </button>
+
+      <button type="button" class="secondary-filter-chip" id="btn-filter-not-informed" data-action="toggle-not-informed" aria-pressed="false" aria-label="Filtrar eventos con precio no informado">
+        <span>❓ No informado</span>
+        <span class="secondary-filter-chip-status" aria-hidden="true">✓</span>
+      </button>
+
+      <button type="button" class="secondary-filter-chip" id="btn-filter-continuous" data-action="toggle-continuous" aria-pressed="false" aria-label="Filtrar exposiciones y eventos continuos">
+        <span>🏛️ Continuos</span>
+        <span class="secondary-filter-chip-status" aria-hidden="true">✓</span>
       </button>
     </div>
 
@@ -1953,6 +2043,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     let currentView = 'today';
     let currentFilter = 'all';
     let isFreeFilterActive = false;
+    let isConfirmedPriceFilterActive = false;
+    let isBoxOfficeFilterActive = false;
+    let isNotInformedFilterActive = false;
+    let isContinuousFilterActive = false;
     let selectedDate = getTodayDateString();
     let currentData = null; // Almacena respuesta de API
     let activeModalEventId = null; // Previene impresiones duplicadas accidentales
@@ -2121,7 +2215,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       if (!evOrIso) return '';
       if (typeof evOrIso === 'object') {
         const ev = evOrIso;
-        if (ev.time_status === 'pending_time' || !ev.start_time) {
+        if (ev.time_status === 'continuous' || (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date)) {
+          if (ev.editorial_date && ev.end_date) {
+            return \`DEL \${formatDateSpanish(ev.editorial_date).toUpperCase()} AL \${formatDateSpanish(ev.end_date).toUpperCase()}\`;
+          }
+          return 'EXPOSICIÓN EN CURSO';
+        }
+        if (ev.time_status === 'pending_time' || (!ev.start_time && ev.time_status !== 'continuous')) {
           if (ev.editorial_date) {
             const parts = ev.editorial_date.split('-').map(Number);
             const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
@@ -2131,9 +2231,6 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             return \`\${weekday} \${day} \${month} · HORARIO POR CONFIRMAR\`;
           }
           return 'HORARIO POR CONFIRMAR';
-        }
-        if (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date) {
-          return 'EXPOSICIÓN EN CURSO';
         }
         return formatPromotedHeroDateTime(ev.start_time);
       }
@@ -2149,6 +2246,9 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
     function renderCardTimeHtml(ev) {
       if (ev.time_status === 'continuous' || (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date)) {
+        if (ev.editorial_date && ev.end_date) {
+          return \`<span class="card-time card-time-exhibition">🏛️ Del \${formatDateSpanish(ev.editorial_date)} al \${formatDateSpanish(ev.end_date)}</span>\`;
+        }
         return '<span class="card-time card-time-exhibition">🏛️ Exposición en curso</span>';
       }
       if (ev.time_status === 'pending_time' || (!ev.start_time && ev.time_status !== 'continuous')) {
@@ -2465,6 +2565,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     // ==============================================================================
     function isEventFree(ev) {
       if (!ev) return false;
+      const status = (ev.price && ev.price.status) || ev.price_status;
+      if (status) {
+        return status === 'FREE';
+      }
       // Contrato canónico de PublicEventItem: la gratuidad autoritativa reside en ev.price.is_free
       if (ev.price && typeof ev.price === 'object' && ev.price.is_free !== undefined) {
         return ev.price.is_free === true;
@@ -2508,11 +2612,41 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         result = result.filter((ev) => isEventFree(ev));
       }
 
+      if (isConfirmedPriceFilterActive) {
+        result = result.filter((ev) => {
+          const status = (ev.price && ev.price.status) || ev.price_status;
+          return status === 'CONFIRMED' || (!status && ev.price && ev.price.amount_cents > 0);
+        });
+      }
+
+      if (isBoxOfficeFilterActive) {
+        result = result.filter((ev) => {
+          const status = (ev.price && ev.price.status) || ev.price_status;
+          return status === 'CHECK_BOX_OFFICE';
+        });
+      }
+
+      if (isNotInformedFilterActive) {
+        result = result.filter((ev) => {
+          const status = (ev.price && ev.price.status) || ev.price_status;
+          return status === 'NOT_INFORMED';
+        });
+      }
+
+      if (isContinuousFilterActive) {
+        result = result.filter((ev) => {
+          return ev.time_status === 'continuous' || Boolean(ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date);
+        });
+      }
+
       return result;
     }
 
     function filterRecurrences(recurrences) {
       if (!recurrences || recurrences.length === 0) return [];
+      if (isContinuousFilterActive || isConfirmedPriceFilterActive || isBoxOfficeFilterActive || isNotInformedFilterActive) {
+        return [];
+      }
       let result = recurrences;
 
       if (currentFilter === 'musica') {
@@ -2566,6 +2700,38 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         \`;
       }
 
+      if (isConfirmedPriceFilterActive) {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="remove-confirmed-filter" aria-label="Eliminar filtro Precio confirmado">
+            Confirmado ✕
+          </button>
+        \`;
+      }
+
+      if (isBoxOfficeFilterActive) {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="remove-box-office-filter" aria-label="Eliminar filtro En taquilla">
+            Taquilla ✕
+          </button>
+        \`;
+      }
+
+      if (isNotInformedFilterActive) {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="remove-not-informed-filter" aria-label="Eliminar filtro Precio no informado">
+            No informado ✕
+          </button>
+        \`;
+      }
+
+      if (isContinuousFilterActive) {
+        chipsHtml += \`
+          <button class="filter-chip-removable" data-action="remove-continuous-filter" aria-label="Eliminar filtro Eventos continuos">
+            Continuos ✕
+          </button>
+        \`;
+      }
+
       if (currentView === 'tomorrow') {
         chipsHtml += \`
           <button class="filter-chip-removable" data-action="switch-view" data-view="today" aria-label="Volver a Hoy">
@@ -2594,22 +2760,37 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
     }
 
-    function syncFreeFilterUi() {
-      const btn = document.getElementById('btn-filter-free');
-      if (btn) {
-        btn.setAttribute('aria-pressed', isFreeFilterActive ? 'true' : 'false');
-        btn.classList.toggle('active', isFreeFilterActive);
+    function syncSecondaryFiltersUi() {
+      const btnFree = document.getElementById('btn-filter-free');
+      if (btnFree) {
+        btnFree.setAttribute('aria-pressed', isFreeFilterActive ? 'true' : 'false');
+        btnFree.classList.toggle('active', isFreeFilterActive);
+      }
+      const btnConfirmed = document.getElementById('btn-filter-price-confirmed');
+      if (btnConfirmed) {
+        btnConfirmed.setAttribute('aria-pressed', isConfirmedPriceFilterActive ? 'true' : 'false');
+        btnConfirmed.classList.toggle('active', isConfirmedPriceFilterActive);
+      }
+      const btnBoxOffice = document.getElementById('btn-filter-box-office');
+      if (btnBoxOffice) {
+        btnBoxOffice.setAttribute('aria-pressed', isBoxOfficeFilterActive ? 'true' : 'false');
+        btnBoxOffice.classList.toggle('active', isBoxOfficeFilterActive);
+      }
+      const btnNotInformed = document.getElementById('btn-filter-not-informed');
+      if (btnNotInformed) {
+        btnNotInformed.setAttribute('aria-pressed', isNotInformedFilterActive ? 'true' : 'false');
+        btnNotInformed.classList.toggle('active', isNotInformedFilterActive);
+      }
+      const btnContinuous = document.getElementById('btn-filter-continuous');
+      if (btnContinuous) {
+        btnContinuous.setAttribute('aria-pressed', isContinuousFilterActive ? 'true' : 'false');
+        btnContinuous.classList.toggle('active', isContinuousFilterActive);
       }
     }
-    window.syncFreeFilterUi = syncFreeFilterUi;
+    window.syncSecondaryFiltersUi = syncSecondaryFiltersUi;
+    window.syncFreeFilterUi = syncSecondaryFiltersUi;
 
-    function toggleFreeFilter(forceVal) {
-      const nextVal = typeof forceVal === 'boolean' ? forceVal : !isFreeFilterActive;
-      isFreeFilterActive = nextVal;
-
-      syncFreeFilterUi();
-      updateListingUrl();
-
+    function refreshAgendaViews() {
       if (currentData) {
         if (currentView === 'weekend') {
           renderWeekendAgenda();
@@ -2618,12 +2799,65 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         }
       }
     }
+
+    function toggleFreeFilter(forceVal) {
+      const nextVal = typeof forceVal === 'boolean' ? forceVal : !isFreeFilterActive;
+      isFreeFilterActive = nextVal;
+
+      syncSecondaryFiltersUi();
+      updateListingUrl();
+      refreshAgendaViews();
+    }
     window.toggleFreeFilter = toggleFreeFilter;
+
+    function toggleConfirmedPriceFilter(forceVal) {
+      const nextVal = typeof forceVal === 'boolean' ? forceVal : !isConfirmedPriceFilterActive;
+      isConfirmedPriceFilterActive = nextVal;
+
+      syncSecondaryFiltersUi();
+      updateListingUrl();
+      refreshAgendaViews();
+    }
+    window.toggleConfirmedPriceFilter = toggleConfirmedPriceFilter;
+
+    function toggleBoxOfficeFilter(forceVal) {
+      const nextVal = typeof forceVal === 'boolean' ? forceVal : !isBoxOfficeFilterActive;
+      isBoxOfficeFilterActive = nextVal;
+
+      syncSecondaryFiltersUi();
+      updateListingUrl();
+      refreshAgendaViews();
+    }
+    window.toggleBoxOfficeFilter = toggleBoxOfficeFilter;
+
+    function toggleNotInformedFilter(forceVal) {
+      const nextVal = typeof forceVal === 'boolean' ? forceVal : !isNotInformedFilterActive;
+      isNotInformedFilterActive = nextVal;
+
+      syncSecondaryFiltersUi();
+      updateListingUrl();
+      refreshAgendaViews();
+    }
+    window.toggleNotInformedFilter = toggleNotInformedFilter;
+
+    function toggleContinuousFilter(forceVal) {
+      const nextVal = typeof forceVal === 'boolean' ? forceVal : !isContinuousFilterActive;
+      isContinuousFilterActive = nextVal;
+
+      syncSecondaryFiltersUi();
+      updateListingUrl();
+      refreshAgendaViews();
+    }
+    window.toggleContinuousFilter = toggleContinuousFilter;
 
     function clearAllFilters() {
       currentFilter = 'all';
       isFreeFilterActive = false;
-      syncFreeFilterUi();
+      isConfirmedPriceFilterActive = false;
+      isBoxOfficeFilterActive = false;
+      isNotInformedFilterActive = false;
+      isContinuousFilterActive = false;
+      syncSecondaryFiltersUi();
       document.querySelectorAll('.cat-btn').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.cat === 'all');
       });
@@ -2784,7 +3018,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
       const filteredEvents = filterEvents(currentData.events || []);
       const recurrences = filterRecurrences(currentData.recurrences || []);
-      const places = (currentFilter === 'all' && !isFreeFilterActive) ? (currentData.places || []) : [];
+      const hasAnySecondaryFilter = isFreeFilterActive || isConfirmedPriceFilterActive || isBoxOfficeFilterActive || isNotInformedFilterActive || isContinuousFilterActive;
+      const places = (currentFilter === 'all' && !hasAnySecondaryFilter) ? (currentData.places || []) : [];
 
       const totalItems = filteredEvents.length + recurrences.length + places.length;
       countEl.innerText = \`\${totalItems} \${totalItems === 1 ? 'plan' : 'planes'}\`;
@@ -2891,7 +3126,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
               </div>
               <div class="card-bottom-row">
                 \${renderCardTimeHtml(ev)}
-                <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
+                <div style="display:inline-flex;flex-direction:column;align-items:flex-end;">
+                  <span class="card-price-pill \${(ev.price && (ev.price.is_free || ev.price.status === 'FREE')) ? 'free' : 'paid'}">\${escapeHtml(ev.price ? ev.price.label : '')}</span>
+                  \${(ev.price && ev.price.note) ? \`<span class="card-price-note">\${escapeHtml(ev.price.note)}</span>\` : ''}
+                </div>
               </div>
             </div>
           </article>
@@ -3031,7 +3269,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
                 </div>
                 <div class="card-bottom-row">
                   \${renderCardTimeHtml(ev)}
-                  <span class="card-price-pill \${ev.price.is_free ? 'free' : 'paid'}">\${escapeHtml(ev.price.label)}</span>
+                  <div style="display:inline-flex;flex-direction:column;align-items:flex-end;">
+                    <span class="card-price-pill \${(ev.price && (ev.price.is_free || ev.price.status === 'FREE')) ? 'free' : 'paid'}">\${escapeHtml(ev.price ? ev.price.label : '')}</span>
+                    \${(ev.price && ev.price.note) ? \`<span class="card-price-note">\${escapeHtml(ev.price.note)}</span>\` : ''}
+                  </div>
                 </div>
               </div>
             </article>
@@ -3064,7 +3305,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
 
       // Planes permanentes al final del fin de semana
-      if (currentFilter === 'all' && !isFreeFilterActive && currentData.places && currentData.places.length > 0) {
+      const hasAnySecondaryFilter = isFreeFilterActive || isConfirmedPriceFilterActive || isBoxOfficeFilterActive || isNotInformedFilterActive || isContinuousFilterActive;
+      if (currentFilter === 'all' && !hasAnySecondaryFilter && currentData.places && currentData.places.length > 0) {
         html += \`
           <div class="weekend-day-group">
             <div class="weekend-day-header">
@@ -3094,7 +3336,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         html += '</div></div>';
       }
 
-      const displayedPlacesCount = (currentFilter === 'all' && !isFreeFilterActive && currentData.places) ? currentData.places.length : 0;
+      const displayedPlacesCount = (currentFilter === 'all' && !hasAnySecondaryFilter && currentData.places) ? currentData.places.length : 0;
       const totalWeekendItems = totalWeekendEvents + displayedPlacesCount;
       countEl.innerText = \`\${totalWeekendItems} \${totalWeekendItems === 1 ? 'plan' : 'planes'}\`;
 
@@ -3194,9 +3436,26 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         : (ev.festival || null);
       const officialLink = (ev.actions && (ev.actions.tickets_url || ev.actions.booking_url)) || (festForOfficial && festForOfficial.official_url) || null;
 
-      let priceLabel = ev.price.label;
-      if (ev.price.amount_cents === 0 || ev.price.is_free) {
+      let priceLabel = '';
+      const pStatus = (ev.price && ev.price.status) || ev.price_status || (ev.price && ev.price.is_free ? 'FREE' : (ev.price && ev.price.amount_cents > 0 ? 'CONFIRMED' : 'UNKNOWN'));
+      const pNote = (ev.price && ev.price.note) || ev.price_note || '';
+
+      if (pStatus === 'FREE') {
         priceLabel = 'Gratis';
+      } else if (pStatus === 'CHECK_BOX_OFFICE') {
+        priceLabel = 'Consultar en taquilla';
+      } else if (pStatus === 'NOT_INFORMED') {
+        priceLabel = 'Precio no informado';
+      } else if (pStatus === 'CONFIRMED') {
+        if (ev.price && ev.price.label) {
+          priceLabel = ev.price.label;
+        } else if (ev.price && ev.price.amount_cents !== null && ev.price.amount_cents !== undefined) {
+          priceLabel = (ev.price.amount_cents / 100).toFixed(2).replace('.', ',') + ' €';
+        } else {
+          priceLabel = 'Precio confirmado';
+        }
+      } else { // UNKNOWN
+        priceLabel = officialLink ? 'Consultar' : '';
       }
 
       sheet.innerHTML = \`
@@ -3242,7 +3501,12 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
             <div class="modal-title-price-row">
               <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(ev.title)}</h1>
-              <span class="modal-price-pill \${(ev.price.amount_cents === 0 || ev.price.is_free) ? 'is-free' : 'is-paid'}">\${escapeHtml(priceLabel)}</span>
+              \${priceLabel ? \`
+                <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;">
+                  <span class="modal-price-pill \${pStatus === 'FREE' ? 'is-free' : 'is-paid'}">\${escapeHtml(priceLabel)}</span>
+                  \${pNote ? \`<span class="modal-price-note">\${escapeHtml(pNote)}</span>\` : ''}
+                </div>
+              \` : ''}
             </div>
           </div>
 
@@ -3867,6 +4131,22 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         toggleFreeFilter();
       } else if (action === 'remove-free-filter') {
         toggleFreeFilter(false);
+      } else if (action === 'toggle-price-confirmed') {
+        toggleConfirmedPriceFilter();
+      } else if (action === 'remove-confirmed-filter') {
+        toggleConfirmedPriceFilter(false);
+      } else if (action === 'toggle-box-office') {
+        toggleBoxOfficeFilter();
+      } else if (action === 'remove-box-office-filter') {
+        toggleBoxOfficeFilter(false);
+      } else if (action === 'toggle-not-informed') {
+        toggleNotInformedFilter();
+      } else if (action === 'remove-not-informed-filter') {
+        toggleNotInformedFilter(false);
+      } else if (action === 'toggle-continuous') {
+        toggleContinuousFilter();
+      } else if (action === 'remove-continuous-filter') {
+        toggleContinuousFilter(false);
       } else if (action === 'prev-hero') {
         if (window.__heroCarouselStep) window.__heroCarouselStep(-1);
       } else if (action === 'next-hero') {
