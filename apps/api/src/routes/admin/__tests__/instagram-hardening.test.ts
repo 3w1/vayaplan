@@ -1,4 +1,12 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+// Asegurar variable de entorno para las pruebas si no estuviera configurada en el entorno global
+if (!process.env.INTERNAL_CRON_SECRET) {
+  process.env.INTERNAL_CRON_SECRET = 'test_cron_secret_env_strict_2026';
+}
+
 import { app } from '../../../index';
 import { query } from '@vayaplan/db';
 import { sign } from 'hono/jwt';
@@ -20,7 +28,7 @@ import type { ApifyInstagramRawPost } from '../../../services/bar-instagram-impo
 
 describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2)', () => {
   let adminToken: string;
-  const cronSecret = process.env.INTERNAL_CRON_SECRET || 'vp_internal_cron_secret_2026';
+  const cronSecret = process.env.INTERNAL_CRON_SECRET!;
 
   beforeAll(async () => {
     adminToken = await sign(
@@ -527,6 +535,40 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
       expect(body.error).toBe('execution_locked');
 
       await releasePersistentLock(DEFAULT_LOCK_KEY);
+    });
+
+    test('Verifica que el archivo no contiene valores por defecto hardcodeados ni fallbacks', () => {
+      const filePath = resolve(__dirname, '../../internal/instagram-ingestion.ts');
+      const content = readFileSync(filePath, 'utf-8');
+
+      // Comprobar que no contiene strings de fallback tipo 'vp_internal_cr...' ni operador || en INTERNAL_CRON_SECRET
+      expect(content).not.toContain('vp_internal_cron_secret');
+      expect(content).not.toMatch(/process\.env\.INTERNAL_CRON_SECRET\s*\|\|/);
+      expect(content).toContain('if (!INTERNAL_CRON_SECRET)');
+      expect(content).toContain("throw new Error('INTERNAL_CRON_SECRET is required')");
+    });
+
+    test('Verifica que el endpoint y la aplicación no arrancan si falta INTERNAL_CRON_SECRET en el entorno', async () => {
+      // Ejecutar un subproceso aislado sin la variable INTERNAL_CRON_SECRET
+      const child = Bun.spawn({
+        cmd: [
+          'bun',
+          '-e',
+          'delete process.env.INTERNAL_CRON_SECRET; await import("./apps/api/src/routes/internal/instagram-ingestion.ts");',
+        ],
+        cwd: resolve(__dirname, '../../../../../..'),
+        env: {
+          ...process.env,
+          INTERNAL_CRON_SECRET: '',
+        },
+        stderr: 'pipe',
+      });
+
+      const stderrText = await new Response(child.stderr).text();
+      const exitCode = await child.exited;
+
+      expect(exitCode).not.toBe(0);
+      expect(stderrText).toContain('INTERNAL_CRON_SECRET is required');
     });
   });
 });

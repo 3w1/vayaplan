@@ -3,8 +3,12 @@ import { runInstagramIngestion } from '../../services/bar-instagram-import/insta
 
 export const internalInstagramIngestionRoutes = new Hono();
 
-// Secret interno para protección del endpoint de cron (fallback seguro si no está definido en .env)
-const INTERNAL_CRON_SECRET = process.env.INTERNAL_CRON_SECRET || 'vp_internal_cron_secret_2026';
+// Secreto interno estricto para protección del endpoint de cron (obtenido exclusivamente desde el entorno)
+const INTERNAL_CRON_SECRET = process.env.INTERNAL_CRON_SECRET;
+
+if (!INTERNAL_CRON_SECRET) {
+  throw new Error('INTERNAL_CRON_SECRET is required');
+}
 
 /**
  * Middleware de seguridad para endpoints internos
