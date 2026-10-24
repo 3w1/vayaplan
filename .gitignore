@@ -10,4 +10,13 @@ build/
 *.log
 .DS_Store
 backups/
+backup_*.json
 listado_locales.txt
+scratch/
+output/
+data/
+infra/backup/check_backup_stale.*
+pnpm-lock.yaml
+infra/scripts/execute_*.sql
+infra/scripts/rollback_*.sql
+infra/scripts/generate_*.py

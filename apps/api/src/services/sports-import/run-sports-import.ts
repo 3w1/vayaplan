@@ -25,7 +25,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     priceCents: 0, // Entradas en taquilla / festival
     rawPriceText: 'Venta de entradas en taquilla y abonados club',
     officialSourceUrl: 'https://www.palenciabaloncesto.com/es/proximos-partidos',
-    imageUrl: null,
+    imageUrl: '/images/events/palencia-baloncesto-escudo.jpg',
     status: 'confirmed',
   },
   // 2. FÚTBOL — Tercera Federación Grupo VIII (Jornada 9 - El Gran Derbi) — Nueva Balastera
@@ -119,7 +119,7 @@ export const INITIAL_OBSERVABLE_SPORTS_EVENTS: RawSportsEvent[] = [
     sourceId: 'sansilvestre_palentina',
     externalId: '2026-12-31-xlv-san-silvestre-palentina-2026',
     title: 'XLV San Silvestre Palentina 2026',
-    sport: 'cultura',
+    sport: 'deporte',
     competition: 'Circuito de Carreras Populares PMD',
     round: 'Carrera Popular 6 km',
     rawDate: '2026-12-31',

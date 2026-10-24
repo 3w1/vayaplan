@@ -2,7 +2,7 @@
  * Tipos para la importación y actualización programada de eventos deportivos en Palencia
  */
 
-export type SportsCategory = 'baloncesto' | 'futbol' | 'rugby' | 'cultura';
+export type SportsCategory = 'baloncesto' | 'futbol' | 'rugby' | 'cultura' | 'deporte';
 
 export type SportsSourceType = 'ayuntamiento_pmd' | 'club_oficial' | 'federacion' | 'diputacion';
 

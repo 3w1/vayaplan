@@ -88,6 +88,51 @@ describe('Servicio de Importación Deportiva de Palencia (sports-import)', () =>
       expect(norm.priceLabel).toBe('Entradas en taquilla / festival');
       expect(norm.venueClassification).toBe('VENUE_NUEVO_PROPUESTO');
       expect(norm.status).toBe('draft');
+      expect(norm.imageUrl).toBe('/images/events/palencia-baloncesto-escudo.jpg');
+    });
+
+    test('Prioridad de imagen: cartel oficial específico prevalece sobre el escudo genérico', () => {
+      const rawBasketWithPoster: RawSportsEvent = {
+        sourceId: 'palencia_baloncesto_club',
+        externalId: '102949',
+        title: 'Súper Agropal Palencia vs. Real Betis Baloncesto',
+        sport: 'baloncesto',
+        competition: 'Primera FEB',
+        homeTeam: 'Súper Agropal Palencia',
+        awayTeam: 'Real Betis Baloncesto',
+        rawDate: '2026-11-08',
+        rawTime: '18:00',
+        venueName: 'Pabellón Municipal de Palencia',
+        city: 'Palencia',
+        officialSourceUrl: 'https://palenciabaloncesto.com/partidos/jornada-7',
+        imageUrl: 'https://palenciabaloncesto.com/carteles/jornada-7-betis.jpg',
+        status: 'confirmed',
+      };
+
+      const norm = normalizeSportsEvent(rawBasketWithPoster, mockExistingVenues);
+      expect(norm.imageUrl).toBe('https://palenciabaloncesto.com/carteles/jornada-7-betis.jpg');
+    });
+
+    test('Aislamiento de imagen: eventos de otros clubs o sin Palencia no reciben el escudo', () => {
+      const rawOtherMatch: RawSportsEvent = {
+        sourceId: 'feb_primera_feb',
+        externalId: '102950',
+        title: 'Club Ourense Baloncesto vs. Palmer Basket Mallorca',
+        sport: 'baloncesto',
+        competition: 'Primera FEB',
+        homeTeam: 'Club Ourense Baloncesto',
+        awayTeam: 'Palmer Basket Mallorca',
+        rawDate: '2026-11-15',
+        rawTime: '17:00',
+        venueName: 'Pazo dos Deportes Paco Paz',
+        city: 'Ourense',
+        officialSourceUrl: 'https://feb.es/partidos/102950',
+        imageUrl: null,
+        status: 'confirmed',
+      };
+
+      const norm = normalizeSportsEvent(rawOtherMatch, mockExistingVenues);
+      expect(norm.imageUrl).toBeNull();
     });
 
     test('Normaliza derbi de Fútbol con hora por confirmar a pending_time', () => {
@@ -118,7 +163,7 @@ describe('Servicio de Importación Deportiva de Palencia (sports-import)', () =>
       const rawSanSilvestre: RawSportsEvent = {
         sourceId: 'sansilvestre_palentina',
         title: 'XLV San Silvestre Palentina 2026',
-        sport: 'cultura',
+        sport: 'deporte',
         competition: 'Circuito Popular PMD',
         rawDate: '2026-12-31',
         rawTime: '18:00',
@@ -131,6 +176,7 @@ describe('Servicio de Importación Deportiva de Palencia (sports-import)', () =>
       };
 
       const norm = normalizeSportsEvent(rawSanSilvestre, mockExistingVenues);
+      expect(norm.category).toBe('deporte');
       expect(norm.isFree).toBe(true);
       expect(norm.priceLabel).toBe('Entrada libre');
       expect(norm.status).toBe('draft');

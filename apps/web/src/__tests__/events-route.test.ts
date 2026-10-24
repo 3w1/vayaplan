@@ -466,4 +466,22 @@ describe('apps/web — Ruta Pública GET /events/:id', () => {
     expect(deletedCaches).not.toContain('vayaplan-analytics-cache');
     expect(deletedCaches).not.toContain('vayaplan-uploads-cache');
   });
+
+  test('GET /images/events/palencia-baloncesto-escudo.jpg entrega el escudo local con Content-Type image/jpeg y 200 OK', async () => {
+    const fetchFn = (webApp as any).fetch;
+    const res = await fetchFn(new Request('http://localhost/images/events/palencia-baloncesto-escudo.jpg'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('image/jpeg');
+    const bytes = await res.arrayBuffer();
+    expect(bytes.byteLength).toBeGreaterThan(10000); // 50 KB aprox
+  });
+
+  test('GET /images/* previene directory traversal y devuelve 404 ante rutas inválidas o inexistentes', async () => {
+    const fetchFn = (webApp as any).fetch;
+    const resTraversal = await fetchFn(new Request('http://localhost/images/../../etc/passwd'));
+    expect(resTraversal.status).toBe(404);
+
+    const resNonExistent = await fetchFn(new Request('http://localhost/images/events/imagen-fantasma.jpg'));
+    expect(resNonExistent.status).toBe(404);
+  });
 });

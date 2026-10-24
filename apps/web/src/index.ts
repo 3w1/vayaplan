@@ -213,6 +213,7 @@ self.addEventListener('fetch', (event) => {
 // Assets e Iconos PWA y Favicon
 // ==============================================================================
 const ICONS_DIR = path.resolve(__dirname, '../public/icons');
+const IMAGES_DIR = path.resolve(__dirname, '../public/images');
 
 app.get('/favicon.ico', (c) => {
   return c.redirect('/icons/favicon.svg', 302);
@@ -243,6 +244,28 @@ app.get('/icons/:filename', (c) => {
   }
   const file = fs.readFileSync(filePath);
   const contentType = filename.endsWith('.svg') ? 'image/svg+xml; charset=utf-8' : 'image/png';
+  return new Response(file, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=86400',
+    },
+  });
+});
+
+app.get('/images/*', (c) => {
+  const relativePath = c.req.path.replace(/^\/images\//, '');
+  const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+  const filePath = path.join(IMAGES_DIR, safePath);
+  if (!filePath.startsWith(IMAGES_DIR) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    return c.text('Not found', 404);
+  }
+  const file = fs.readFileSync(filePath);
+  const ext = path.extname(filePath).toLowerCase();
+  let contentType = 'application/octet-stream';
+  if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+  else if (ext === '.png') contentType = 'image/png';
+  else if (ext === '.webp') contentType = 'image/webp';
+  else if (ext === '.svg') contentType = 'image/svg+xml; charset=utf-8';
   return new Response(file, {
     headers: {
       'Content-Type': contentType,

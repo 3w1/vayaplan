@@ -224,6 +224,20 @@ export function normalizeSportsEvent(
     dedupeKey = `palencia-deporte-${raw.sourceId}-${raw.externalId}`;
   }
 
+  // 6. Imagen: prioridad al cartel oficial específico; fallback al escudo institucional local de Palencia Baloncesto
+  let imageUrl: string | null = raw.imageUrl || null;
+  if (!imageUrl) {
+    const isPalenciaBaloncesto =
+      raw.sport === 'baloncesto' &&
+      (raw.sourceId === 'palencia_baloncesto_club' ||
+        Boolean(raw.homeTeam?.toLowerCase().includes('palencia')) ||
+        (raw.title.toLowerCase().includes('palencia') && !raw.title.toLowerCase().startsWith('club ourense')));
+
+    if (isPalenciaBaloncesto) {
+      imageUrl = '/images/events/palencia-baloncesto-escudo.jpg';
+    }
+  }
+
   return {
     dedupeKey,
     externalId: raw.externalId ? String(raw.externalId) : null,
@@ -247,7 +261,7 @@ export function normalizeSportsEvent(
     priceLabel,
     sourceUrl: raw.officialSourceUrl,
     sourceType: raw.sourceId.includes('api') ? 'api' : 'scraper',
-    imageUrl: raw.imageUrl || null,
+    imageUrl,
     status: 'draft',
     rawStatus: raw.status,
   };
