@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { sign } from 'hono/jwt';
 import { setCookie, deleteCookie } from 'hono/cookie';
 import { requireAdminAuth, JWT_SECRET } from '../../middleware/auth';
+import { env } from '../../config/env';
 import type { AdminLoginResponse, AdminMeResponse, AdminUser } from '@vayaplan/types';
 
 export const adminAuthRoutes = new Hono();
@@ -47,46 +48,38 @@ function resetAttempts(ip: string): void {
 }
 
 /**
- * Comprueba si la contraseña ingresada coincide con el hash o contraseña configurada
- * Soporta Bcrypt ($2b$...), SHA-256 hex y contraseña plana de fallback
+ * Comprueba si la contraseña ingresada coincide con el hash o contraseña configurada.
+ * En producción se valida estrictamente contra ADMIN_PASSWORD_HASH (Bcrypt o SHA-256).
+ * No contiene valores por defecto ni fallbacks hardcodeados en el código.
  */
 async function verifyAdminPassword(plainPassword: string): Promise<boolean> {
-  const envHash = process.env.ADMIN_PASSWORD_HASH?.trim();
-  const envPlain = process.env.ADMIN_PASSWORD?.trim();
+  const envHash = env.ADMIN_PASSWORD_HASH;
+  const envPlain = !env.isProduction ? process.env.ADMIN_PASSWORD?.trim() : undefined;
 
-  // Contraseña por defecto para entorno de desarrollo / inicial: "vayaplan2026!"
-  const DEFAULT_BCRYPT = '$2b$10$pv6GS2VhoXWeQlO4Ikrcm.dd7fj9ww4Fc1EPPD9HaZdllAp/H9X9q';
-  const DEFAULT_SHA256 = '1261cb40e118080f4f5a3424d8520db7218685e1302ee81fbfb1c1ba36511b0b';
-
-  // 1. Si hay contraseña plana configurada explícitamente
+  // 1. Si hay contraseña plana configurada explícitamente en desarrollo o test
   if (envPlain && plainPassword === envPlain) {
     return true;
   }
 
-  // 2. Comprobar contra hash configurado
-  const targetHash = envHash && envHash.length > 0 ? envHash : DEFAULT_BCRYPT;
-
-  // Si es Bcrypt ($2a$, $2b$, $2y$)
-  if (targetHash.startsWith('$2')) {
-    try {
-      const match = await Bun.password.verify(plainPassword, targetHash);
-      if (match) return true;
-    } catch {}
-  }
-
-  // Si es SHA-256 en formato hex (64 caracteres)
-  if (targetHash.length === 64) {
-    const hasher = new Bun.CryptoHasher('sha256');
-    hasher.update(plainPassword);
-    const calculatedHex = hasher.digest('hex');
-    if (calculatedHex.toLowerCase() === targetHash.toLowerCase()) {
-      return true;
+  // 2. Comprobar contra hash configurado desde el entorno
+  if (envHash && envHash.length > 0) {
+    // Si es Bcrypt ($2a$, $2b$, $2y$)
+    if (envHash.startsWith('$2')) {
+      try {
+        const match = await Bun.password.verify(plainPassword, envHash);
+        if (match) return true;
+      } catch {}
     }
-  }
 
-  // Fallback directo a la clave por defecto
-  if (plainPassword === 'vayaplan2026!') {
-    return true;
+    // Si es SHA-256 en formato hex (64 caracteres)
+    if (envHash.length === 64) {
+      const hasher = new Bun.CryptoHasher('sha256');
+      hasher.update(plainPassword);
+      const calculatedHex = hasher.digest('hex');
+      if (calculatedHex.toLowerCase() === envHash.toLowerCase()) {
+        return true;
+      }
+    }
   }
 
   return false;
@@ -127,7 +120,7 @@ adminAuthRoutes.post('/login', async (c) => {
   const email = body?.email?.toLowerCase()?.trim();
   const password = body?.password;
 
-  const expectedEmail = (process.env.ADMIN_EMAIL || 'admin@vayaplan.com').toLowerCase().trim();
+  const expectedEmail = env.ADMIN_EMAIL;
 
   if (!email || !password) {
     return c.json(

@@ -2,8 +2,9 @@ import type { Context, Next } from 'hono';
 import { verify } from 'hono/jwt';
 import { getCookie } from 'hono/cookie';
 import type { AdminUser } from '@vayaplan/types';
+import { env } from '../config/env';
 
-export const JWT_SECRET = process.env.JWT_SECRET || 'vayaplan_jwt_secret_dev_2026';
+export const JWT_SECRET = env.JWT_SECRET;
 
 /**
  * Middleware que verifica autenticación administrativa mediante JWT (Bearer token o cookie httpOnly)

@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: vayaplan
       POSTGRES_USER: ${POSTGRES_USER:-vayaplan_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - vayaplan_db_data:/var/lib/postgresql/data
     networks:
@@ -28,12 +28,12 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       PORT: 4000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-vayaplan_user}:${POSTGRES_PASSWORD}@db:5432/vayaplan
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@vayaplan.com}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-1261cb40e118080f4f5a3424d8520db7218685e1302ee81fbfb1c1ba36511b0b}
-      JWT_SECRET: ${JWT_SECRET:-vayaplan_jwt_secret_dev_2026}
-      WHATSAPP_WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-vayaplan_whatsapp_verify_token_2026}
-      INTERNAL_CRON_SECRET: ${INTERNAL_CRON_SECRET:-}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?ADMIN_PASSWORD_HASH is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      WHATSAPP_WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:?WHATSAPP_WEBHOOK_SECRET is required}
+      INTERNAL_CRON_SECRET: ${INTERNAL_CRON_SECRET:?INTERNAL_CRON_SECRET is required}
       APIFY_TOKEN: ${APIFY_TOKEN:-}
       UPLOADS_DIR: /app/uploads
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}

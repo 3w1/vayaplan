@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { query } from '@vayaplan/db';
 import { getCurrentDateInTimezone, isValidDateString } from '@vayaplan/shared';
+import { env } from '../../config/env';
 import type { EventCategory } from '@vayaplan/types';
 
 export const whatsappWebhookRoutes = new Hono();
 
-const WHATSAPP_VERIFY_TOKEN =
-  process.env.WHATSAPP_WEBHOOK_SECRET || 'vayaplan_whatsapp_verify_token_2026';
+const WHATSAPP_VERIFY_TOKEN = env.WHATSAPP_WEBHOOK_SECRET;
 
 /**
  * Deduce de forma heurística una categoría a partir del texto del mensaje

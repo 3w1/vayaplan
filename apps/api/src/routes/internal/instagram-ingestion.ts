@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import { runInstagramIngestion } from '../../services/bar-instagram-import/instagram-ingestion-service';
+import { env } from '../../config/env';
 
 export const internalInstagramIngestionRoutes = new Hono();
 
 // Secreto interno estricto para protección del endpoint de cron (obtenido exclusivamente desde el entorno)
-const INTERNAL_CRON_SECRET = process.env.INTERNAL_CRON_SECRET;
+const INTERNAL_CRON_SECRET = env.INTERNAL_CRON_SECRET;
 
 if (!INTERNAL_CRON_SECRET) {
   throw new Error('INTERNAL_CRON_SECRET is required');

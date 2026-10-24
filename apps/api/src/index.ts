@@ -1,3 +1,4 @@
+import { env } from './config/env';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { structuredLogger } from './middleware/logger';
