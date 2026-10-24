@@ -3972,6 +3972,9 @@ export function renderAdminHtml(): string {
           <div id="approve-prop-duplicate-msg" style="font-size:0.875rem; color:#7f1d1d; line-height:1.4;"></div>
         </div>
 
+        <!-- Sugerencia de Contraste con Taquilla.com (Sala Infinity) -->
+        <div id="approve-prop-taquilla-box" style="display:none; margin-bottom:1rem;"></div>
+
         <!-- Banner informativo: Se creará estrictamente como borrador -->
         <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.25rem; font-size:0.85rem; color:#1e40af; display:flex; align-items:center; gap:0.5rem;">
           <span>ℹ️</span>
@@ -10006,6 +10009,17 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       }
     };
 
+    window.applyTaquillaSuggestion = function(time, price) {
+      if (time) {
+        const timeInput = document.getElementById('approve-prop-time-input');
+        if (timeInput) timeInput.value = time;
+      }
+      if (price !== null && price !== undefined) {
+        const priceInput = document.getElementById('approve-prop-price-input');
+        if (priceInput) priceInput.value = Number(price).toFixed(2).replace('.', ',');
+      }
+    };
+
     window.openApproveProposalModal = function(id) {
       const prop = cachedProposals.find(p => p.id === id);
       if (!prop) {
@@ -10062,6 +10076,57 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         dupBox.style.display = 'block';
       } else if (dupBox) {
         dupBox.style.display = 'none';
+      }
+
+      // Sugerencias de Taquilla.com para Sala Infinity (solo bajo demanda)
+      const taqBox = document.getElementById('approve-prop-taquilla-box');
+      if (taqBox) {
+        if (prop.venue_id === 10052) {
+          const tc = prop.taquilla_contrast;
+          if (tc && tc.matchedEvent) {
+            const sugTime = tc.suggestedTime || '';
+            const sugPrice = tc.suggestedPrice !== undefined && tc.suggestedPrice !== null ? tc.suggestedPrice : null;
+            taqBox.style.display = 'block';
+            taqBox.innerHTML = '<div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:0.6rem; font-size:0.8rem; color:#1e40af;">' +
+              '<strong>🎟️ Taquilla.com sugiere:</strong> ' + escapeHtml(tc.matchedEvent.title) +
+              (sugTime ? ' | ⏰ <strong>' + escapeHtml(sugTime) + ' h</strong>' : '') +
+              (tc.suggestedPriceFormatted ? ' | 💶 <strong>' + escapeHtml(tc.suggestedPriceFormatted) + '</strong>' : '') +
+              ' <button type="button" class="btn-sm btn-secondary" onclick="applyTaquillaSuggestion(' +
+              (sugTime ? '&quot;' + escapeHtml(sugTime) + '&quot;' : 'null') + ', ' +
+              (sugPrice !== null ? sugPrice : 'null') +
+              ')" style="padding:0.15rem 0.4rem; font-size:0.75rem; margin-left:0.5rem; background:#dbeafe; font-weight:700;">Adoptar datos</button>' +
+            '</div>';
+          } else if (!tc && !prop._taquilla_loading) {
+            prop._taquilla_loading = true;
+            apiFetch('/api/v1/admin/proposals/' + prop.id + '/taquilla-contrast')
+              .then(function(res) { return res.json(); })
+              .then(function(data) {
+                prop._taquilla_loading = false;
+                if (data && data.contrast) {
+                  prop.taquilla_contrast = data.contrast;
+                  if (data.contrast.matchedEvent) {
+                    const st = data.contrast.suggestedTime || '';
+                    const sp = data.contrast.suggestedPrice !== undefined && data.contrast.suggestedPrice !== null ? data.contrast.suggestedPrice : null;
+                    taqBox.style.display = 'block';
+                    taqBox.innerHTML = '<div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:0.6rem; font-size:0.8rem; color:#1e40af;">' +
+                      '<strong>🎟️ Taquilla.com sugiere:</strong> ' + escapeHtml(data.contrast.matchedEvent.title) +
+                      (st ? ' | ⏰ <strong>' + escapeHtml(st) + ' h</strong>' : '') +
+                      (data.contrast.suggestedPriceFormatted ? ' | 💶 <strong>' + escapeHtml(data.contrast.suggestedPriceFormatted) + '</strong>' : '') +
+                      ' <button type="button" class="btn-sm btn-secondary" onclick="applyTaquillaSuggestion(' +
+                      (st ? '&quot;' + escapeHtml(st) + '&quot;' : 'null') + ', ' +
+                      (sp !== null ? sp : 'null') +
+                      ')" style="padding:0.15rem 0.4rem; font-size:0.75rem; margin-left:0.5rem; background:#dbeafe; font-weight:700;">Adoptar datos</button>' +
+                    '</div>';
+                  }
+                }
+              })
+              .catch(function() { prop._taquilla_loading = false; });
+          } else {
+            taqBox.style.display = 'none';
+          }
+        } else {
+          taqBox.style.display = 'none';
+        }
       }
 
       updateApproveImagePreview();
@@ -10281,6 +10346,59 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       }
     };
 
+    function renderTaquillaContrastDetailsHtml(tc) {
+      if (!tc) return '';
+      if (tc.matchedEvent) {
+        const badgeBg = tc.matchLevel === 'TAQUILLA_MATCH_EXACTO'
+          ? '#ecfdf5; color:#065f46; border:1px solid #a7f3d0'
+          : (tc.matchLevel === 'TAQUILLA_MATCH_ALTO'
+            ? '#eff6ff; color:#1e40af; border:1px solid #bfdbfe'
+            : '#fffbeb; color:#92400e; border:1px solid #fde68a');
+
+        const diffItems = (tc.differencesDetected || []).map(function(d) {
+          return '<li>' + escapeHtml(d) + '</li>';
+        }).join('');
+
+        const diffHtml = diffItems
+          ? '<div style="margin-top:0.5rem; padding:0.5rem; background:#fff1f2; border:1px solid #fecdd3; border-radius:6px; color:#9f1239; font-size:0.75rem;">' +
+              '<strong>⚠️ Diferencias detectadas frente a Instagram:</strong><ul style="margin:0.25rem 0 0 1.25rem; padding:0;">' +
+              diffItems +
+            '</ul></div>'
+          : '<div style="margin-top:0.4rem; font-size:0.75rem; color:#059669; font-weight:700;">✓ Coincidencia plena (sin discrepancias de horario ni precio)</div>';
+
+        const taqPriceFormatted = tc.matchedEvent.price !== null && tc.matchedEvent.price !== undefined
+          ? (Number(tc.matchedEvent.price) === 0 ? 'Gratis' : Number(tc.matchedEvent.price).toFixed(2).replace('.', ',') + ' €')
+          : (tc.matchedEvent.priceMin ? tc.matchedEvent.priceMin + ' €' : 'No indicado');
+
+        return '<div style="background:#ffffff; border:1px solid #93c5fd; border-radius:8px; padding:1rem; box-shadow:0 1px 3px rgba(37,99,235,0.08);">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; border-bottom:1px solid #e2e8f0; padding-bottom:0.5rem;">' +
+            '<div style="display:flex; align-items:center; gap:0.5rem;">' +
+              '<span style="font-size:1.1rem;">🎟️</span>' +
+              '<strong style="color:#1e3a8a; font-size:0.925rem;">Contraste con Taquilla.com (Sala Infinity)</strong>' +
+            '</div>' +
+            '<span class="badge-tag" style="font-weight:700; background:' + badgeBg + ';">' + escapeHtml(tc.matchLevel) + '</span>' +
+          '</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.5rem; font-size:0.8125rem; background:#f8fafc; padding:0.75rem; border-radius:6px; margin-bottom:0.5rem;">' +
+            '<div><strong>Evento en Taquilla:</strong> ' + escapeHtml(tc.matchedEvent.title) + '</div>' +
+            '<div><strong>📅 Fecha Taquilla:</strong> ' + escapeHtml(tc.matchedEvent.date || 'Sin fecha') + '</div>' +
+            '<div><strong>⏰ Hora Taquilla:</strong> ' + (tc.matchedEvent.time ? escapeHtml(tc.matchedEvent.time) + ' h' : 'No indicada') + '</div>' +
+            '<div><strong>💶 Precio Taquilla:</strong> ' + escapeHtml(taqPriceFormatted) + '</div>' +
+            '<div><strong>Última consulta:</strong> ' + (tc.lastCheckedAt ? escapeHtml(tc.lastCheckedAt.slice(0, 19).replace('T', ' ')) : 'Reciente') + '</div>' +
+            '<div><strong>Ficha oficial:</strong> <a href="' + escapeHtml(tc.matchedEvent.ticketUrl) + '" target="_blank" rel="noopener noreferrer" style="color:#2563eb; font-weight:700; text-decoration:none;">Ver en Taquilla.com ↗</a></div>' +
+          '</div>' +
+          diffHtml +
+          '<div style="margin-top:0.5rem; font-size:0.775rem; color:#1e40af;"><strong>Acción recomendada:</strong> ' + escapeHtml(tc.recommendedAction) + '</div>' +
+        '</div>';
+      } else {
+        return '<div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:0.75rem; font-size:0.8125rem; color:#64748b;">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<span>🎟️ <strong>Contraste con Taquilla.com (Sala Infinity):</strong> ' + escapeHtml((tc && tc.recommendedAction) || 'Sin eventos coincidentes activos para esta fecha en Sala Infinity.') + '</span>' +
+            '<a href="https://www.taquilla.com/palencia/sala-infinity-palencia" target="_blank" rel="noopener noreferrer" style="color:#2563eb; font-weight:700; text-decoration:none; font-size:0.75rem;">Visitar cartelera ↗</a>' +
+          '</div>' +
+        '</div>';
+      }
+    }
+
     window.openProposalCaptionModal = function(id) {
       const prop = cachedProposals.find(p => p.id === id);
       if (!prop) {
@@ -10312,6 +10430,32 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         recommendedAction = 'Asignar una hora válida antes de aprobar';
       }
 
+      let taquillaHtml = '';
+      if (prop.venue_id === 10052) {
+        if (prop.taquilla_contrast) {
+          taquillaHtml = '<div id="modal-caption-taquilla-container">' + renderTaquillaContrastDetailsHtml(prop.taquilla_contrast) + '</div>';
+        } else {
+          taquillaHtml = '<div id="modal-caption-taquilla-container"><div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:0.75rem; font-size:0.8125rem; color:#64748b;">' +
+            '<span>🎟️ Consultando Taquilla.com para Sala Infinity...</span>' +
+          '</div></div>';
+
+          if (!prop._taquilla_loading) {
+            prop._taquilla_loading = true;
+            apiFetch('/api/v1/admin/proposals/' + prop.id + '/taquilla-contrast')
+              .then(function(res) { return res.json(); })
+              .then(function(data) {
+                prop._taquilla_loading = false;
+                if (data && data.contrast) {
+                  prop.taquilla_contrast = data.contrast;
+                  const c = document.getElementById('modal-caption-taquilla-container');
+                  if (c) c.innerHTML = renderTaquillaContrastDetailsHtml(data.contrast);
+                }
+              })
+              .catch(function() { prop._taquilla_loading = false; });
+          }
+        }
+      }
+
       bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; gap:1rem;">' +
         '<div style="background:#ffffff; border:1px solid var(--border); border-radius:8px; padding:1rem;">' +
           '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">' +
@@ -10336,6 +10480,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             (prop.reviewed_by ? '<div><strong>Revisado por:</strong> ' + escapeHtml(prop.reviewed_by) + ' (' + (prop.reviewed_at ? prop.reviewed_at.slice(0, 19).replace('T', ' ') : '—') + ')</div>' : '') +
           '</div>' +
         '</div>' +
+        taquillaHtml +
         '<div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:1rem;">' +
           '<div style="font-weight:800; font-size:0.8125rem; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.5rem;">Texto del Post (Caption Original)</div>' +
           '<div style="white-space:pre-wrap; font-size:0.875rem; color:var(--text-main); line-height:1.5; font-family:inherit; max-height:220px; overflow-y:auto; background:#ffffff; padding:0.75rem; border-radius:6px; border:1px solid var(--border);">' +
