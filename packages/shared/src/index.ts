@@ -1,4 +1,5 @@
-import type { EventCategory, EventStatus, EventSourceType, VenueCategory, GastronomicRouteCategory } from '@vayaplan/types';
+import type { EventCategory, EventStatus, EventSourceType, VenueCategory, GastronomicRouteCategory, PriceStatus } from '@vayaplan/types';
+export type { PriceStatus };
 
 /**
  * Categorías válidas de venues en VayaPlan.
@@ -78,17 +79,39 @@ export const VALID_EVENT_SOURCES: readonly EventSourceType[] = [
 ] as const;
 
 /**
- * Normaliza y devuelve la etiqueta de precio para un evento
+ * Normaliza y devuelve la etiqueta de precio para un evento según su estado
  */
 export function formatPriceLabel(
-  priceCents: number,
-  isFree: boolean,
+  priceCents: number | null | undefined,
+  isFree?: boolean,
+  priceStatus?: PriceStatus,
+  hasOfficialChannel?: boolean,
 ): string {
+  if (priceStatus) {
+    switch (priceStatus) {
+      case 'FREE':
+        return 'Gratis';
+      case 'CHECK_BOX_OFFICE':
+        return 'Consultar en taquilla';
+      case 'NOT_INFORMED':
+        return 'Precio no informado';
+      case 'CONFIRMED':
+        if (priceCents !== null && priceCents !== undefined) {
+          const euros = (priceCents / 100).toFixed(2).replace('.', ',');
+          return `${euros} €`;
+        }
+        return 'Precio confirmado';
+      case 'UNKNOWN':
+        return hasOfficialChannel ? 'Consultar' : '';
+    }
+  }
+
+  // Fallback retrocompatible para llamadas previas sin priceStatus explícito
   if (isFree) {
     return 'Entrada libre';
   }
 
-  if (priceCents > 0) {
+  if (priceCents !== null && priceCents !== undefined && priceCents > 0) {
     const euros = (priceCents / 100)
       .toFixed(2)
       .replace('.', ',');
@@ -97,6 +120,96 @@ export function formatPriceLabel(
   }
 
   return 'Entradas en taquilla / festival';
+}
+
+export interface PriceDetectionResult {
+  priceCents: number | null;
+  amount: number | null;
+  priceStatus: PriceStatus;
+  isFree: boolean;
+  priceNote?: string | null;
+  formatted?: string | null;
+}
+
+/**
+ * Reglas de ingesta canónica de precio a partir del texto del post o web:
+ * 1. "entrada libre", "gratuito", "gratis", "free" -> price_status = FREE, price_cents = 0, isFree = true.
+ * 2. Si hay un precio explícito numérico (ej. 12€, 12,50 €) -> price_status = CONFIRMED, price_cents normalizado.
+ * 3. "consultar en taquilla", "entradas en taquilla" -> price_status = CHECK_BOX_OFFICE, price_cents = null, isFree = false.
+ * 4. Sin mención alguna de precio -> price_status = NOT_INFORMED, price_cents = null, isFree = false.
+ * 5. NUNCA infiere gratuidad por ausencia de precio.
+ */
+export function detectPriceFromText(text: string | null | undefined): PriceDetectionResult {
+  if (!text || typeof text !== 'string' || text.trim() === '') {
+    return {
+      priceCents: null,
+      amount: null,
+      priceStatus: 'NOT_INFORMED',
+      isFree: false,
+      priceNote: null,
+      formatted: 'Precio no informado',
+    };
+  }
+
+  const clean = text.trim();
+
+  // 1. Detección de gratuidad explícita
+  const isFreeExplicit = /\b(?:entrada\s+(?:libre|gratuita|gratis)|acceso\s+libre|gratuito|gratuita|gratis|free)\b/i.test(clean);
+  if (isFreeExplicit) {
+    return {
+      priceCents: 0,
+      amount: 0,
+      priceStatus: 'FREE',
+      isFree: true,
+      priceNote: null,
+      formatted: 'Gratis',
+    };
+  }
+
+  // 2. Detección de precio explícito numérico
+  const priceMatch = clean.match(/(?:^|[^\d])(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?\b)/i);
+  if (priceMatch) {
+    try {
+      const norm = normalizePrice(priceMatch[1]);
+      let note: string | null = null;
+      if (/\b(?:en\s+taquilla|taquilla)\b/i.test(clean)) {
+        note = 'En taquilla';
+      }
+      return {
+        priceCents: norm.priceCents,
+        amount: norm.amount,
+        priceStatus: 'CONFIRMED',
+        isFree: norm.priceCents === 0,
+        priceNote: note,
+        formatted: norm.formatted,
+      };
+    } catch {
+      // Si la normalización falla, continuar evaluando
+    }
+  }
+
+  // 3. Detección de taquilla sin precio explícito
+  const isBoxOffice = /\b(?:consultar\s+en\s+taquilla|entradas?\s+en\s+taquilla|precio\s+en\s+taquilla|venta\s+en\s+taquilla|en\s+taquilla)\b/i.test(clean);
+  if (isBoxOffice) {
+    return {
+      priceCents: null,
+      amount: null,
+      priceStatus: 'CHECK_BOX_OFFICE',
+      isFree: false,
+      priceNote: 'Consultar en taquilla',
+      formatted: 'Consultar en taquilla',
+    };
+  }
+
+  // 4. Ausencia de mención de precio -> NOT_INFORMED (nunca inferir gratuidad)
+  return {
+    priceCents: null,
+    amount: null,
+    priceStatus: 'NOT_INFORMED',
+    isFree: false,
+    priceNote: null,
+    formatted: 'Precio no informado',
+  };
 }
 
 export interface NormalizedPrice {

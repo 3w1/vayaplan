@@ -11,6 +11,7 @@ import {
   ATENEO_MAX_PILOT_ITEMS,
   type AteneoRawEvent,
 } from './ateneo-types';
+import { detectPriceFromText } from '@vayaplan/shared';
 
 /**
  * Decodifica entidades HTML habituales de títulos de WordPress
@@ -294,9 +295,15 @@ export async function fetchAteneoProgramacionEvents(
       continue;
     }
 
-    // Ateneo de Palencia: Entrada libre por defecto para actos culturales
-    const price = null;
-    const isFree = true;
+    // Detección canónica de precio a partir del título y contenido (sin asumir gratuidad por defecto)
+    const textForPrice = `${title} ${description} ${item.content?.rendered ? cleanHtmlDescription(item.content.rendered, 500) : ''}`;
+    const detectedPrice = detectPriceFromText(textForPrice);
+
+    const price = detectedPrice.amount;
+    const priceCents = detectedPrice.priceCents;
+    const priceStatus = detectedPrice.priceStatus;
+    const priceNote = detectedPrice.priceNote || null;
+    const isFree = detectedPrice.isFree;
 
     // Detección de categoría sugerida por título
     let category = 'cultura';
@@ -322,6 +329,9 @@ export async function fetchAteneoProgramacionEvents(
       endTime,
       description,
       price,
+      priceCents,
+      priceStatus,
+      priceNote,
       isFree,
       category,
       eventUrl,

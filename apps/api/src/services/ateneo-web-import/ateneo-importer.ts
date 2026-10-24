@@ -221,12 +221,20 @@ export async function runAteneoPilotIngestion(options?: {
             matched_event_id,
             match_level,
             match_reasons,
+            proposed_end_date,
+            proposed_end_time,
+            price_status,
+            price_note,
+            price_source,
+            price_checked_at,
             created_at,
             updated_at
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9,
             $10, $11, $12, $13, $14, $15, $16, $17,
-            $18, $19, $20, $21, $22, $23, NOW(), NOW()
+            $18, $19, $20, $21, $22, $23,
+            $24, $25, $26, $27, $28, NOW(),
+            NOW(), NOW()
           ) RETURNING id;
         `;
 
@@ -254,6 +262,11 @@ export async function runAteneoPilotIngestion(options?: {
           matchEval.matchedEvent?.id || null,
           matchEval.matchLevel !== 'SIN_MATCH' ? matchEval.matchLevel : null,
           matchEval.signals.length > 0 ? matchEval.signals.join('; ') : null,
+          classificationResult.suggestedEndDate || null,
+          classificationResult.suggestedEndTime || null,
+          classificationResult.suggestedPriceStatus || 'NOT_INFORMED',
+          classificationResult.suggestedPriceNote || null,
+          'ateneo_web',
         ]);
 
         const proposalId = insertRes.rows[0].id;

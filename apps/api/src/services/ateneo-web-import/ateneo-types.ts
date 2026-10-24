@@ -5,6 +5,8 @@
  * Venue ID: 10149 (Ateneo de Palencia)
  */
 
+import type { PriceStatus } from '@vayaplan/shared';
+
 export const ATENEO_VENUE_ID = 10149;
 export const ATENEO_VENUE_NAME = 'Ateneo de Palencia';
 export const ATENEO_VENUE_SLUG = 'ateneo-de-palencia';
@@ -19,7 +21,8 @@ export type AteneoClassification =
   | 'EVENTO_POSIBLE_SIN_HORA'
   | 'CONTENIDO_VENUE'
   | 'DUPLICADO_POSIBLE'
-  | 'SIN_MATCH';
+  | 'SIN_MATCH'
+  | 'EVENTO_CONTINUO';
 
 export interface AteneoRawEvent {
   sourceId: string; // Ej: "ateneo_9984"
@@ -31,7 +34,10 @@ export interface AteneoRawEvent {
   endDate?: string | null;
   endTime?: string | null;
   description: string;
-  price: number | null; // null si no se especifica o gratuito
+  price: number | null; // null si no se especifica o no confirmado
+  priceCents: number | null;
+  priceStatus: PriceStatus;
+  priceNote?: string | null;
   isFree: boolean;
   category: string; // 'cultura', 'conferencia', 'literatura', 'exposicion'
   eventUrl: string;
@@ -47,8 +53,12 @@ export interface AteneoClassificationResult {
   suggestedTitle: string;
   suggestedDate: string | null;
   suggestedTime: string | null;
+  suggestedEndDate?: string | null;
+  suggestedEndTime?: string | null;
   suggestedCategory: string;
   suggestedPrice: number | null;
+  suggestedPriceStatus?: PriceStatus;
+  suggestedPriceNote?: string | null;
   reasons: string[];
 }
 

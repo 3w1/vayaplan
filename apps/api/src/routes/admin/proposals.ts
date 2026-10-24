@@ -116,6 +116,7 @@ adminProposalsRoutes.get('/proposals', async (c) => {
   const category = c.req.query('category');
   const confidence = c.req.query('confidence');
   const classification = c.req.query('classification');
+  const priceStatus = c.req.query('price_status');
 
   const conditions: string[] = [];
   const params: any[] = [];
@@ -153,6 +154,11 @@ adminProposalsRoutes.get('/proposals', async (c) => {
     conditions.push(`p.classification = $${params.length}`);
   }
 
+  if (priceStatus) {
+    params.push(priceStatus);
+    conditions.push(`p.price_status = $${params.length}`);
+  }
+
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const sql = `
@@ -161,12 +167,18 @@ adminProposalsRoutes.get('/proposals', async (c) => {
       p.title,
       p.proposed_date,
       p.proposed_time,
+      p.proposed_end_date,
+      p.proposed_end_time,
       p.venue_id,
       v.name AS venue_name,
       v.slug AS venue_slug,
       v.address AS venue_address,
       p.category,
       p.price,
+      p.price_status,
+      p.price_note,
+      p.price_source,
+      p.price_checked_at,
       p.caption,
       p.source_url,
       p.source_type,
@@ -380,27 +392,84 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
     body.venue_id !== undefined ? parseInt(body.venue_id, 10) : proposal.venue_id;
   const effectiveCategory = (body.category || proposal.category || 'dj_tardeo').trim();
 
-  // Normalización defensiva de precio
-  let normalizedPrice;
-  try {
-    const rawPriceInput =
-      body.price !== undefined
-        ? body.price
-        : body.price_cents !== undefined
-        ? (Number(body.price_cents) / 100).toFixed(2)
-        : proposal.price !== null
-        ? proposal.price
-        : '0';
-    normalizedPrice = normalizePrice(rawPriceInput);
-  } catch (priceErr: any) {
-    return c.json({
-      error: 'invalid_price',
-      message: `Precio inválido: ${priceErr.message}`,
-    }, 400);
+  // Soporte de eventos continuos / exposiciones
+  const isContinuous =
+    proposal.classification === 'EVENTO_CONTINUO' ||
+    body.is_continuous === true ||
+    (body.proposed_end_date && body.proposed_end_date !== effectiveDate) ||
+    (body.end_date && body.end_date !== effectiveDate);
+
+  const effectiveEndDate = (
+    body.end_date ||
+    body.proposed_end_date ||
+    proposal.proposed_end_date ||
+    null
+  );
+
+  if (effectiveEndDate && !isValidDateString(effectiveEndDate)) {
+    return c.json({ error: 'invalid_end_date', message: 'La fecha de fin debe ser válida (YYYY-MM-DD).' }, 400);
+  }
+  if (effectiveEndDate && effectiveEndDate < effectiveDate) {
+    return c.json({ error: 'invalid_end_date_range', message: 'La fecha de fin no puede ser anterior a la fecha de inicio.' }, 400);
   }
 
-  const effectivePriceCents = normalizedPrice.priceCents;
-  const isFree = normalizedPrice.isFree;
+  // Normalización defensiva de estado de precio y céntimos
+  let effectivePriceStatus: any = body.price_status || proposal.price_status || 'UNKNOWN';
+  let effectivePriceCents: number | null = null;
+  let isFree = false;
+
+  if (effectivePriceStatus === 'FREE') {
+    effectivePriceCents = 0;
+    isFree = true;
+  } else if (effectivePriceStatus === 'CHECK_BOX_OFFICE' || effectivePriceStatus === 'NOT_INFORMED') {
+    effectivePriceCents = null;
+    isFree = false;
+  } else if (effectivePriceStatus === 'CONFIRMED') {
+    try {
+      const rawPriceInput =
+        body.price !== undefined
+          ? body.price
+          : body.price_cents !== undefined
+          ? (Number(body.price_cents) / 100).toFixed(2)
+          : proposal.price !== null
+          ? proposal.price
+          : '0';
+      const norm = normalizePrice(rawPriceInput);
+      effectivePriceCents = norm.priceCents;
+      isFree = norm.priceCents === 0;
+      if (isFree) {
+        effectivePriceStatus = 'FREE';
+      }
+    } catch (priceErr: any) {
+      return c.json({
+        error: 'invalid_price',
+        message: `Precio inválido: ${priceErr.message}`,
+      }, 400);
+    }
+  } else {
+    // UNKNOWN o sin estado previo
+    if (body.price !== undefined || body.price_cents !== undefined || (proposal.price !== null && proposal.price !== undefined)) {
+      try {
+        const rawPriceInput =
+          body.price !== undefined
+            ? body.price
+            : body.price_cents !== undefined
+            ? (Number(body.price_cents) / 100).toFixed(2)
+            : proposal.price !== null
+            ? proposal.price
+            : '0';
+        const norm = normalizePrice(rawPriceInput);
+        effectivePriceCents = norm.priceCents;
+        isFree = norm.priceCents === 0;
+        effectivePriceStatus = norm.priceCents > 0 ? 'CONFIRMED' : 'UNKNOWN';
+      } catch {
+        effectivePriceCents = null;
+        effectivePriceStatus = 'UNKNOWN';
+      }
+    }
+  }
+
+  const effectivePriceNote = body.price_note !== undefined ? body.price_note : (proposal.price_note || null);
   const effectiveImageUrl = (body.image_url || proposal.image_url || '').trim();
   const effectiveDescription = (body.description || proposal.caption || '').trim();
 
@@ -422,23 +491,40 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
     return c.json({ error: 'venue_not_found', message: `El venue con ID ${effectiveVenueId} no existe o no está activo.` }, 400);
   }
 
-  // 3. Validar hora obligatoria (HH:mm) para crear el borrador
-  if (!effectiveTime || typeof effectiveTime !== 'string' || effectiveTime.trim() === '') {
-    return c.json({
-      error: 'missing_time',
-      message: 'La hora del evento es obligatoria para poder aprobar el borrador. Añada una hora válida (HH:mm).',
-    }, 400);
-  }
+  // 3. Validar hora según tipo de evento (puntual vs continuo)
+  let timeStatus = 'confirmed';
+  let startTimeIso: string | null = null;
+  let scheduleText: string | null = null;
 
-  const timeMatch = effectiveTime.trim().match(/^([012]?\d):([0-5]\d)(?::[0-5]\d)?$/);
-  if (!timeMatch) {
-    return c.json({ error: 'invalid_time', message: 'El formato de hora debe ser HH:mm (ej: 22:30).' }, 400);
+  if (isContinuous) {
+    timeStatus = 'continuous';
+    startTimeIso = null;
+    if (body.schedule_text) {
+      scheduleText = String(body.schedule_text).trim();
+    } else if (body.start_time || effectiveTime) {
+      const st = (body.start_time || effectiveTime).trim();
+      const et = (body.end_time || body.proposed_end_time || proposal.proposed_end_time || '').trim();
+      scheduleText = et ? `${st} - ${et}` : `${st}h`;
+    }
+  } else {
+    // Evento puntual: hora obligatoria (HH:mm) para crear el borrador
+    if (!effectiveTime || typeof effectiveTime !== 'string' || effectiveTime.trim() === '') {
+      return c.json({
+        error: 'missing_time',
+        message: 'La hora del evento es obligatoria para poder aprobar el borrador. Añada una hora válida (HH:mm).',
+      }, 400);
+    }
+
+    const timeMatch = effectiveTime.trim().match(/^([012]?\d):([0-5]\d)(?::[0-5]\d)?$/);
+    if (!timeMatch) {
+      return c.json({ error: 'invalid_time', message: 'El formato de hora debe ser HH:mm (ej: 22:30).' }, 400);
+    }
+    const hh = timeMatch[1].padStart(2, '0');
+    const mm = timeMatch[2].padStart(2, '0');
+    timeStatus = 'confirmed';
+    startTimeIso = `${effectiveDate}T${hh}:${mm}:00+02:00`;
+    scheduleText = `${hh}:${mm}h`;
   }
-  const hh = timeMatch[1].padStart(2, '0');
-  const mm = timeMatch[2].padStart(2, '0');
-  const timeStatus = 'confirmed';
-  const startTimeIso = `${effectiveDate}T${hh}:${mm}:00+02:00`;
-  const scheduleText = `${hh}:${mm}h`;
 
   // 4. Validar que la imagen provenga de Cloudflare R2
   if (!isValidR2ImageUrl(effectiveImageUrl)) {
@@ -503,7 +589,12 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
         time_status,
         schedule_text,
         editorial_date,
+        end_date,
         price_cents,
+        price_status,
+        price_note,
+        price_source,
+        price_checked_at,
         is_free,
         image_url,
         source_type,
@@ -527,11 +618,16 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
         $9,
         $10,
         $11,
-        'instagram',
         $12,
         $13,
-        'draft',
+        NOW(),
         $14,
+        $15,
+        $16,
+        $17,
+        $18,
+        'draft',
+        $19,
         NOW(),
         NOW(),
         NOW()
@@ -548,9 +644,14 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
       timeStatus,
       scheduleText,
       effectiveDate,
+      effectiveEndDate,
       effectivePriceCents,
-      effectivePriceCents === 0,
+      effectivePriceStatus,
+      effectivePriceNote,
+      proposal.source_type || 'curation_proposal',
+      isFree,
       effectiveImageUrl,
+      proposal.source_type || 'instagram',
       proposal.source_url,
       dedupeKey,
       userEmail,
@@ -564,17 +665,20 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
         title = $1,
         proposed_date = $2,
         proposed_time = $3,
-        venue_id = $4,
-        category = $5,
-        price = $6,
-        image_url = $7,
+        proposed_end_date = $4,
+        venue_id = $5,
+        category = $6,
+        price = $7,
+        price_status = $8,
+        price_note = $9,
+        image_url = $10,
         review_status = 'approved_draft',
         requires_manual_review = false,
-        reviewed_by = $8,
+        reviewed_by = $11,
         reviewed_at = NOW(),
-        created_event_id = $9,
+        created_event_id = $12,
         updated_at = NOW()
-      WHERE id = $10
+      WHERE id = $13
       RETURNING *;
     `;
 
@@ -582,9 +686,12 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
       effectiveTitle,
       effectiveDate,
       effectiveTime || null,
+      effectiveEndDate,
       effectiveVenueId,
       effectiveCategory,
-      normalizedPrice.amount > 0 ? normalizedPrice.amount : (isFree ? 0 : null),
+      effectivePriceCents !== null ? Number((effectivePriceCents / 100).toFixed(2)) : (isFree ? 0 : null),
+      effectivePriceStatus,
+      effectivePriceNote,
       effectiveImageUrl,
       userEmail,
       createdEvent.id,
@@ -849,6 +956,46 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
     }
     params.push(tm);
     fields.push(`proposed_time = $${params.length}`);
+  }
+
+  if (body.proposed_end_date !== undefined) {
+    const ed = body.proposed_end_date ? String(body.proposed_end_date).trim() : null;
+    if (ed && !isValidDateString(ed)) {
+      return c.json({ error: 'invalid_end_date', message: 'Formato de fecha de fin inválido (YYYY-MM-DD).' }, 400);
+    }
+    params.push(ed);
+    fields.push(`proposed_end_date = $${params.length}`);
+  }
+
+  if (body.proposed_end_time !== undefined) {
+    const etm = body.proposed_end_time ? String(body.proposed_end_time).trim() : null;
+    if (etm && !/^([012]?\d):([0-5]\d)$/.test(etm)) {
+      return c.json({ error: 'invalid_end_time', message: 'Formato de hora de fin inválido (HH:mm).' }, 400);
+    }
+    params.push(etm);
+    fields.push(`proposed_end_time = $${params.length}`);
+  }
+
+  if (body.price_status !== undefined) {
+    const ps = String(body.price_status).trim();
+    const validStatuses = ['UNKNOWN', 'FREE', 'NOT_INFORMED', 'CHECK_BOX_OFFICE', 'CONFIRMED'];
+    if (!validStatuses.includes(ps)) {
+      return c.json({ error: 'invalid_price_status', message: `Estado de precio inválido: ${ps}` }, 400);
+    }
+    params.push(ps);
+    fields.push(`price_status = $${params.length}`);
+  }
+
+  if (body.price_note !== undefined) {
+    const pn = body.price_note !== null ? String(body.price_note).trim() : null;
+    params.push(pn);
+    fields.push(`price_note = $${params.length}`);
+  }
+
+  if (body.classification !== undefined) {
+    const cls = String(body.classification).trim();
+    params.push(cls);
+    fields.push(`classification = $${params.length}`);
   }
 
   if (body.venue_id !== undefined) {

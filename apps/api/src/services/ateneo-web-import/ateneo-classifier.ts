@@ -29,6 +29,10 @@ export function classifyAteneoEvent(
     time = null;
   }
 
+  const effectivePrice = rawEvent.price !== undefined
+    ? rawEvent.price
+    : (rawEvent.priceCents !== null && rawEvent.priceCents !== undefined ? rawEvent.priceCents / 100 : null);
+
   // 1. Caso Duplicado detectado por matching
   if (hasDuplicateMatch) {
     reasons.push('Detectada coincidencia con evento existente en el catálogo del Ateneo de Palencia');
@@ -38,8 +42,12 @@ export function classifyAteneoEvent(
       suggestedTitle: title,
       suggestedDate: date,
       suggestedTime: time,
+      suggestedEndDate: rawEvent.endDate || null,
+      suggestedEndTime: rawEvent.endTime || null,
       suggestedCategory: rawEvent.category || 'cultura',
-      suggestedPrice: rawEvent.price,
+      suggestedPrice: effectivePrice,
+      suggestedPriceStatus: rawEvent.priceStatus,
+      suggestedPriceNote: rawEvent.priceNote,
       reasons,
     };
   }
@@ -53,13 +61,36 @@ export function classifyAteneoEvent(
       suggestedTitle: title || 'Actividad en Ateneo de Palencia',
       suggestedDate: null,
       suggestedTime: null,
+      suggestedEndDate: null,
+      suggestedEndTime: null,
       suggestedCategory: rawEvent.category || 'cultura',
       suggestedPrice: null,
+      suggestedPriceStatus: rawEvent.priceStatus || 'NOT_INFORMED',
+      suggestedPriceNote: rawEvent.priceNote,
       reasons,
     };
   }
 
-  // 3. Caso Fecha confirmada pero sin hora -> EVENTO_POSIBLE_SIN_HORA
+  // 3. Caso Rango de fechas distintas -> EVENTO_CONTINUO (Exposición o actividad continua)
+  if (date && rawEvent.endDate && rawEvent.endDate !== date) {
+    reasons.push(`Actividad continua con rango de fechas (${date} al ${rawEvent.endDate})`);
+    return {
+      classification: 'EVENTO_CONTINUO',
+      confidence: 'ALTA',
+      suggestedTitle: title,
+      suggestedDate: date,
+      suggestedTime: null, // Horario de sala o franja continua, no sesión puntual obligatoria
+      suggestedEndDate: rawEvent.endDate,
+      suggestedEndTime: rawEvent.endTime || null,
+      suggestedCategory: rawEvent.category || 'cultura',
+      suggestedPrice: effectivePrice,
+      suggestedPriceStatus: rawEvent.priceStatus,
+      suggestedPriceNote: rawEvent.priceNote,
+      reasons,
+    };
+  }
+
+  // 4. Caso Fecha confirmada pero sin hora -> EVENTO_POSIBLE_SIN_HORA
   if (date && !time) {
     reasons.push(`Fecha confirmada (${date}) pero sin hora de inicio específica en programación web`);
     return {
@@ -68,13 +99,17 @@ export function classifyAteneoEvent(
       suggestedTitle: title,
       suggestedDate: date,
       suggestedTime: null,
+      suggestedEndDate: rawEvent.endDate || null,
+      suggestedEndTime: rawEvent.endTime || null,
       suggestedCategory: rawEvent.category || 'cultura',
-      suggestedPrice: rawEvent.price,
+      suggestedPrice: effectivePrice,
+      suggestedPriceStatus: rawEvent.priceStatus,
+      suggestedPriceNote: rawEvent.priceNote,
       reasons,
     };
   }
 
-  // 4. Caso Fecha y hora confirmadas -> EVENTO_POSIBLE
+  // 5. Caso Fecha y hora confirmadas -> EVENTO_POSIBLE
   reasons.push(`Fecha (${date}) y hora (${time}) oficiales confirmadas en programación del Ateneo`);
   return {
     classification: 'EVENTO_POSIBLE',
@@ -82,8 +117,12 @@ export function classifyAteneoEvent(
     suggestedTitle: title,
     suggestedDate: date,
     suggestedTime: time,
+    suggestedEndDate: rawEvent.endDate || null,
+    suggestedEndTime: rawEvent.endTime || null,
     suggestedCategory: rawEvent.category || 'cultura',
-    suggestedPrice: rawEvent.price,
+    suggestedPrice: effectivePrice,
+    suggestedPriceStatus: rawEvent.priceStatus,
+    suggestedPriceNote: rawEvent.priceNote,
     reasons,
   };
 }

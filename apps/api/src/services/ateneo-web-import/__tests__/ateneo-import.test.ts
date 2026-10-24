@@ -71,7 +71,8 @@ END:VCALENDAR
     expect(ev.date).toBe('2026-10-22');
     expect(ev.time).toBe('20:00');
     expect(ev.imageUrl).toBe('https://ateneodepalencia.com/wp-content/uploads/2026/10/6.png');
-    expect(ev.isFree).toBe(true);
+    expect(ev.isFree).toBe(false);
+    expect(ev.priceStatus).toBe('NOT_INFORMED');
 
     const classification = classifyAteneoEvent(ev, false);
     expect(classification.classification).toBe('EVENTO_POSIBLE');
