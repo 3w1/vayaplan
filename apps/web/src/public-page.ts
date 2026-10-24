@@ -2787,8 +2787,11 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         btnContinuous.classList.toggle('active', isContinuousFilterActive);
       }
     }
+    function syncFreeFilterUi() {
+      return syncSecondaryFiltersUi();
+    }
     window.syncSecondaryFiltersUi = syncSecondaryFiltersUi;
-    window.syncFreeFilterUi = syncSecondaryFiltersUi;
+    window.syncFreeFilterUi = syncFreeFilterUi;
 
     function refreshAgendaViews() {
       if (currentData) {

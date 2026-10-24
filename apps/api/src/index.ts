@@ -24,6 +24,7 @@ import { adminUploadsRoutes } from './routes/admin/uploads';
 import { adminGastronomicRoutes } from './routes/admin/gastronomic-routes';
 import { adminProposalsRoutes } from './routes/admin/proposals';
 import { adminInstagramIngestionRoutes } from './routes/admin/instagram-ingestion';
+import { bibliotecaImagesRoutes } from './routes/admin/biblioteca-images';
 import { internalInstagramIngestionRoutes } from './routes/internal/instagram-ingestion';
 import { publicUploadsRoutes } from './routes/uploads';
 import { whatsappWebhookRoutes } from './routes/webhooks/whatsapp';
@@ -94,6 +95,7 @@ app.route('/api/v1/admin', adminUploadsRoutes);
 app.route('/api/v1/admin', adminGastronomicRoutes);
 app.route('/api/v1/admin', adminProposalsRoutes);
 app.route('/api/v1/admin', adminInstagramIngestionRoutes);
+app.route('/api/v1/admin', bibliotecaImagesRoutes);
 app.route('/api/v1/internal', internalInstagramIngestionRoutes);
 
 // Iniciar worker de caducidad automática de eventos pasados
