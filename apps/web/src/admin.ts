@@ -2719,6 +2719,16 @@ export function renderAdminHtml(): string {
 
       <!-- SECCIÓN PROPUESTAS DE BARES (INSTAGRAM) -->
       <section id="section-proposals" style="display:none;">
+        <!-- Pestañas de Curación Editorial (Fase 7) -->
+        <div class="subfilter-pills" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+          <button type="button" id="prop-tab-all" class="subfilter-pill active" onclick="switchProposalTab('all')" style="font-weight:700;">Todas</button>
+          <button type="button" id="prop-tab-events" class="subfilter-pill" onclick="switchProposalTab('events')" style="font-weight:700;">🎯 1. Propuestas de eventos</button>
+          <button type="button" id="prop-tab-no-time" class="subfilter-pill" onclick="switchProposalTab('no_time')" style="font-weight:700;">⏰ 2. Eventos sin hora</button>
+          <button type="button" id="prop-tab-duplicates" class="subfilter-pill" onclick="switchProposalTab('duplicates')" style="font-weight:700;">⚠️ 3. Posibles duplicados</button>
+          <button type="button" id="prop-tab-venue-content" class="subfilter-pill" onclick="switchProposalTab('venue_content')" style="font-weight:700;">🍸 4. Contenido de venues</button>
+          <button type="button" id="prop-tab-archived" class="subfilter-pill" onclick="switchProposalTab('archived')" style="font-weight:700;">📦 5. Archivadas</button>
+        </div>
+
         <div class="toolbar" style="flex-wrap:wrap; gap:0.75rem; margin-bottom:1.25rem;">
           <div class="filter-group" style="flex-wrap:wrap; gap:0.5rem; align-items:center;">
             <select id="proposal-filter-status" onchange="onProposalFilterChange()" aria-label="Filtrar por estado">
@@ -4011,9 +4021,9 @@ export function renderAdminHtml(): string {
             </div>
 
             <div>
-              <label for="approve-prop-price-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Precio en céntimos (0 = Gratuito)</label>
-              <input type="number" id="approve-prop-price-input" min="0" step="50" value="0" style="width:140px;" placeholder="0">
-              <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.5rem;">0 = Gratis, 1000 = 10,00 €</span>
+              <label for="approve-prop-price-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Precio de entrada en euros (€)</label>
+              <input type="text" id="approve-prop-price-input" value="0,00" style="width:140px; font-weight:700;" placeholder="0,00">
+              <span style="font-size:0.75rem; color:var(--text-muted); margin-left:0.5rem;">Ej: 12,50 € (0 = Entrada gratuita)</span>
             </div>
 
             <div>
@@ -9599,6 +9609,34 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     // ==============================================================================
     let cachedProposals = [];
     let proposalSearchQuery = '';
+    let currentProposalTab = 'all';
+
+    window.switchProposalTab = function(tab) {
+      currentProposalTab = tab;
+      const tabIds = {
+        all: 'prop-tab-all',
+        events: 'prop-tab-events',
+        no_time: 'prop-tab-no-time',
+        duplicates: 'prop-tab-duplicates',
+        venue_content: 'prop-tab-venue-content',
+        archived: 'prop-tab-archived'
+      };
+      Object.keys(tabIds).forEach(t => {
+        const el = document.getElementById(tabIds[t]);
+        if (el) {
+          if (t === tab) {
+            el.classList.add('active');
+            el.style.background = '#059669';
+            el.style.color = '#ffffff';
+          } else {
+            el.classList.remove('active');
+            el.style.background = '';
+            el.style.color = '';
+          }
+        }
+      });
+      renderProposalsList(cachedProposals);
+    };
 
     window.onProposalFilterChange = function() {
       loadAdminProposals();
@@ -9637,6 +9675,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (clearAllBtn) clearAllBtn.style.display = 'none';
 
       proposalSearchQuery = '';
+      currentProposalTab = 'all';
+      switchProposalTab('all');
       loadAdminProposals();
     };
 
@@ -9677,19 +9717,76 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       }
     };
 
+    window.confirmLinkProposal = async function(propId, targetEventId) {
+      if (!confirm('¿Deseas vincular la propuesta #' + propId + ' al evento existente #' + targetEventId + '? Esta acción NO creará un evento duplicado.')) {
+        return;
+      }
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals/' + propId + '/link-event', {
+          method: 'POST',
+          body: JSON.stringify({ target_event_id: targetEventId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error al vincular: ' + (data.message || res.statusText));
+          return;
+        }
+        alert(data.message || 'Propuesta vinculada con éxito.');
+        loadAdminProposals();
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    };
+
+    function getProposalClassificationBadge(cls) {
+      if (cls === 'CONTENIDO_VENUE') {
+        return '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">🍸 CONTENIDO VENUE</span>';
+      } else if (cls === 'EVENTO_POSIBLE_SIN_HORA') {
+        return '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">⏰ SIN HORA</span>';
+      } else if (cls === 'DUPLICADO_POSIBLE') {
+        return '<span class="badge-tag" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-weight:700;">⚠️ DUPLICADO POSIBLE</span>';
+      } else if (cls === 'EVENTO_POSIBLE') {
+        return '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🎯 EVENTO POSIBLE</span>';
+      }
+      return '<span class="badge-tag" style="background:#f3f4f6; color:#4b5563;">' + escapeHtml(cls || 'SIN_MATCH') + '</span>';
+    }
+
+    function formatProposalPrice(price) {
+      if (price === null || price === undefined || price === '') return '<span style="color:var(--text-muted);">No detectado</span>';
+      const num = Number(price);
+      if (isNaN(num)) return '<span style="color:var(--text-muted);">' + escapeHtml(String(price)) + '</span>';
+      if (num === 0) return '<span style="color:#059669; font-weight:700;">0,00 € (Gratis)</span>';
+      return '<span style="font-weight:700; color:var(--text-main);">' + num.toFixed(2).replace('.', ',') + ' €</span>';
+    }
+
     window.renderProposalsList = function(proposals) {
       const tbody = document.getElementById('proposals-tbody');
       const cards = document.getElementById('proposals-cards-container');
       const badge = document.getElementById('proposals-count-badge');
 
       let list = proposals;
+
+      // Filtrado por pestaña de curación (Fase 7)
+      if (currentProposalTab === 'events') {
+        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE' || p.classification === 'NUEVA_PROPUESTA') && p.review_status === 'pending');
+      } else if (currentProposalTab === 'no_time') {
+        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) && p.classification !== 'CONTENIDO_VENUE' && p.review_status === 'pending');
+      } else if (currentProposalTab === 'duplicates') {
+        list = list.filter(p => p.classification === 'DUPLICADO_POSIBLE' || !!p.matched_event_id);
+      } else if (currentProposalTab === 'venue_content') {
+        list = list.filter(p => p.classification === 'CONTENIDO_VENUE');
+      } else if (currentProposalTab === 'archived') {
+        list = list.filter(p => p.review_status === 'archived' || p.review_status === 'rejected');
+      }
+
       if (proposalSearchQuery) {
         list = list.filter(p => {
           const t = (p.title || '').toLowerCase();
           const v = (p.venue_name || '').toLowerCase();
           const c = (p.caption || '').toLowerCase();
           const u = (p.instagram_username || '').toLowerCase();
-          return t.includes(proposalSearchQuery) || v.includes(proposalSearchQuery) || c.includes(proposalSearchQuery) || u.includes(proposalSearchQuery);
+          const idStr = String(p.id);
+          return t.includes(proposalSearchQuery) || v.includes(proposalSearchQuery) || c.includes(proposalSearchQuery) || u.includes(proposalSearchQuery) || idStr === proposalSearchQuery;
         });
       }
 
@@ -9699,7 +9796,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       }
 
       if (list.length === 0) {
-        const emptyMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-muted);"><div style="font-size:1.5rem; margin-bottom:0.5rem;">🍸</div><strong>No se encontraron propuestas</strong><p style="margin:0.25rem 0 0 0; font-size:0.875rem;">Ajusta los filtros o cambia el estado para ver más candidatos.</p></div>';
+        const emptyMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-muted);"><div style="font-size:1.5rem; margin-bottom:0.5rem;">🍸</div><strong>No se encontraron propuestas</strong><p style="margin:0.25rem 0 0 0; font-size:0.875rem;">Ajusta la pestaña o los filtros para ver más elementos.</p></div>';
         if (tbody) tbody.innerHTML = '<tr><td colspan="6">' + emptyMsg + '</td></tr>';
         if (cards) cards.innerHTML = '<div style="background:#ffffff; border-radius:12px; border:1px solid var(--border);">' + emptyMsg + '</div>';
         return;
@@ -9726,25 +9823,51 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
           const timeHtml = p.proposed_time
             ? '<div style="font-weight:700; color:var(--text-main); font-size:0.875rem;">⏰ ' + escapeHtml(p.proposed_time) + ' h</div>'
-            : '<div style="font-size:0.75rem; color:#d97706; font-weight:600;">⚠️ Hora pendiente</div>';
+            : '<div style="font-size:0.75rem; color:#d97706; font-weight:600;">⚠️ Sin hora</div>';
+
+          const priceHtml = '<div style="font-size:0.8125rem; margin-top:0.25rem;">💶 ' + formatProposalPrice(p.price) + '</div>';
+
+          // Alerta de duplicado / matching
+          let matchAlertHtml = '';
+          if (p.matched_event_id) {
+            matchAlertHtml = '<div style="margin-top:0.35rem; padding:0.35rem 0.5rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; color:#991b1b;">' +
+              '<strong>⚠️ Match (' + escapeHtml(p.match_level || 'POSIBLE') + '):</strong> Evento #' + p.matched_event_id + (p.matched_event_title ? ' — ' + escapeHtml(p.matched_event_title) : '') +
+              (p.review_status === 'pending' ? ' <button type="button" class="btn-sm btn-secondary" onclick="confirmLinkProposal(' + p.id + ', ' + p.matched_event_id + ')" style="padding:0.15rem 0.4rem; font-size:0.7rem; margin-left:0.25rem; background:#fee2e2; border-color:#fca5a5; font-weight:700;">🔗 Vincular</button>' : '') +
+            '</div>';
+          }
 
           let actionsHtml = '';
           if (p.review_status === 'pending') {
-            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
-              '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Aprobar y crear borrador" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" title="Rechazar con motivo" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')" title="Archivar sin crear evento">Archivar</button>' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')" title="Marcar como promoción comercial">Promoción</button>' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" title="Ver texto original y fuente">Ver Post</button>' +
-            '</div>';
+            if (p.classification === 'CONTENIDO_VENUE') {
+              // CONTENIDO_VENUE: No se puede aprobar como evento
+              actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
+                '<span style="font-size:0.75rem; color:#64748b; align-self:center; margin-right:0.25rem;">(Material local - no evento)</span>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')" title="Archivar contenido">Archivar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')" title="Marcar como promoción comercial">Promoción</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" title="Ver texto original">Ver Post</button>' +
+              '</div>';
+            } else if (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) {
+              // EVENTO_POSIBLE_SIN_HORA: Requiere asignar hora para aprobar
+              actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
+                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Asignar hora y aprobar borrador" style="background:#d97706; border-color:#d97706; font-weight:700;">⏰ Asignar Hora</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+              '</div>';
+            } else {
+              // EVENTO_POSIBLE o DUPLICADO_POSIBLE con hora
+              actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
+                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Aprobar y crear borrador" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" title="Rechazar con motivo" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+              '</div>';
+            }
           } else if (p.review_status === 'approved_draft') {
             actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
               (p.created_event_id ? '<span style="font-size:0.75rem; font-weight:700; color:#059669;">Evento #' + p.created_event_id + ' (Draft)</span>' : '') +
               '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-            '</div>';
-          } else if (p.review_status === 'rejected') {
-            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Detalle</button>' +
             '</div>';
           } else {
             actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
@@ -9755,22 +9878,28 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           return '<tr id="prop-row-' + p.id + '">' +
             '<td>' +
               '<div style="width:56px; height:56px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:#f1f5f9; display:flex; align-items:center; justify-content:center;">' +
-                (p.image_url ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;">' : '<span style="font-size:0.7rem; color:var(--text-muted);">Sin foto</span>') +
+                (p.image_url ? '<a href="' + escapeHtml(p.image_url) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;"></a>' : '<span style="font-size:0.7rem; color:var(--text-muted);">Sin foto</span>') +
               '</div>' +
             '</td>' +
             '<td>' +
-              '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35; margin-bottom:0.25rem;">' + escapeHtml(p.title) + '</div>' +
+              '<div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.2rem;">' +
+                '<span style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">#' + p.id + '</span>' +
+                '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35;">' + escapeHtml(p.title) + '</div>' +
+              '</div>' +
               '<div style="font-size:0.8rem; color:var(--text-dim); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">' +
                 '<span>📍 <strong>' + escapeHtml(p.venue_name || ('Local #' + (p.venue_id || '—'))) + '</strong></span>' +
                 (p.instagram_username ? '<span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>' : '') +
               '</div>' +
+              matchAlertHtml +
             '</td>' +
             '<td>' +
-              '<div style="font-weight:600; font-size:0.875rem;">' + (p.proposed_date || 'Sin fecha') + '</div>' +
+              '<div style="font-weight:600; font-size:0.875rem;">' + (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>') + '</div>' +
               timeHtml +
+              priceHtml +
             '</td>' +
             '<td>' +
               '<div style="display:flex; flex-direction:column; gap:0.25rem;">' +
+                getProposalClassificationBadge(p.classification) +
                 '<span class="badge-tag" style="font-size:0.75rem; align-self:flex-start;">' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
                 confBadge +
               '</div>' +
@@ -9805,35 +9934,73 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
                   ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">Promoción</span>'
                   : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">Archivado</span>')));
 
-          return '<article style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
-            '<div style="display:flex; gap:0.75rem; margin-bottom:0.75rem;">' +
-              '<div style="width:70px; height:70px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:#f1f5f9; flex-shrink:0;">' +
-                (p.image_url ? '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;">' : '<div style="display:flex; height:100%; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.75rem;">Sin foto</div>') +
-              '</div>' +
-              '<div style="flex:1; min-width:0;">' +
-                '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; margin-bottom:0.25rem;">' +
-                  statusBadge +
-                  confBadge +
-                '</div>' +
-                '<h4 style="margin:0 0 0.25rem 0; font-size:0.95rem; font-weight:800; color:var(--text-main); line-height:1.3;">' + escapeHtml(p.title) + '</h4>' +
-                '<div style="font-size:0.8rem; color:var(--text-dim);">📍 <strong>' + escapeHtml(p.venue_name || ('Local #' + (p.venue_id || '—'))) + '</strong></div>' +
-              '</div>' +
-            '</div>' +
-            '<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem;">' +
-              '<span>📅 ' + (p.proposed_date || 'Sin fecha') + '</span>' +
-              '<span>' + (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '⚠️ Hora pendiente') + '</span>' +
-              '<span>🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
-            '</div>' +
-            (p.rejection_reason ? '<div style="font-size:0.8rem; color:#dc2626; background:#fef2f2; padding:0.4rem 0.6rem; border-radius:6px; margin-bottom:0.75rem;"><strong>Motivo rechazo:</strong> ' + escapeHtml(p.rejection_reason) + '</div>' : '') +
-            '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
-              (p.review_status === 'pending' ?
+          let matchAlertHtml = '';
+          if (p.matched_event_id) {
+            matchAlertHtml = '<div style="margin-top:0.5rem; padding:0.5rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; color:#991b1b;">' +
+              '<strong>⚠️ Match (' + escapeHtml(p.match_level || 'POSIBLE') + '):</strong> Evento #' + p.matched_event_id + (p.matched_event_title ? ' — ' + escapeHtml(p.matched_event_title) : '') +
+              (p.review_status === 'pending' ? ' <div style="margin-top:0.25rem;"><button type="button" class="btn-sm btn-secondary" onclick="confirmLinkProposal(' + p.id + ', ' + p.matched_event_id + ')" style="padding:0.2rem 0.5rem; font-size:0.75rem; background:#fee2e2; border-color:#fca5a5; font-weight:700;">🔗 Vincular a Evento #' + p.matched_event_id + '</button></div>' : '') +
+            '</div>';
+          }
+
+          let mobileActionsHtml = '';
+          if (p.review_status === 'pending') {
+            if (p.classification === 'CONTENIDO_VENUE') {
+              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
+                '<span style="font-size:0.75rem; color:#64748b; align-self:center;">(Material local - no evento)</span>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+              '</div>';
+            } else if (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) {
+              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
+                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" style="background:#d97706; border-color:#d97706; font-weight:700;">⏰ Asignar Hora</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626;">Rechazar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+              '</div>';
+            } else {
+              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
                 '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626;">Rechazar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>'
-                : '') +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+              '</div>';
+            }
+          } else {
+            mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
+              (p.created_event_id ? '<span style="font-size:0.75rem; font-weight:700; color:#059669; align-self:center;">Evento #' + p.created_event_id + '</span>' : '') +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Detalle</button>' +
+            '</div>';
+          }
+
+          return '<article style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
+            '<div style="display:flex; gap:0.75rem; margin-bottom:0.75rem;">' +
+              '<div style="width:70px; height:70px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:#f1f5f9; flex-shrink:0;">' +
+                (p.image_url ? '<a href="' + escapeHtml(p.image_url) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;"></a>' : '<div style="display:flex; height:100%; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.75rem;">Sin foto</div>') +
+              '</div>' +
+              '<div style="flex:1; min-width:0;">' +
+                '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; margin-bottom:0.25rem;">' +
+                  '<div>' + statusBadge + ' ' + getProposalClassificationBadge(p.classification) + '</div>' +
+                  confBadge +
+                '</div>' +
+                '<h4 style="margin:0 0 0.25rem 0; font-size:0.95rem; font-weight:800; color:var(--text-main); line-height:1.3;">' +
+                  '<span style="font-size:0.75rem; color:var(--text-muted); margin-right:0.35rem;">#' + p.id + '</span>' + escapeHtml(p.title) +
+                '</h4>' +
+                '<div style="font-size:0.8rem; color:var(--text-dim);">📍 <strong>' + escapeHtml(p.venue_name || ('Local #' + (p.venue_id || '—'))) + '</strong>' +
+                  (p.instagram_username ? ' <span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>' : '') +
+                '</div>' +
+              '</div>' +
             '</div>' +
+            matchAlertHtml +
+            '<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">' +
+              '<span>📅 ' + (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>') + '</span>' +
+              '<span>' + (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '<span style="color:#d97706;">⚠️ Sin hora</span>') + '</span>' +
+              '<span>💶 ' + formatProposalPrice(p.price) + '</span>' +
+              '<span>🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
+            '</div>' +
+            (p.rejection_reason ? '<div style="font-size:0.8rem; color:#dc2626; background:#fef2f2; padding:0.4rem 0.6rem; border-radius:6px; margin-bottom:0.75rem;"><strong>Motivo rechazo:</strong> ' + escapeHtml(p.rejection_reason) + '</div>' : '') +
+            mobileActionsHtml +
           '</article>';
         }).join('');
       }
@@ -9846,13 +10013,24 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         return;
       }
 
+      if (prop.classification === 'CONTENIDO_VENUE') {
+        alert('Este post está clasificado como CONTENIDO_VENUE (material promocional o de ambiente sin fecha/hora). No puede aprobarse como evento de agenda.');
+        return;
+      }
+
       document.getElementById('approve-prop-id').value = prop.id;
       document.getElementById('approve-prop-title-input').value = prop.title || '';
       document.getElementById('approve-prop-date-input').value = prop.proposed_date || '';
       document.getElementById('approve-prop-time-input').value = prop.proposed_time || '';
       document.getElementById('approve-prop-venue-select').value = prop.venue_id ? String(prop.venue_id) : '';
       document.getElementById('approve-prop-category-select').value = prop.category || 'dj_tardeo';
-      document.getElementById('approve-prop-price-input').value = prop.price !== null ? prop.price * 100 : 0;
+
+      // Precio formateado en euros para edición humana
+      const formattedPrice = prop.price !== null && prop.price !== undefined
+        ? Number(prop.price).toFixed(2).replace('.', ',')
+        : '0,00';
+      document.getElementById('approve-prop-price-input').value = formattedPrice;
+
       document.getElementById('approve-prop-desc-input').value = prop.caption ? prop.caption.slice(0, 300) : '';
       document.getElementById('approve-prop-img-input').value = prop.image_url || '';
 
@@ -9875,7 +10053,16 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (errBox) errBox.style.display = 'none';
 
       const dupBox = document.getElementById('approve-prop-duplicate-alert');
-      if (dupBox) dupBox.style.display = 'none';
+      const dupMsg = document.getElementById('approve-prop-duplicate-msg');
+      if (prop.matched_event_id && dupBox && dupMsg) {
+        dupMsg.innerHTML = '<strong>⚠️ Atención: Este post coincide con un evento existente:</strong><br>' +
+          'Evento #' + prop.matched_event_id + (prop.matched_event_title ? ' — "' + escapeHtml(prop.matched_event_title) + '"' : '') +
+          ' (' + escapeHtml(prop.match_level || 'POSIBLE') + ')<br>' +
+          '<div style="margin-top:0.5rem;"><button type="button" class="btn-sm btn-primary" onclick="closeModal(&quot;modal-approve-proposal&quot;); confirmLinkProposal(' + prop.id + ', ' + prop.matched_event_id + ');">🔗 Vincular a Evento Existente (Evitar duplicado)</button></div>';
+        dupBox.style.display = 'block';
+      } else if (dupBox) {
+        dupBox.style.display = 'none';
+      }
 
       updateApproveImagePreview();
       openModal('modal-approve-proposal');
@@ -9918,7 +10105,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const time = (document.getElementById('approve-prop-time-input')?.value || '').trim();
       const venueId = parseInt(document.getElementById('approve-prop-venue-select')?.value, 10);
       const category = (document.getElementById('approve-prop-category-select')?.value || 'dj_tardeo').trim();
-      const priceCents = parseInt(document.getElementById('approve-prop-price-input')?.value, 10) || 0;
+      const priceRaw = (document.getElementById('approve-prop-price-input')?.value || '0').trim();
       const description = (document.getElementById('approve-prop-desc-input')?.value || '').trim();
       const imageUrl = (document.getElementById('approve-prop-img-input')?.value || '').trim();
 
@@ -9937,6 +10124,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (errBox) { errBox.innerText = 'La fecha del evento es obligatoria.'; errBox.style.display = 'block'; }
         return;
       }
+      if (!time) {
+        if (errBox) { errBox.innerText = 'La hora del evento es obligatoria para poder crear el borrador (HH:mm).'; errBox.style.display = 'block'; }
+        return;
+      }
       if (!venueId || isNaN(venueId)) {
         if (errBox) { errBox.innerText = 'Debes seleccionar un local (venue) válido.'; errBox.style.display = 'block'; }
         return;
@@ -9953,10 +10144,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         const payload = {
           title: title,
           proposed_date: date,
-          proposed_time: time || null,
+          proposed_time: time,
           venue_id: venueId,
           category: category,
-          price_cents: priceCents,
+          price: priceRaw,
           description: description,
           image_url: imageUrl
         };
@@ -10100,17 +10291,47 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const bodyEl = document.getElementById('modal-caption-prop-body');
       if (!bodyEl) return;
 
+      const priceFormatted = prop.price !== null && prop.price !== undefined
+        ? (Number(prop.price) === 0 ? '0,00 € (Gratis)' : Number(prop.price).toFixed(2).replace('.', ',') + ' €')
+        : 'No detectado';
+
+      const reasonsFormatted = prop.match_reasons && Array.isArray(prop.match_reasons) && prop.match_reasons.length > 0
+        ? prop.match_reasons.join(', ')
+        : (prop.classification === 'CONTENIDO_VENUE'
+          ? 'Post sin fecha ni hora detectables (contenido/ambiente de local)'
+          : (prop.classification === 'EVENTO_POSIBLE_SIN_HORA'
+            ? 'Fecha detectada pero sin horario'
+            : 'Extracción estándar de Instagram'));
+
+      let recommendedAction = 'Revisar y aprobar como borrador';
+      if (prop.classification === 'CONTENIDO_VENUE') {
+        recommendedAction = 'Conservar como contenido o archivar (Bloqueado para eventos)';
+      } else if (prop.classification === 'DUPLICADO_POSIBLE') {
+        recommendedAction = 'Verificar y vincular al evento existente #' + (prop.matched_event_id || 'existente');
+      } else if (prop.classification === 'EVENTO_POSIBLE_SIN_HORA' || !prop.proposed_time) {
+        recommendedAction = 'Asignar una hora válida antes de aprobar';
+      }
+
       bodyEl.innerHTML = '<div style="display:flex; flex-direction:column; gap:1rem;">' +
         '<div style="background:#ffffff; border:1px solid var(--border); border-radius:8px; padding:1rem;">' +
-          '<h4 style="margin:0 0 0.5rem 0; font-size:1.05rem; font-weight:800; color:var(--text-main);">' + escapeHtml(prop.title) + '</h4>' +
-          '<div style="display:flex; gap:0.5rem; flex-wrap:wrap; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem;">' +
-            '<span>📍 ' + escapeHtml(prop.venue_name || ('Local #' + prop.venue_id)) + '</span>' +
-            '<span>📅 ' + (prop.proposed_date || 'Sin fecha') + '</span>' +
-            (prop.proposed_time ? '<span>⏰ ' + escapeHtml(prop.proposed_time) + ' h</span>' : '<span style="color:#d97706;">⚠️ Hora pendiente</span>') +
-            '<span>🏷️ ' + escapeHtml(prop.category || 'dj_tardeo') + '</span>' +
+          '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.5rem;">' +
+            '<h4 style="margin:0; font-size:1.05rem; font-weight:800; color:var(--text-main);">' +
+              '<span style="color:var(--text-muted); font-size:0.875rem; margin-right:0.35rem;">#' + prop.id + '</span>' + escapeHtml(prop.title) +
+            '</h4>' +
+            getProposalClassificationBadge(prop.classification) +
           '</div>' +
-          '<div style="font-size:0.75rem; color:var(--text-muted);">' +
-            '<div><strong>Estado:</strong> ' + escapeHtml(prop.review_status) + ' | <strong>Clasificación:</strong> ' + escapeHtml(prop.classification) + '</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem; background:#f8fafc; padding:0.75rem; border-radius:6px;">' +
+            '<div><strong>📍 Venue:</strong> ' + escapeHtml(prop.venue_name || ('Local #' + prop.venue_id)) + '</div>' +
+            '<div><strong>📅 Fecha:</strong> ' + (prop.proposed_date || 'Sin fecha') + '</div>' +
+            '<div><strong>⏰ Hora:</strong> ' + (prop.proposed_time ? escapeHtml(prop.proposed_time) + ' h' : 'Sin hora') + '</div>' +
+            '<div><strong>💶 Precio:</strong> ' + priceFormatted + '</div>' +
+            '<div><strong>🏷️ Categoría:</strong> ' + escapeHtml(prop.category || 'dj_tardeo') + '</div>' +
+            '<div><strong>⭐ Confianza:</strong> ' + escapeHtml(prop.confidence || 'MEDIA') + '</div>' +
+          '</div>' +
+          '<div style="font-size:0.8125rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;">' +
+            '<div><strong>Motivo clasificación:</strong> ' + escapeHtml(reasonsFormatted) + '</div>' +
+            '<div><strong>Acción recomendada:</strong> <span style="font-weight:700; color:var(--text-main);">' + escapeHtml(recommendedAction) + '</span></div>' +
+            (prop.matched_event_id ? '<div style="color:#b91c1c; font-weight:700; background:#fef2f2; padding:0.4rem; border-radius:4px; margin-top:0.25rem;">⚠️ Posible duplicado vinculado al Evento #' + prop.matched_event_id + (prop.matched_event_title ? ' ("' + escapeHtml(prop.matched_event_title) + '")' : '') + ' [Nivel: ' + escapeHtml(prop.match_level || 'POSIBLE') + ']</div>' : '') +
             (prop.rejection_reason ? '<div style="color:#dc2626; margin-top:0.25rem;"><strong>Motivo rechazo:</strong> ' + escapeHtml(prop.rejection_reason) + '</div>' : '') +
             (prop.reviewed_by ? '<div><strong>Revisado por:</strong> ' + escapeHtml(prop.reviewed_by) + ' (' + (prop.reviewed_at ? prop.reviewed_at.slice(0, 19).replace('T', ' ') : '—') + ')</div>' : '') +
           '</div>' +

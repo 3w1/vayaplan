@@ -283,10 +283,10 @@ describe('Bandeja de Curación de Propuestas de Bares (Admin Proposals API)', ()
     // Insertar propuesta con el mismo dedupe_key
     const p = await testPool.query(
       `INSERT INTO curation_proposals (
-        title, proposed_date, venue_id, category, source_url,
+        title, proposed_date, proposed_time, venue_id, category, source_url,
         image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
       ) VALUES (
-        'Propuesta Duplicada', '2026-10-24', $1, 'dj_tardeo', 'https://instagram.com/p/dup1/',
+        'Propuesta Duplicada', '2026-10-24', '21:00', $1, 'dj_tardeo', 'https://instagram.com/p/dup1/',
         'https://media.vayaplan.com/bars/test/dup1.jpg', 'bars/test/dup1.jpg', 'ALTA', $2,
         'EVENTO_POSIBLE', 'pending', true
       ) RETURNING id;`,
@@ -304,6 +304,7 @@ describe('Bandeja de Curación de Propuestas de Bares (Admin Proposals API)', ()
       body: JSON.stringify({
         title: 'Propuesta Duplicada',
         proposed_date: '2026-10-24',
+        proposed_time: '21:00',
         venue_id: testVenueId,
       }),
     });
@@ -317,10 +318,10 @@ describe('Bandeja de Curación de Propuestas de Bares (Admin Proposals API)', ()
   test('9. Verifica que la imagen usada debe ser de Cloudflare R2 y bloquea CDN de Instagram', async () => {
     const p = await testPool.query(
       `INSERT INTO curation_proposals (
-        title, proposed_date, venue_id, category, source_url,
+        title, proposed_date, proposed_time, venue_id, category, source_url,
         image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
       ) VALUES (
-        'Test Imagen CDN', '2026-10-24', $1, 'dj_tardeo', 'https://instagram.com/p/cdn1/',
+        'Test Imagen CDN', '2026-10-24', '20:00', $1, 'dj_tardeo', 'https://instagram.com/p/cdn1/',
         'https://media.vayaplan.com/bars/test/cdn1.jpg', 'bars/test/cdn1.jpg', 'ALTA', 'test#cdn1',
         'EVENTO_POSIBLE', 'pending', true
       ) RETURNING id;`,
@@ -338,6 +339,7 @@ describe('Bandeja de Curación de Propuestas de Bares (Admin Proposals API)', ()
       body: JSON.stringify({
         title: 'Test Imagen CDN',
         proposed_date: '2026-10-24',
+        proposed_time: '20:00',
         venue_id: testVenueId,
         image_url: 'https://scontent-lga3-3.cdninstagram.com/v/t51.82787-15/invalid.jpg',
       }),
@@ -365,5 +367,324 @@ describe('Bandeja de Curación de Propuestas de Bares (Admin Proposals API)', ()
       body: JSON.stringify({ rejection_reason: 'Sin auth' }),
     });
     expect(resReject.status).toBe(401);
+  });
+
+  test('11. Bug de precio: Entrada "12,50" se guarda como 12.50 (numeric) y price_cents = 1250', async () => {
+    const p = await testPool.query(
+      `INSERT INTO curation_proposals (
+        title, proposed_date, proposed_time, venue_id, category, source_url,
+        image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
+      ) VALUES (
+        'Héroes El Culto — Test Precio', '2026-10-31', '21:30', $1, 'musica_directo', 'https://instagram.com/p/heroes1/',
+        'https://media.vayaplan.com/bars/test/heroes1.jpg', 'bars/test/heroes1.jpg', 'ALTA', 'test#heroes#1250',
+        'EVENTO_POSIBLE', 'pending', true
+      ) RETURNING id;`,
+      [testVenueId]
+    );
+    const propId = p.rows[0].id;
+    createdProposalIds.push(propId);
+
+    const res = await app.request(`/api/v1/admin/proposals/${propId}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Héroes El Culto — Concierto Tributo',
+        proposed_date: '2026-10-31',
+        proposed_time: '21:30',
+        venue_id: testVenueId,
+        category: 'musica_directo',
+        price: '12,50', // Entrada con coma decimal española
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    const eventId = body.createdEvent.id;
+    createdEventIds.push(eventId);
+
+    // Verificar en tabla events: price_cents debe ser 1250 (12,50 €)
+    const evCheck = await testPool.query(`SELECT price_cents, is_free, status FROM events WHERE id = $1;`, [eventId]);
+    expect(evCheck.rows[0].price_cents).toBe(1250);
+    expect(evCheck.rows[0].is_free).toBe(false);
+    expect(evCheck.rows[0].status).toBe('draft');
+
+    // Verificar en tabla curation_proposals: price debe ser 12.50
+    const propCheck = await testPool.query(`SELECT price FROM curation_proposals WHERE id = $1;`, [propId]);
+    expect(parseFloat(propCheck.rows[0].price)).toBe(12.50);
+  });
+
+  test('12. Normalización de precio con punto ("12.50") y miles europeos ("1.234,56")', async () => {
+    const p1 = await testPool.query(
+      `INSERT INTO curation_proposals (
+        title, proposed_date, proposed_time, venue_id, category, source_url,
+        image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
+      ) VALUES (
+        'Test Punto', '2026-11-01', '20:00', $1, 'dj_tardeo', 'https://instagram.com/p/punto1/',
+        'https://media.vayaplan.com/bars/test/punto1.jpg', 'bars/test/punto1.jpg', 'ALTA', 'test#punto1',
+        'EVENTO_POSIBLE', 'pending', true
+      ) RETURNING id;`,
+      [testVenueId]
+    );
+    const propId1 = p1.rows[0].id;
+    createdProposalIds.push(propId1);
+
+    const res1 = await app.request(`/api/v1/admin/proposals/${propId1}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Test Punto',
+        proposed_date: '2026-11-01',
+        proposed_time: '20:00',
+        venue_id: testVenueId,
+        price: '12.50',
+      }),
+    });
+    expect(res1.status).toBe(200);
+    const body1 = await res1.json();
+    const eventId1 = body1.createdEvent.id;
+    createdEventIds.push(eventId1);
+
+    const ev1 = await testPool.query(`SELECT price_cents FROM events WHERE id = $1;`, [eventId1]);
+    expect(ev1.rows[0].price_cents).toBe(1250);
+
+    // Miles europeos: "1.234,56"
+    const p2 = await testPool.query(
+      `INSERT INTO curation_proposals (
+        title, proposed_date, proposed_time, venue_id, category, source_url,
+        image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
+      ) VALUES (
+        'Test Miles', '2026-11-02', '20:00', $1, 'dj_tardeo', 'https://instagram.com/p/miles1/',
+        'https://media.vayaplan.com/bars/test/miles1.jpg', 'bars/test/miles1.jpg', 'ALTA', 'test#miles1',
+        'EVENTO_POSIBLE', 'pending', true
+      ) RETURNING id;`,
+      [testVenueId]
+    );
+    const propId2 = p2.rows[0].id;
+    createdProposalIds.push(propId2);
+
+    const res2 = await app.request(`/api/v1/admin/proposals/${propId2}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Test Miles',
+        proposed_date: '2026-11-02',
+        proposed_time: '20:00',
+        venue_id: testVenueId,
+        price: '1.234,56',
+      }),
+    });
+    expect(res2.status).toBe(200);
+    const body2 = await res2.json();
+    const eventId2 = body2.createdEvent.id;
+    createdEventIds.push(eventId2);
+
+    const ev2 = await testPool.query(`SELECT price_cents FROM events WHERE id = $1;`, [eventId2]);
+    expect(ev2.rows[0].price_cents).toBe(123456);
+  });
+
+  test('13. Rechaza precio inválido ("abc") y precio negativo ("-5")', async () => {
+    const p = await testPool.query(
+      `INSERT INTO curation_proposals (
+        title, proposed_date, proposed_time, venue_id, category, source_url,
+        image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
+      ) VALUES (
+        'Test Invalid Price', '2026-11-03', '20:00', $1, 'dj_tardeo', 'https://instagram.com/p/invprice1/',
+        'https://media.vayaplan.com/bars/test/invprice1.jpg', 'bars/test/invprice1.jpg', 'ALTA', 'test#invprice1',
+        'EVENTO_POSIBLE', 'pending', true
+      ) RETURNING id;`,
+      [testVenueId]
+    );
+    const propId = p.rows[0].id;
+    createdProposalIds.push(propId);
+
+    // Texto no numérico
+    const resAbc = await app.request(`/api/v1/admin/proposals/${propId}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Test Invalid Price',
+        proposed_date: '2026-11-03',
+        proposed_time: '20:00',
+        venue_id: testVenueId,
+        price: 'abc',
+      }),
+    });
+    expect(resAbc.status).toBe(400);
+    const bodyAbc = await resAbc.json();
+    expect(bodyAbc.error).toBe('invalid_price');
+
+    // Negativo
+    const resNeg = await app.request(`/api/v1/admin/proposals/${propId}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Test Invalid Price',
+        proposed_date: '2026-11-03',
+        proposed_time: '20:00',
+        venue_id: testVenueId,
+        price: '-5',
+      }),
+    });
+    expect(resNeg.status).toBe(400);
+    const bodyNeg = await resNeg.json();
+    expect(bodyNeg.error).toBe('invalid_price');
+  });
+
+  test('14. Bloqueo estricto: CONTENIDO_VENUE no puede aprobarse como evento', async () => {
+    const p = await testPool.query(
+      `INSERT INTO curation_proposals (
+        title, proposed_date, proposed_time, venue_id, category, source_url,
+        image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
+      ) VALUES (
+        'Reel Bar Salvaje Sin Fecha', null, null, $1, 'dj_tardeo', 'https://instagram.com/p/salvaje1/',
+        'https://media.vayaplan.com/bars/test/salvaje1.jpg', 'bars/test/salvaje1.jpg', 'BAJA', 'test#salvaje1',
+        'CONTENIDO_VENUE', 'pending', true
+      ) RETURNING id;`,
+      [testVenueId]
+    );
+    const propId = p.rows[0].id;
+    createdProposalIds.push(propId);
+
+    const res = await app.request(`/api/v1/admin/proposals/${propId}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Intento de Aprobar Contenido de Venue',
+        proposed_date: '2026-11-05',
+        proposed_time: '22:00',
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('cannot_approve_venue_content');
+  });
+
+  test('15. Bloqueo estricto: Propuesta sin hora no puede aprobarse hasta indicar hora válida', async () => {
+    const p = await testPool.query(
+      `INSERT INTO curation_proposals (
+        title, proposed_date, proposed_time, venue_id, category, source_url,
+        image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review
+      ) VALUES (
+        'Evento Sin Hora Test', '2026-11-06', null, $1, 'dj_tardeo', 'https://instagram.com/p/sinhora1/',
+        'https://media.vayaplan.com/bars/test/sinhora1.jpg', 'bars/test/sinhora1.jpg', 'MEDIA', 'test#sinhora1',
+        'EVENTO_POSIBLE_SIN_HORA', 'pending', true
+      ) RETURNING id;`,
+      [testVenueId]
+    );
+    const propId = p.rows[0].id;
+    createdProposalIds.push(propId);
+
+    // Intento sin hora
+    const resNoTime = await app.request(`/api/v1/admin/proposals/${propId}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Evento Sin Hora Test',
+        proposed_date: '2026-11-06',
+        proposed_time: '',
+        venue_id: testVenueId,
+      }),
+    });
+    expect(resNoTime.status).toBe(400);
+    const bodyNoTime = await resNoTime.json();
+    expect(bodyNoTime.error).toBe('missing_time');
+
+    // Proporcionando hora válida -> éxito
+    const resWithTime = await app.request(`/api/v1/admin/proposals/${propId}/approve`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: 'Evento Sin Hora Test',
+        proposed_date: '2026-11-06',
+        proposed_time: '23:30',
+        venue_id: testVenueId,
+      }),
+    });
+    expect(resWithTime.status).toBe(200);
+    const bodyWithTime = await resWithTime.json();
+    const eventId = bodyWithTime.createdEvent.id;
+    createdEventIds.push(eventId);
+    expect(bodyWithTime.createdEvent.status).toBe('draft');
+  });
+
+  test('16. Vincula propuesta a evento existente (/link-event) sin duplicar eventos', async () => {
+    // 1. Crear evento ya existente en base de datos
+    const existingEv = await testPool.query(`
+      INSERT INTO events (
+        city_id, venue_id, title, category, editorial_date, start_time, time_status, price_cents, is_free,
+        image_url, source_type, dedupe_key, status
+      ) VALUES (
+        1, $1, 'Evento Oficial Publicado Previo', 'dj_tardeo', '2026-11-10', '2026-11-10T23:00:00+02:00', 'confirmed', 0, true,
+        'https://media.vayaplan.com/bars/test/pub1.jpg', 'instagram', 'test#existing#link', 'published'
+      ) RETURNING id, title;
+    `, [testVenueId]);
+    const existingEventId = existingEv.rows[0].id;
+    createdEventIds.push(existingEventId);
+
+    // 2. Crear propuesta candidata que coincide con el evento
+    const p = await testPool.query(
+      `INSERT INTO curation_proposals (
+        title, proposed_date, proposed_time, venue_id, category, source_url,
+        image_url, r2_key, confidence, dedupe_key, classification, review_status, requires_manual_review,
+        matched_event_id, match_level
+      ) VALUES (
+        'Post Instagram de Evento Previo', '2026-11-10', '23:00', $1, 'dj_tardeo', 'https://instagram.com/p/linkprop1/',
+        'https://media.vayaplan.com/bars/test/linkprop1.jpg', 'bars/test/linkprop1.jpg', 'ALTA', 'test#linkprop1',
+        'DUPLICADO_POSIBLE', 'pending', true, $2, 'MATCH_ALTO'
+      ) RETURNING id;`,
+      [testVenueId, existingEventId]
+    );
+    const propId = p.rows[0].id;
+    createdProposalIds.push(propId);
+
+    // Contar eventos antes de vincular
+    const countBefore = await testPool.query(`SELECT COUNT(*)::int AS count FROM events;`);
+
+    // 3. Vincular con confirmación humana explícita
+    const linkRes = await app.request(`/api/v1/admin/proposals/${propId}/link-event`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ target_event_id: existingEventId }),
+    });
+
+    expect(linkRes.status).toBe(200);
+    const linkBody = await linkRes.json();
+    expect(linkBody.success).toBe(true);
+    expect(linkBody.proposal.created_event_id).toBe(existingEventId);
+    expect(linkBody.proposal.review_status).toBe('approved_draft');
+
+    // 4. Verificar que NO se creó ningún evento nuevo
+    const countAfter = await testPool.query(`SELECT COUNT(*)::int AS count FROM events;`);
+    expect(countAfter.rows[0].count).toBe(countBefore.rows[0].count);
   });
 });

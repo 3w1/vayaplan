@@ -4,6 +4,7 @@ import type {
   PostClassificationResult,
   ApifyInstagramRawPost,
 } from './bar-types';
+import { normalizePrice } from '@vayaplan/shared';
 
 /**
  * Expresiones regulares para detección de señales
@@ -95,13 +96,31 @@ export function classifyBarPost(
     };
   }
 
-  // 4. Descartar copys genéricos de fin de semana (Falsos Positivos de discoteca/bar)
+  // 4. Felicitaciones festivas o saludos genéricos
+  if (fullText.includes('feliz año') || fullText.includes('feliz lunes') || fullText.includes('feliz semana') || fullText.includes('feliz navidad')) {
+    return {
+      classification: 'NO_RELEVANTE',
+      reason: 'Felicitación festiva o saludo genérico sin contenido de agenda.',
+      signals: ['Felicitación festiva o saludo genérico'],
+      confidence: 'BAJA',
+      inferredDate: null,
+      inferredTime: null,
+      detectedDate: null,
+      detectedTime: null,
+    };
+  }
+
+  // 5. Descartar copys genéricos de fin de semana (Falsos Positivos de discoteca/bar -> Contenido del venue)
   if (PATTERNS.genericVibe.test(caption)) {
     return {
-      classification: 'CONTENIDO_GENERAL',
+      classification: 'CONTENIDO_VENUE',
       reason: 'Copywriting genérico de ambiente de fin de semana sin programación específica de cartel o evento.',
       signals: ['Copywriting genérico de fin de semana'],
       confidence: 'BAJA',
+      inferredDate: null,
+      inferredTime: null,
+      detectedDate: null,
+      detectedTime: null,
     };
   }
 
@@ -180,8 +199,26 @@ export function classifyBarPost(
     signals.push(`Lugar identificable: ${matched ? matched[0] : venueName}`);
   }
 
-  // E. Detectar ENTRADA / CONDICIÓN
-  if (PATTERNS.ticketOrBooking.test(caption)) {
+  // E. Detectar ENTRADA / CONDICIÓN Y PRECIO
+  let estimatedPriceCents: number | null = null;
+  const isFree = /\b(?:entrada\s+(?:libre|gratuita|gratis)|acceso\s+libre|gratis|gratuita)\b/i.test(caption);
+  if (isFree) {
+    estimatedPriceCents = 0;
+    signals.push('Acceso gratuito detectado');
+  } else {
+    const priceMatch = caption.match(/\b(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros)\b/i);
+    if (priceMatch) {
+      try {
+        const norm = normalizePrice(priceMatch[1]);
+        estimatedPriceCents = norm.priceCents;
+        signals.push(`Precio estimado detectado: ${norm.formatted}`);
+      } catch {
+        // Ignorar si no se puede normalizar
+      }
+    }
+  }
+
+  if (PATTERNS.ticketOrBooking.test(caption) && !signals.some(s => s.includes('Precio') || s.includes('gratuito'))) {
     const matched = caption.match(PATTERNS.ticketOrBooking);
     signals.push(`Condición o acceso detectado: "${matched ? matched[0] : ''}"`);
   }
@@ -196,31 +233,71 @@ export function classifyBarPost(
       confidence: 'BAJA',
       detectedActivity,
       provisionalCategory,
+      inferredDate: detectedDate,
+      inferredTime: detectedTime,
+      candidateCategory: provisionalCategory,
+      estimatedPriceCents,
     };
   }
 
-  // EVENTO_POSIBLE si detecta >= 2 señales con actividad concreta o (fecha + hora):
-  const signalCount = signals.length;
-  if (signalCount >= 2 && (detectedActivity || (detectedDate && detectedTime))) {
-    let confidence: 'ALTA' | 'MEDIA' | 'BAJA' = 'MEDIA';
-    if (detectedDate && detectedTime && detectedActivity) {
-      confidence = 'ALTA';
-    } else if (!detectedDate || !detectedTime) {
-      confidence = 'MEDIA';
-    }
-
-    const provisionalTitle = generateTitle(detectedActivity, venueName, caption, detectedDate);
-
+  // Si no tiene fecha ni hora: CONTENIDO_VENUE
+  if (!detectedDate && !detectedTime) {
     return {
-      classification: 'EVENTO_POSIBLE',
-      reason: `Detectadas ${signalCount} señales de evento (${signals.join('; ')}).`,
+      classification: 'CONTENIDO_VENUE',
+      reason: 'Reel, imagen o caption sin fecha ni hora fiables. Material promocional o de ambiente del local.',
       signals,
-      detectedDate,
-      detectedTime,
+      confidence: 'BAJA',
+      detectedDate: null,
+      detectedTime: null,
+      inferredDate: null,
+      inferredTime: null,
       detectedActivity,
       provisionalCategory,
+      candidateCategory: provisionalCategory || 'dj_tardeo',
+      estimatedPriceCents,
+    };
+  }
+
+  // Si tiene fecha pero no tiene hora: EVENTO_POSIBLE_SIN_HORA
+  if (detectedDate && !detectedTime) {
+    const provisionalTitle = generateTitle(detectedActivity, venueName, caption, detectedDate);
+    return {
+      classification: 'EVENTO_POSIBLE_SIN_HORA',
+      reason: `Detectada fecha (${detectedDate}) pero sin hora confirmada. Requiere revisión humana y asignación de hora válida para poder aprobar.`,
+      signals,
+      confidence: detectedActivity ? 'MEDIA' : 'BAJA',
+      detectedDate,
+      detectedTime: null,
+      inferredDate: detectedDate,
+      inferredTime: null,
+      detectedActivity,
+      provisionalCategory,
+      candidateCategory: provisionalCategory || 'dj_tardeo',
       provisionalTitle,
+      candidateTitle: provisionalTitle,
+      estimatedPriceCents,
+    };
+  }
+
+  // Si tiene fecha y hora: EVENTO_POSIBLE
+  if (detectedDate && detectedTime) {
+    const confidence = detectedActivity ? 'ALTA' : 'MEDIA';
+    const provisionalTitle = generateTitle(detectedActivity, venueName, caption, detectedDate);
+    return {
+      classification: 'EVENTO_POSIBLE',
+      reason: `Detectadas fecha (${detectedDate}) y hora (${detectedTime}) completas con ${signals.length} señales objetivas.`,
+      signals,
       confidence,
+      detectedDate,
+      detectedTime,
+      inferredDate: detectedDate,
+      inferredTime: detectedTime,
+      detectedActivity,
+      provisionalCategory,
+      candidateCategory: provisionalCategory || 'dj_tardeo',
+      provisionalTitle,
+      candidateTitle: provisionalTitle,
+      estimatedPriceCents,
     };
   }
 

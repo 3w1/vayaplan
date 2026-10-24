@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, resolveGoogleMapsUrl } from './index';
+import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, normalizePrice, resolveGoogleMapsUrl } from './index';
 
 describe('computeEditorialDate', () => {
   describe('Horario de verano (CEST, UTC+2)', () => {
@@ -274,6 +274,90 @@ describe('Conversión Horaria Robusta — Europe/Madrid a UTC (parseMadridWallCl
 
     test('is_free = true prevalece independientemente de price_cents', () => {
       expect(formatPriceLabel(1200, true)).toBe('Entrada libre');
+    });
+  });
+
+  describe('normalizePrice (Función única de normalización)', () => {
+    test('“12,50” → 12.50 numérico, 1250 céntimos, formato "12,50 €"', () => {
+      const res = normalizePrice('12,50');
+      expect(res.amount).toBe(12.5);
+      expect(res.numericString).toBe('12.50');
+      expect(res.priceCents).toBe(1250);
+      expect(res.formatted).toBe('12,50 €');
+      expect(res.isFree).toBe(false);
+    });
+
+    test('“12.50” → 12.50 numérico, 1250 céntimos, formato "12,50 €"', () => {
+      const res = normalizePrice('12.50');
+      expect(res.amount).toBe(12.5);
+      expect(res.numericString).toBe('12.50');
+      expect(res.priceCents).toBe(1250);
+      expect(res.formatted).toBe('12,50 €');
+      expect(res.isFree).toBe(false);
+    });
+
+    test('“12,5” → 12.50 numérico, 1250 céntimos', () => {
+      const res = normalizePrice('12,5');
+      expect(res.amount).toBe(12.5);
+      expect(res.numericString).toBe('12.50');
+      expect(res.priceCents).toBe(1250);
+      expect(res.formatted).toBe('12,50 €');
+      expect(res.isFree).toBe(false);
+    });
+
+    test('“12” → 12.00 numérico, 1200 céntimos', () => {
+      const res = normalizePrice('12');
+      expect(res.amount).toBe(12.0);
+      expect(res.numericString).toBe('12.00');
+      expect(res.priceCents).toBe(1200);
+      expect(res.formatted).toBe('12,00 €');
+      expect(res.isFree).toBe(false);
+    });
+
+    test('“0” → 0.00 numérico, 0 céntimos, isFree = true', () => {
+      const res = normalizePrice('0');
+      expect(res.amount).toBe(0.0);
+      expect(res.numericString).toBe('0.00');
+      expect(res.priceCents).toBe(0);
+      expect(res.formatted).toBe('0,00 €');
+      expect(res.isFree).toBe(true);
+    });
+
+    test('“abc” → error de validación', () => {
+      expect(() => normalizePrice('abc')).toThrow('Valor de precio no numérico');
+    });
+
+    test('“-5” → error de validación', () => {
+      expect(() => normalizePrice('-5')).toThrow('El precio no puede ser negativo');
+    });
+
+    test('“1.234,56” → 1234.56 con punto de miles y coma decimal', () => {
+      const res = normalizePrice('1.234,56');
+      expect(res.amount).toBe(1234.56);
+      expect(res.numericString).toBe('1234.56');
+      expect(res.priceCents).toBe(123456);
+      expect(res.formatted).toBe('1.234,56 €');
+      expect(res.isFree).toBe(false);
+    });
+
+    test('“1,234.56” → error de validación explícito (formato anglosajón ambiguo)', () => {
+      expect(() => normalizePrice('1,234.56')).toThrow('Formato de separador de miles anglosajón no permitido');
+    });
+
+    test('Limpia espacios, símbolos de euro y sufijos (" 12,50 € ", "12.50 EUR")', () => {
+      const r1 = normalizePrice(' 12,50 € ');
+      expect(r1.amount).toBe(12.5);
+      expect(r1.priceCents).toBe(1250);
+
+      const r2 = normalizePrice('12.50 EUR');
+      expect(r2.amount).toBe(12.5);
+      expect(r2.priceCents).toBe(1250);
+    });
+
+    test('Rechaza campos vacíos, nulos o indefinidos', () => {
+      expect(() => normalizePrice('')).toThrow('El precio es obligatorio');
+      expect(() => normalizePrice(null)).toThrow('El precio es obligatorio');
+      expect(() => normalizePrice(undefined)).toThrow('El precio es obligatorio');
     });
   });
 });

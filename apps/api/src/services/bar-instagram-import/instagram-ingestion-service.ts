@@ -2,6 +2,7 @@ import { query } from '@vayaplan/db';
 import { classifyBarPost } from './bar-classifier';
 import { uploadPostImageToR2 } from './r2-image-pipeline';
 import type { ApifyInstagramRawPost } from './bar-types';
+import { matchPostWithPublishedEvents, type ExistingEventRecord } from './event-matcher';
 import {
   acquirePersistentLock,
   releasePersistentLock,
@@ -184,6 +185,19 @@ export async function runInstagramIngestion(options: {
     const sourcesRes = await query(querySql, params);
     const sources: IngestionSourceRow[] = sourcesRes.rows;
 
+    // Cargar eventos existentes para matching defensivo y detección de duplicados
+    let existingEvents: ExistingEventRecord[] = [];
+    try {
+      const evRes = await query(
+        `SELECT id, venue_id, editorial_date, start_time, title, description, status, image_url
+         FROM events
+         WHERE status IN ('published', 'draft', 'tentative');`
+      );
+      existingEvents = evRes.rows;
+    } catch (evErr) {
+      console.warn('[Instagram Ingestion] No se pudieron cargar eventos existentes para matching:', evErr);
+    }
+
     for (const source of sources) {
       result.sourcesProcessed++;
       const sourceResult = {
@@ -223,44 +237,85 @@ export async function runInstagramIngestion(options: {
             const caption = post.caption || '';
             const postDate = post.timestamp ? post.timestamp.split('T')[0] : null;
 
-            // Clasificar post
-            const classificationResult = classifyBarPost(post);
+            // Clasificar post con motor de reglas
+            const classificationResult = classifyBarPost(post, source.venue_name);
 
-            // Regla editorial de fechas
-            let effectiveDate = classificationResult.inferredDate || postDate;
-            let effectiveTime = classificationResult.inferredTime || null;
+            // Matching defensivo con eventos publicados en el catálogo
+            const isNoDateTime =
+              classificationResult.classification === 'CONTENIDO_VENUE' ||
+              (!classificationResult.detectedDate && !classificationResult.detectedTime);
+
+            const matchEval = matchPostWithPublishedEvents(
+              {
+                venueId: source.venue_id,
+                proposedDate: classificationResult.detectedDate || null,
+                proposedTime: classificationResult.detectedTime || null,
+                title: classificationResult.candidateTitle || `Actividad en ${source.venue_name || 'local'}`,
+                caption,
+                imageUrl: post.displayUrl,
+                postPublishedAt: post.timestamp,
+                hasNoDateAndTime: isNoDateTime,
+              },
+              existingEvents
+            );
+
+            let effectiveDate: string | null = null;
+            let effectiveTime: string | null = null;
             let effectiveClassification = classificationResult.classification;
             let effectiveReviewStatus = 'pending';
             let effectiveRequiresManualReview = true;
+            let matchedEventId: number | null = matchEval.matchedEvent?.id || null;
+            let matchLevel: string | null = matchEval.matchLevel !== 'SIN_MATCH' ? matchEval.matchLevel : null;
+            let matchReasons: string | null = matchEval.signals.length > 0 ? matchEval.signals.join('; ') : null;
 
-            // Filtro de horario ("hasta las HH:MM")
-            const timeCheck = sanitizeProposedTime(caption, effectiveTime);
-            effectiveTime = timeCheck.time;
-            if (timeCheck.requiresRevision && effectiveClassification === 'EVENTO_POSIBLE') {
-              effectiveClassification = 'REQUIERE_REVISION';
-            }
-
-            if (!effectiveDate) {
-              effectiveClassification = 'REQUIERE_REVISION';
+            if (isNoDateTime) {
+              // Contenido de venue sin fecha ni hora
+              effectiveDate = null;
+              effectiveTime = null;
+              effectiveClassification = 'CONTENIDO_VENUE';
               effectiveReviewStatus = 'pending';
               effectiveRequiresManualReview = true;
-            } else if (effectiveDate < TODAY_EDITORIAL) {
-              effectiveClassification = 'PAST_EVENT';
-              effectiveReviewStatus = 'archived';
-              effectiveRequiresManualReview = false;
+            } else if (
+              matchEval.matchLevel === 'MATCH_EXACTO' ||
+              matchEval.matchLevel === 'MATCH_ALTO' ||
+              matchEval.matchLevel === 'MATCH_POSIBLE'
+            ) {
+              // Posible duplicado de evento ya existente en catálogo
+              effectiveDate = classificationResult.detectedDate || postDate;
+              effectiveTime = classificationResult.detectedTime || null;
+              effectiveClassification = 'DUPLICADO_POSIBLE';
+              effectiveReviewStatus = 'pending';
+              effectiveRequiresManualReview = true;
             } else {
-              // Hoy o futuro
-              effectiveClassification = 'EVENTO_POSIBLE';
-              effectiveReviewStatus = 'pending';
-              effectiveRequiresManualReview = true;
+              // Post con fecha identificada sin duplicados
+              effectiveDate = classificationResult.detectedDate || postDate;
+              effectiveTime = classificationResult.detectedTime || null;
+
+              // Filtro de horario ("hasta las HH:MM")
+              const timeCheck = sanitizeProposedTime(caption, effectiveTime);
+              effectiveTime = timeCheck.time;
+
+              if (effectiveDate && effectiveDate < TODAY_EDITORIAL) {
+                effectiveClassification = 'PAST_EVENT';
+                effectiveReviewStatus = 'archived';
+                effectiveRequiresManualReview = false;
+              } else if (!effectiveTime) {
+                effectiveClassification = 'EVENTO_POSIBLE_SIN_HORA';
+                effectiveReviewStatus = 'pending';
+                effectiveRequiresManualReview = true;
+              } else {
+                effectiveClassification = 'EVENTO_POSIBLE';
+                effectiveReviewStatus = 'pending';
+                effectiveRequiresManualReview = true;
+              }
             }
 
             // Normalización de dedupe_key
-            const normTitle = (classificationResult.candidateTitle || `${source.venue_name || 'Evento'} ${effectiveDate}`)
+            const normTitle = (classificationResult.candidateTitle || `${source.venue_name || 'Evento'} ${effectiveDate || 'sin-fecha'}`)
               .toLowerCase()
               .replace(/[^a-z0-9]/g, '-')
               .slice(0, 30);
-            const dedupeKey = `instagram#${source.venue_id}#${effectiveDate}#${effectiveTime || 'sin-hora'}#${normTitle}`;
+            const dedupeKey = `instagram#${source.venue_id}#${effectiveDate || 'sin-fecha'}#${effectiveTime || 'sin-hora'}#${normTitle}`;
 
             // Comprobar si ya existe en proposals o events
             const dupCheckProposal = await query(
@@ -317,22 +372,27 @@ export async function runInstagramIngestion(options: {
                 classification,
                 review_status,
                 requires_manual_review,
+                matched_event_id,
+                match_level,
+                match_reasons,
                 created_at,
                 updated_at
               ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, 'instagram',
                 $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                $18, $19, $20, $21, NOW(), NOW()
+                $18, $19, $20, $21, $22, $23, $24, NOW(), NOW()
               ) RETURNING id;
             `;
 
             await query(insertSql, [
-              classificationResult.candidateTitle || `Actividad en ${source.venue_name}`,
+              classificationResult.candidateTitle || `Actividad en ${source.venue_name || 'local'}`,
               effectiveDate,
               effectiveTime,
               source.venue_id,
               classificationResult.candidateCategory || 'dj_tardeo',
-              classificationResult.estimatedPriceCents ? Math.round(classificationResult.estimatedPriceCents / 100) : null,
+              classificationResult.estimatedPriceCents !== null && classificationResult.estimatedPriceCents !== undefined
+                ? Number((classificationResult.estimatedPriceCents / 100).toFixed(2))
+                : null,
               caption,
               post.url || `https://www.instagram.com/p/${shortCode}/`,
               source.instagram_username,
@@ -348,6 +408,9 @@ export async function runInstagramIngestion(options: {
               effectiveClassification,
               effectiveReviewStatus,
               effectiveRequiresManualReview,
+              matchedEventId,
+              matchLevel,
+              matchReasons,
             ]);
 
             sourceResult.proposalsCreated++;

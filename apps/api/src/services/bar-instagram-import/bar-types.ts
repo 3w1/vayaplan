@@ -5,11 +5,21 @@
 
 export type BarPostClassification =
   | 'EVENTO_POSIBLE'
+  | 'EVENTO_POSIBLE_SIN_HORA'
+  | 'CONTENIDO_VENUE'
+  | 'DUPLICADO_POSIBLE'
+  | 'SIN_MATCH'
   | 'PAST_EVENT'
   | 'PROMOCION'
   | 'CONTENIDO_GENERAL'
   | 'NO_RELEVANTE'
   | 'REQUIERE_REVISION';
+
+export type EventMatchLevel =
+  | 'MATCH_EXACTO'
+  | 'MATCH_ALTO'
+  | 'MATCH_POSIBLE'
+  | 'SIN_MATCH';
 
 export type BarProvisionalCategory =
   | 'musica_directo'
@@ -73,6 +83,15 @@ export interface PostClassificationResult {
   provisionalCategory?: BarProvisionalCategory;
   provisionalTitle?: string | null;
   confidence: 'ALTA' | 'MEDIA' | 'BAJA';
+  // Aliases y compatibilidad con pipelines
+  inferredDate?: string | null;
+  inferredTime?: string | null;
+  candidateCategory?: string | null;
+  candidateTitle?: string | null;
+  estimatedPriceCents?: number | null;
+  matchedEventId?: number | null;
+  matchLevel?: EventMatchLevel | null;
+  matchReasons?: string[] | null;
 }
 
 export interface UploadedR2Image {
@@ -106,6 +125,9 @@ export interface BarEventProposal {
   classification: BarPostClassification;
   requiresManualReview: boolean;
   reviewStatus: 'pending' | 'archived' | 'approved' | 'rejected';
+  matchedEventId?: number | null;
+  matchLevel?: EventMatchLevel | null;
+  matchReasons?: string[] | null;
   statusReason?: string;
   caption: string;
   postPublishedAt: string;
