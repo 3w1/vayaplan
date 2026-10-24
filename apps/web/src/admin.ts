@@ -17,6 +17,16 @@ export function renderVenueCategorySelectOptions(placeholder?: string): string {
 }
 
 /**
+ * Determina si una propuesta de curación corresponde a un evento continuo o exposición.
+ */
+export function isContinuousProposal(
+  proposal: { classification?: string | null; proposed_end_date?: string | null; proposed_date?: string | null } | null | undefined
+): boolean {
+  if (!proposal) return false;
+  return proposal.classification === 'EVENTO_CONTINUO' || Boolean(proposal.proposed_end_date && proposal.proposed_end_date !== proposal.proposed_date);
+}
+
+/**
  * Renderizador de la interfaz del Panel de Curación Administrativo (/admin)
  * Mobile-first, responsive, protegida por token JWT con soporte para gestión integral de eventos,
  * locales, recurrencias, lugares permanentes, códigos QR y visualización de métricas.
@@ -9828,6 +9838,12 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       return text;
     }
 
+    function isContinuousProposal(proposal) {
+      if (!proposal) return false;
+      return proposal.classification === 'EVENTO_CONTINUO' || Boolean(proposal.proposed_end_date && proposal.proposed_end_date !== proposal.proposed_date);
+    }
+    window.isContinuousProposal = isContinuousProposal;
+
     window.renderProposalsList = function(proposals) {
       const tbody = document.getElementById('proposals-tbody');
       const cards = document.getElementById('proposals-cards-container');
@@ -9839,13 +9855,13 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (currentProposalTab === 'events') {
         list = list.filter(p => (p.classification === 'EVENTO_POSIBLE' || p.classification === 'NUEVA_PROPUESTA') && p.review_status === 'pending');
       } else if (currentProposalTab === 'no_time') {
-        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) && p.classification !== 'CONTENIDO_VENUE' && p.classification !== 'EVENTO_CONTINUO' && p.review_status === 'pending');
+        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) && p.classification !== 'CONTENIDO_VENUE' && !isContinuousProposal(p) && p.review_status === 'pending');
       } else if (currentProposalTab === 'duplicates') {
         list = list.filter(p => p.classification === 'DUPLICADO_POSIBLE' || !!p.matched_event_id);
       } else if (currentProposalTab === 'venue_content') {
         list = list.filter(p => p.classification === 'CONTENIDO_VENUE');
       } else if (currentProposalTab === 'continuous') {
-        list = list.filter(p => p.classification === 'EVENTO_CONTINUO' || (p.proposed_end_date && p.proposed_end_date !== p.proposed_date));
+        list = list.filter(p => isContinuousProposal(p));
       } else if (currentProposalTab === 'ateneo') {
         list = list.filter(p => p.source_type === 'WEB_PROGRAMACION' || p.venue_id === 10149);
       } else if (currentProposalTab === 'archived') {
@@ -9894,9 +9910,9 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
                   ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">Promoción</span>'
                   : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">Archivado</span>')));
 
-          const isContinuousProposal = p.classification === 'EVENTO_CONTINUO' || (p.proposed_end_date && p.proposed_end_date !== p.proposed_date);
+          const isContinuous = isContinuousProposal(p);
 
-          const timeHtml = isContinuousProposal
+          const timeHtml = isContinuous
             ? (p.proposed_time
                 ? '<div style="font-weight:700; color:#6d28d9; font-size:0.875rem;">🏛️ De ' + escapeHtml(p.proposed_time) + (p.proposed_end_time ? ' a ' + escapeHtml(p.proposed_end_time) : '') + '</div>'
                 : (p.proposed_end_time
@@ -9983,7 +9999,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             '</td>' +
             '<td>' +
               '<div style="font-weight:600; font-size:0.875rem;">' + (
-                isContinuousProposal
+                isContinuous
                   ? '<span style="color:#6d28d9; font-weight:700;">Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') + '</span>'
                   : (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>')
               ) + '</div>' +
@@ -10027,6 +10043,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
                   ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">Promoción</span>'
                   : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">Archivado</span>')));
 
+          const isContinuous = isContinuousProposal(p);
+
           let matchAlertHtml = '';
           if (p.matched_event_id) {
             matchAlertHtml = '<div style="margin-top:0.5rem; padding:0.5rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; color:#991b1b;">' +
@@ -10042,6 +10060,13 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
                 '<span style="font-size:0.75rem; color:#64748b; align-self:center;">(Material local - no evento)</span>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
+              '</div>';
+            } else if (isContinuous) {
+              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
+                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Revisar y aprobar borrador continuo" style="background:#059669; border-color:#059669; font-weight:700;">✓ Aprobar Borrador</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
               '</div>';
             } else if (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) {
@@ -10087,8 +10112,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             '</div>' +
             matchAlertHtml +
             '<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">' +
-              '<span>📅 ' + (isContinuousProposal ? 'Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') : (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>')) + '</span>' +
-              '<span>' + (isContinuousProposal ? (p.proposed_time ? '🏛️ De ' + escapeHtml(p.proposed_time) + ' a ' + escapeHtml(p.proposed_end_time || '18:00') : (p.proposed_end_time ? '🏛️ De 08:00 a ' + escapeHtml(p.proposed_end_time) : '🏛️ De 08:00 a 18:00')) : (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '<span style="color:#d97706;">⚠️ Sin hora</span>')) + '</span>' +
+              '<span>📅 ' + (isContinuous ? 'Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') : (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>')) + '</span>' +
+              '<span>' + (isContinuous ? (p.proposed_time ? '🏛️ De ' + escapeHtml(p.proposed_time) + ' a ' + escapeHtml(p.proposed_end_time || '18:00') : (p.proposed_end_time ? '🏛️ De 08:00 a ' + escapeHtml(p.proposed_end_time) : '🏛️ De 08:00 a 18:00')) : (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '<span style="color:#d97706;">⚠️ Sin hora</span>')) + '</span>' +
               '<span>💶 ' + formatProposalPrice(p.price, p.price_status, p.price_note) + '</span>' +
               '<span>🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
             '</div>' +
@@ -10137,7 +10162,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         return;
       }
 
-      const isCont = prop.classification === 'EVENTO_CONTINUO' || Boolean(prop.proposed_end_date && prop.proposed_end_date !== prop.proposed_date);
+      const isContinuous = isContinuousProposal(prop);
+      const isCont = isContinuous;
       const contBadge = document.getElementById('approve-prop-continuous-badge');
       const contText = document.getElementById('approve-prop-continuous-text');
       const timeHint = document.getElementById('approve-prop-time-hint');
@@ -10312,7 +10338,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const description = (document.getElementById('approve-prop-desc-input')?.value || '').trim();
       const imageUrl = (document.getElementById('approve-prop-img-input')?.value || '').trim();
 
-      const isContinuous = (prop && prop.classification === 'EVENTO_CONTINUO') || Boolean(endDate && endDate !== date);
+      const isContinuous = isContinuousProposal(prop) || Boolean(endDate && endDate !== date);
 
       const errBox = document.getElementById('approve-prop-error');
       const dupBox = document.getElementById('approve-prop-duplicate-alert');
