@@ -213,28 +213,32 @@ adminProposalsRoutes.get('/proposals', async (c) => {
   const result = await query(sql, params);
   const rows = result.rows;
 
-  // Enriquecer con contraste de Taquilla.com para propuestas de Sala Infinity (ID 10052)
-  const hasInfinity = rows.some((r) => r.venue_id === SALA_INFINITY_VENUE_ID);
-  if (hasInfinity) {
-    try {
-      const taquillaEvents = await getCachedTaquillaEvents();
-      for (const p of rows) {
-        if (p.venue_id === SALA_INFINITY_VENUE_ID) {
-          p.taquilla_contrast = contrastProposalWithTaquilla(
-            {
-              venueId: p.venue_id,
-              title: p.title,
-              proposedDate: p.proposed_date,
-              proposedTime: p.proposed_time,
-              price: p.price,
-              caption: p.caption,
-            },
-            taquillaEvents
-          );
+  // Contraste con Taquilla.com para Sala Infinity: solo se ejecuta bajo demanda explícita
+  // para evitar sobrecargar o ralentizar la carga general de la bandeja de curación
+  const includeTaquilla = c.req.query('include_taquilla') === 'true';
+  if (includeTaquilla) {
+    const hasInfinity = rows.some((r) => r.venue_id === SALA_INFINITY_VENUE_ID);
+    if (hasInfinity) {
+      try {
+        const taquillaEvents = await getCachedTaquillaEvents();
+        for (const p of rows) {
+          if (p.venue_id === SALA_INFINITY_VENUE_ID) {
+            p.taquilla_contrast = contrastProposalWithTaquilla(
+              {
+                venueId: p.venue_id,
+                title: p.title,
+                proposedDate: p.proposed_date,
+                proposedTime: p.proposed_time,
+                price: p.price,
+                caption: p.caption,
+              },
+              taquillaEvents
+            );
+          }
         }
+      } catch {
+        // Degradar graciosamente sin bloquear la consulta administrativa
       }
-    } catch {
-      // Degradar graciosamente sin bloquear la consulta administrativa
     }
   }
 

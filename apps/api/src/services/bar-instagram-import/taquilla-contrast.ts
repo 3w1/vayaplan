@@ -12,8 +12,9 @@
 import { normalizePrice } from '@vayaplan/shared';
 
 export const SALA_INFINITY_VENUE_ID = 10052;
+export const TAQUILLA_VENUE_ID_SALA_INFINITY = '266051';
 export const TAQUILLA_SALA_INFINITY_URL = 'https://www.taquilla.com/palencia/sala-infinity-palencia';
-export const TAQUILLA_API_ENDPOINT = 'https://www.taquilla.com/json2/search/entities?lang=es&t10venue=266051';
+export const TAQUILLA_API_ENDPOINT = `https://www.taquilla.com/json2/search/entities?lang=es&t10venue=${TAQUILLA_VENUE_ID_SALA_INFINITY}`;
 
 export type TaquillaMatchLevel =
   | 'TAQUILLA_MATCH_EXACTO'
@@ -289,6 +290,7 @@ export async function fetchSalaInfinityTaquillaEvents(
         'User-Agent': 'VayaPlan-Editorial-Contrast/1.0 (+https://vayaplan.com)',
         'Accept': 'application/json',
       },
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!res.ok) {
