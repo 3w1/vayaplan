@@ -21,10 +21,14 @@ import { adminQrRoutes } from './routes/admin/qr';
 import { adminPromotionsRoutes } from './routes/admin/promotions';
 import { adminUploadsRoutes } from './routes/admin/uploads';
 import { adminGastronomicRoutes } from './routes/admin/gastronomic-routes';
+import { adminProposalsRoutes } from './routes/admin/proposals';
+import { adminInstagramIngestionRoutes } from './routes/admin/instagram-ingestion';
+import { internalInstagramIngestionRoutes } from './routes/internal/instagram-ingestion';
 import { publicUploadsRoutes } from './routes/uploads';
 import { whatsappWebhookRoutes } from './routes/webhooks/whatsapp';
 import { qrRedirectRoutes } from './routes/qr-redirect';
 import { startExpirationWorker, stopExpirationWorker } from './services/expiration';
+import { startInstagramIngestionCron, stopInstagramIngestionCron } from './services/bar-instagram-import/cron-scheduler';
 import { closePool } from '@vayaplan/db';
 
 export const app = new Hono();
@@ -87,9 +91,15 @@ app.route('/api/v1/admin', adminQrRoutes);
 app.route('/api/v1/admin', adminPromotionsRoutes);
 app.route('/api/v1/admin', adminUploadsRoutes);
 app.route('/api/v1/admin', adminGastronomicRoutes);
+app.route('/api/v1/admin', adminProposalsRoutes);
+app.route('/api/v1/admin', adminInstagramIngestionRoutes);
+app.route('/api/v1/internal', internalInstagramIngestionRoutes);
 
 // Iniciar worker de caducidad automática de eventos pasados
 startExpirationWorker();
+
+// Iniciar worker de cron de ingesta programada de Instagram (Miércoles y Viernes 12:00 Madrid)
+startInstagramIngestionCron();
 
 // Puerto de ejecución
 const port = Number(process.env.PORT || 4000);
@@ -112,6 +122,7 @@ const gracefulShutdown = async (signal: string) => {
     message: `Señal ${signal} recibida, cerrando conexiones ordenadamente...`,
   }));
   stopExpirationWorker();
+  stopInstagramIngestionCron();
   await closePool();
   process.exit(0);
 };
