@@ -1,0 +1,464 @@
+import { query } from '@vayaplan/db';
+import { classifyBarPost } from './bar-classifier';
+import { uploadPostImageToR2 } from './r2-image-pipeline';
+import type { ApifyInstagramRawPost } from './bar-types';
+import {
+  acquirePersistentLock,
+  releasePersistentLock,
+  getPersistentLockStatus,
+  DEFAULT_LOCK_KEY,
+  DEFAULT_LOCK_TTL_MINUTES,
+  type LockInfo,
+} from './persistent-lock';
+
+export interface IngestionSourceRow {
+  id: number;
+  venue_id: number;
+  venue_name?: string;
+  venue_slug?: string;
+  venue_address?: string;
+  instagram_username: string;
+  instagram_profile_url?: string;
+  is_active: boolean;
+  posts_per_run: number;
+  include_reels: boolean;
+  last_ingested_at?: string;
+  last_run_id?: string;
+  last_status: 'never_run' | 'success' | 'partial' | 'error';
+  last_error?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IngestionRunResult {
+  executionId: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  sourcesProcessed: number;
+  totalPostsScraped: number;
+  proposalsCreated: number;
+  duplicatesSkipped: number;
+  errors: Array<{ sourceId: number; username: string; error: string }>;
+  resultsBySource: Array<{
+    sourceId: number;
+    venueId: number;
+    username: string;
+    status: 'success' | 'partial' | 'error';
+    error?: string;
+    postsExtracted: number;
+    proposalsCreated: number;
+  }>;
+}
+
+// Lock en memoria para comprobaciones rápidas
+let isIngestionRunning = false;
+let currentRunStartedAt: string | null = null;
+
+export function isExecutionLocked(): { locked: boolean; startedAt: string | null; lockInfo?: LockInfo } {
+  return {
+    locked: isIngestionRunning,
+    startedAt: currentRunStartedAt,
+  };
+}
+
+export async function isExecutionLockedAsync(lockKey: string = DEFAULT_LOCK_KEY): Promise<{
+  locked: boolean;
+  startedAt: string | null;
+  lockInfo?: LockInfo;
+}> {
+  try {
+    const status = await getPersistentLockStatus(lockKey);
+    if (status.locked) {
+      return {
+        locked: true,
+        startedAt: status.lockInfo?.startedAt || currentRunStartedAt,
+        lockInfo: status.lockInfo,
+      };
+    }
+  } catch {
+    // Fallback a estado en memoria
+  }
+  return {
+    locked: isIngestionRunning,
+    startedAt: currentRunStartedAt,
+  };
+}
+
+/**
+ * Fecha de referencia editorial actual (Palencia)
+ */
+const TODAY_EDITORIAL = '2026-10-24';
+
+/**
+ * Filtra horas que correspondan a límites de venta o de cierre ("hasta las HH:MM", "entradas hasta...")
+ * Si solo se detectó una hora de cierre, debe retornarse null y clasificarse como REQUIERE_REVISION.
+ */
+function sanitizeProposedTime(caption: string, detectedTime: string | null): { time: string | null; requiresRevision: boolean } {
+  if (!detectedTime) return { time: null, requiresRevision: false };
+
+  const lower = (caption || '').toLowerCase();
+  // Patrones de hora de cierre / fin de taquilla
+  const untilRegex = new RegExp(`(?:hasta\\s+las?|entradas?\\s+hasta|cierre\\s+a\\s+las?|apertura\\s+hasta)\\s*${detectedTime}`, 'i');
+  if (untilRegex.test(lower)) {
+    return { time: null, requiresRevision: true };
+  }
+
+  return { time: detectedTime, requiresRevision: false };
+}
+
+/**
+ * Ejecutor principal de ingesta de Instagram para una lista de fuentes
+ */
+export async function runInstagramIngestion(options: {
+  sourceIds?: number[];
+  onlyActive?: boolean;
+  executionType?: 'manual_single' | 'manual_selected' | 'manual_all' | 'cron_scheduled';
+  mockPostsProvider?: (username: string, limit: number) => Promise<ApifyInstagramRawPost[]>;
+}): Promise<IngestionRunResult> {
+  const executionId = `ig_run_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const startedAt = new Date().toISOString();
+
+  // 1. Adquirir lock persistente en PostgreSQL con exclusión mutua
+  const lockAcquire = await acquirePersistentLock({
+    lockKey: DEFAULT_LOCK_KEY,
+    lockedBy: executionId,
+    ttlMinutes: DEFAULT_LOCK_TTL_MINUTES,
+    executionDetails: {
+      executionType: options.executionType || 'manual',
+      sourceIds: options.sourceIds || [],
+      onlyActive: options.onlyActive,
+      startedAt,
+    },
+  });
+
+  if (!lockAcquire.success) {
+    const lockStarted = lockAcquire.lockInfo?.startedAt || currentRunStartedAt || 'recientemente';
+    const error: any = new Error(
+      `Ya existe una ejecución de ingesta en curso iniciada a las ${lockStarted}. No se permiten ejecuciones concurrentes.`
+    );
+    error.status = 409;
+    error.statusCode = 409;
+    error.lockInfo = lockAcquire.lockInfo;
+    throw error;
+  }
+
+  isIngestionRunning = true;
+  currentRunStartedAt = startedAt;
+
+  const result: IngestionRunResult = {
+    executionId,
+    startedAt,
+    completedAt: '',
+    durationMs: 0,
+    sourcesProcessed: 0,
+    totalPostsScraped: 0,
+    proposalsCreated: 0,
+    duplicatesSkipped: 0,
+    errors: [],
+    resultsBySource: [],
+  };
+
+  try {
+    // 1. Obtener las fuentes a procesar
+    let querySql = `
+      SELECT s.*, v.name AS venue_name, v.slug AS venue_slug, v.address AS venue_address
+      FROM instagram_ingestion_sources s
+      JOIN venues v ON s.venue_id = v.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+
+    if (options.onlyActive) {
+      querySql += ` AND s.is_active = true`;
+    }
+
+    if (options.sourceIds && options.sourceIds.length > 0) {
+      params.push(options.sourceIds);
+      querySql += ` AND s.id = ANY($${params.length})`;
+    }
+
+    querySql += ` ORDER BY s.id ASC;`;
+
+    const sourcesRes = await query(querySql, params);
+    const sources: IngestionSourceRow[] = sourcesRes.rows;
+
+    for (const source of sources) {
+      result.sourcesProcessed++;
+      const sourceResult = {
+        sourceId: source.id,
+        venueId: source.venue_id,
+        username: source.instagram_username,
+        status: 'success' as 'success' | 'partial' | 'error',
+        error: undefined as string | undefined,
+        postsExtracted: 0,
+        proposalsCreated: 0,
+      };
+
+      try {
+        const postsLimit = Math.min(Math.max(source.posts_per_run || 5, 1), 20);
+        let posts: ApifyInstagramRawPost[] = [];
+
+        if (options.mockPostsProvider) {
+          posts = await options.mockPostsProvider(source.instagram_username, postsLimit);
+        } else {
+          // En modo producción / Apify, si hay token de Apify disponible
+          posts = await fetchPostsFromApify(source.instagram_username, postsLimit, source.include_reels);
+        }
+
+        sourceResult.postsExtracted = posts.length;
+        result.totalPostsScraped += posts.length;
+
+        let sourceErrors = 0;
+
+        for (const post of posts) {
+          try {
+            // Respetar include_reels
+            if (!source.include_reels && (post.type === 'Video' || post.videoUrl)) {
+              continue;
+            }
+
+            const shortCode = post.shortCode || post.id || '';
+            const caption = post.caption || '';
+            const postDate = post.timestamp ? post.timestamp.split('T')[0] : null;
+
+            // Clasificar post
+            const classificationResult = classifyBarPost(post);
+
+            // Regla editorial de fechas
+            let effectiveDate = classificationResult.inferredDate || postDate;
+            let effectiveTime = classificationResult.inferredTime || null;
+            let effectiveClassification = classificationResult.classification;
+            let effectiveReviewStatus = 'pending';
+            let effectiveRequiresManualReview = true;
+
+            // Filtro de horario ("hasta las HH:MM")
+            const timeCheck = sanitizeProposedTime(caption, effectiveTime);
+            effectiveTime = timeCheck.time;
+            if (timeCheck.requiresRevision && effectiveClassification === 'EVENTO_POSIBLE') {
+              effectiveClassification = 'REQUIERE_REVISION';
+            }
+
+            if (!effectiveDate) {
+              effectiveClassification = 'REQUIERE_REVISION';
+              effectiveReviewStatus = 'pending';
+              effectiveRequiresManualReview = true;
+            } else if (effectiveDate < TODAY_EDITORIAL) {
+              effectiveClassification = 'PAST_EVENT';
+              effectiveReviewStatus = 'archived';
+              effectiveRequiresManualReview = false;
+            } else {
+              // Hoy o futuro
+              effectiveClassification = 'EVENTO_POSIBLE';
+              effectiveReviewStatus = 'pending';
+              effectiveRequiresManualReview = true;
+            }
+
+            // Normalización de dedupe_key
+            const normTitle = (classificationResult.candidateTitle || `${source.venue_name || 'Evento'} ${effectiveDate}`)
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, '-')
+              .slice(0, 30);
+            const dedupeKey = `instagram#${source.venue_id}#${effectiveDate}#${effectiveTime || 'sin-hora'}#${normTitle}`;
+
+            // Comprobar si ya existe en proposals o events
+            const dupCheckProposal = await query(
+              `SELECT id FROM curation_proposals WHERE dedupe_key = $1 OR instagram_post_shortcode = $2 LIMIT 1;`,
+              [dedupeKey, shortCode]
+            );
+            const dupCheckEvent = await query(
+              `SELECT id FROM events WHERE dedupe_key = $1 LIMIT 1;`,
+              [dedupeKey]
+            );
+
+            if (dupCheckProposal.rows.length > 0 || dupCheckEvent.rows.length > 0) {
+              result.duplicatesSkipped++;
+              continue;
+            }
+
+            // Si no tiene imagen o displayUrl, o la imagen falla, no crear propuesta parcial
+            if (!post.displayUrl) {
+              continue;
+            }
+
+            // Subir imagen a Cloudflare R2
+            let r2Image;
+            try {
+              r2Image = await uploadPostImageToR2(post, source.venue_slug || `venue-${source.venue_id}`);
+            } catch (imgErr: any) {
+              console.warn(`[Instagram Ingestion] Fallo en imagen para ${shortCode}:`, imgErr.message);
+              sourceErrors++;
+              continue;
+            }
+
+            // Insertar propuesta en curation_proposals
+            const insertSql = `
+              INSERT INTO curation_proposals (
+                title,
+                proposed_date,
+                proposed_time,
+                venue_id,
+                category,
+                price,
+                caption,
+                source_url,
+                source_type,
+                instagram_username,
+                instagram_post_shortcode,
+                r2_key,
+                image_url,
+                image_width,
+                image_height,
+                image_content_type,
+                image_size_bytes,
+                confidence,
+                dedupe_key,
+                classification,
+                review_status,
+                requires_manual_review,
+                created_at,
+                updated_at
+              ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, 'instagram',
+                $9, $10, $11, $12, $13, $14, $15, $16, $17,
+                $18, $19, $20, $21, NOW(), NOW()
+              ) RETURNING id;
+            `;
+
+            await query(insertSql, [
+              classificationResult.candidateTitle || `Actividad en ${source.venue_name}`,
+              effectiveDate,
+              effectiveTime,
+              source.venue_id,
+              classificationResult.candidateCategory || 'dj_tardeo',
+              classificationResult.estimatedPriceCents ? Math.round(classificationResult.estimatedPriceCents / 100) : null,
+              caption,
+              post.url || `https://www.instagram.com/p/${shortCode}/`,
+              source.instagram_username,
+              shortCode,
+              r2Image.r2Key,
+              r2Image.finalUrl,
+              r2Image.width,
+              r2Image.height,
+              r2Image.contentType,
+              r2Image.sizeBytes,
+              classificationResult.confidence || 'MEDIA',
+              dedupeKey,
+              effectiveClassification,
+              effectiveReviewStatus,
+              effectiveRequiresManualReview,
+            ]);
+
+            sourceResult.proposalsCreated++;
+            result.proposalsCreated++;
+          } catch (postErr: any) {
+            console.error(`Error procesando post ${post.shortCode}:`, postErr);
+            sourceErrors++;
+          }
+        }
+
+        if (sourceErrors > 0 && sourceResult.proposalsCreated > 0) {
+          sourceResult.status = 'partial';
+        } else if (sourceErrors > 0 && sourceResult.proposalsCreated === 0) {
+          sourceResult.status = 'error';
+          sourceResult.error = 'Fallaron todas las publicaciones procesadas.';
+        } else {
+          sourceResult.status = 'success';
+        }
+
+        // Actualizar estado en instagram_ingestion_sources
+        await query(
+          `UPDATE instagram_ingestion_sources
+           SET last_ingested_at = NOW(),
+               last_run_id = $1,
+               last_status = $2,
+               last_error = $3,
+               updated_at = NOW()
+           WHERE id = $4;`,
+          [executionId, sourceResult.status, sourceResult.error || null, source.id]
+        );
+      } catch (srcErr: any) {
+        sourceResult.status = 'error';
+        sourceResult.error = srcErr.message || String(srcErr);
+        result.errors.push({
+          sourceId: source.id,
+          username: source.instagram_username,
+          error: sourceResult.error,
+        });
+
+        await query(
+          `UPDATE instagram_ingestion_sources
+           SET last_ingested_at = NOW(),
+               last_run_id = $1,
+               last_status = 'error',
+               last_error = $2,
+               updated_at = NOW()
+           WHERE id = $3;`,
+          [executionId, sourceResult.error, source.id]
+        );
+      }
+
+      result.resultsBySource.push(sourceResult);
+    }
+  } finally {
+    isIngestionRunning = false;
+    currentRunStartedAt = null;
+    result.completedAt = new Date().toISOString();
+    result.durationMs = new Date(result.completedAt).getTime() - new Date(startedAt).getTime();
+    try {
+      await releasePersistentLock(DEFAULT_LOCK_KEY, executionId);
+    } catch (releaseErr) {
+      console.error('Error al liberar lock persistente de ingesta:', releaseErr);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Llamada real al scraper de Apify (apify/instagram-post-scraper)
+ */
+async function fetchPostsFromApify(username: string, limit: number, includeReels: boolean): Promise<ApifyInstagramRawPost[]> {
+  const apifyToken = process.env.APIFY_TOKEN;
+  if (!apifyToken) {
+    throw new Error('APIFY_TOKEN no configurado en el entorno.');
+  }
+
+  const endpoint = `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(apifyToken)}`;
+  const input = {
+    username: [username],
+    resultsLimit: limit,
+    skipPinnedPosts: false,
+    includeReels: includeReels,
+  };
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(60000), // 60s timeout
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text().catch(() => '');
+    throw new Error(`Fallo en Apify Instagram Post Scraper (HTTP ${res.status}): ${errorBody.slice(0, 200)}`);
+  }
+
+  const items = (await res.json()) as any[];
+  return items.map((item) => ({
+    id: item.id || item.shortCode,
+    shortCode: item.shortCode || item.code || item.id,
+    type: item.type || (item.videoUrl ? 'Video' : 'Image'),
+    url: item.url || `https://www.instagram.com/p/${item.shortCode}/`,
+    displayUrl: item.displayUrl || item.imageUrl || item.thumbnailUrl,
+    caption: item.caption || item.text || '',
+    timestamp: item.timestamp || item.takenAt || null,
+    likesCount: item.likesCount || 0,
+    commentsCount: item.commentsCount || 0,
+    dimensionsWidth: item.dimensionsWidth || 1080,
+    dimensionsHeight: item.dimensionsHeight || 1080,
+    ownerUsername: item.ownerUsername || username,
+    taggedUsers: item.taggedUsers || [],
+  }));
+}
