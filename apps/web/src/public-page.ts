@@ -2215,7 +2215,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       if (!evOrIso) return '';
       if (typeof evOrIso === 'object') {
         const ev = evOrIso;
-        if (ev.time_status === 'pending_time' || !ev.start_time) {
+        if (ev.time_status === 'continuous' || (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date)) {
+          if (ev.editorial_date && ev.end_date) {
+            return \`DEL \${formatDateSpanish(ev.editorial_date).toUpperCase()} AL \${formatDateSpanish(ev.end_date).toUpperCase()}\`;
+          }
+          return 'EXPOSICIÓN EN CURSO';
+        }
+        if (ev.time_status === 'pending_time' || (!ev.start_time && ev.time_status !== 'continuous')) {
           if (ev.editorial_date) {
             const parts = ev.editorial_date.split('-').map(Number);
             const date = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
@@ -2225,9 +2231,6 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             return \`\${weekday} \${day} \${month} · HORARIO POR CONFIRMAR\`;
           }
           return 'HORARIO POR CONFIRMAR';
-        }
-        if (ev.end_date && ev.editorial_date && ev.end_date > ev.editorial_date) {
-          return 'EXPOSICIÓN EN CURSO';
         }
         return formatPromotedHeroDateTime(ev.start_time);
       }

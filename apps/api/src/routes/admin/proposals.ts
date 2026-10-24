@@ -501,10 +501,20 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
     startTimeIso = null;
     if (body.schedule_text) {
       scheduleText = String(body.schedule_text).trim();
-    } else if (body.start_time || effectiveTime) {
-      const st = (body.start_time || effectiveTime).trim();
+    } else {
+      const st = (body.start_time || body.proposed_time || effectiveTime || '').trim();
       const et = (body.end_time || body.proposed_end_time || proposal.proposed_end_time || '').trim();
-      scheduleText = et ? `${st} - ${et}` : `${st}h`;
+      if (st && et) {
+        scheduleText = `De ${st} a ${et}`;
+      } else if (et === '18:00' || et === '18:00:00') {
+        scheduleText = 'De 08:00 a 18:00';
+      } else if (st) {
+        scheduleText = `${st}h`;
+      } else if (et) {
+        scheduleText = `De 08:00 a ${et}`;
+      } else {
+        scheduleText = 'De 08:00 a 18:00';
+      }
     }
   } else {
     // Evento puntual: hora obligatoria (HH:mm) para crear el borrador

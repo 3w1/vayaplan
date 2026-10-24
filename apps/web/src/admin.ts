@@ -9898,8 +9898,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
           const timeHtml = isContinuousProposal
             ? (p.proposed_time
-                ? '<div style="font-weight:700; color:#6d28d9; font-size:0.875rem;">🏛️ ' + escapeHtml(p.proposed_time) + (p.proposed_end_time ? ' - ' + escapeHtml(p.proposed_end_time) : ' h') + '</div>'
-                : '<div style="font-size:0.75rem; color:#6d28d9; font-weight:600;">🏛️ Continuo (horario sala)</div>')
+                ? '<div style="font-weight:700; color:#6d28d9; font-size:0.875rem;">🏛️ De ' + escapeHtml(p.proposed_time) + (p.proposed_end_time ? ' a ' + escapeHtml(p.proposed_end_time) : '') + '</div>'
+                : (p.proposed_end_time
+                    ? '<div style="font-weight:700; color:#6d28d9; font-size:0.875rem;">🏛️ De 08:00 a ' + escapeHtml(p.proposed_end_time) + '</div>'
+                    : '<div style="font-size:0.75rem; color:#6d28d9; font-weight:600;">🏛️ Continuo (De 08:00 a 18:00)</div>'))
             : (p.proposed_time
                 ? '<div style="font-weight:700; color:var(--text-main); font-size:0.875rem;">⏰ ' + escapeHtml(p.proposed_time) + ' h</div>'
                 : '<div style="font-size:0.75rem; color:#d97706; font-weight:600;">⚠️ Sin hora</div>');
@@ -10086,7 +10088,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             matchAlertHtml +
             '<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">' +
               '<span>📅 ' + (isContinuousProposal ? 'Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') : (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>')) + '</span>' +
-              '<span>' + (isContinuousProposal ? '🏛️ Continuo' : (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '<span style="color:#d97706;">⚠️ Sin hora</span>')) + '</span>' +
+              '<span>' + (isContinuousProposal ? (p.proposed_time ? '🏛️ De ' + escapeHtml(p.proposed_time) + ' a ' + escapeHtml(p.proposed_end_time || '18:00') : (p.proposed_end_time ? '🏛️ De 08:00 a ' + escapeHtml(p.proposed_end_time) : '🏛️ De 08:00 a 18:00')) : (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '<span style="color:#d97706;">⚠️ Sin hora</span>')) + '</span>' +
               '<span>💶 ' + formatProposalPrice(p.price, p.price_status, p.price_note) + '</span>' +
               '<span>🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
             '</div>' +
@@ -10153,8 +10155,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       document.getElementById('approve-prop-title-input').value = prop.title || '';
       document.getElementById('approve-prop-date-input').value = prop.proposed_date || '';
       document.getElementById('approve-prop-end-date-input').value = prop.proposed_end_date || '';
-      document.getElementById('approve-prop-time-input').value = prop.proposed_time || '';
-      document.getElementById('approve-prop-end-time-input').value = prop.proposed_end_time || '';
+      document.getElementById('approve-prop-time-input').value = prop.proposed_time || (isContinuous && prop.proposed_end_time ? '08:00' : '');
+      document.getElementById('approve-prop-end-time-input').value = prop.proposed_end_time || (isContinuous ? '18:00' : '');
       document.getElementById('approve-prop-venue-select').value = prop.venue_id ? String(prop.venue_id) : '';
       document.getElementById('approve-prop-category-select').value = prop.category || 'dj_tardeo';
 
