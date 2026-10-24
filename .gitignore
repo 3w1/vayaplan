@@ -15,6 +15,7 @@ listado_locales.txt
 scratch/
 output/
 data/
+apps/api/src/services/bar-instagram-import/*.json
 infra/backup/check_backup_stale.*
 pnpm-lock.yaml
 infra/scripts/execute_*.sql
