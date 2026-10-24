@@ -4745,6 +4745,7 @@ export function renderAdminHtml(): string {
         const res = await apiFetch('/api/v1/admin/venues?all=true');
         const data = await res.json();
         cachedVenues = data.venues || [];
+        window.cachedVenues = cachedVenues;
 
         // Rellenar selects
         const selects = ['rec-venue-id'];
@@ -11038,6 +11039,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources');
         const data = await res.json();
         cachedSources = data.sources || [];
+        window.cachedSources = cachedSources;
         selectedSourceIds.clear();
         updateSelectedSourcesButtons();
 
@@ -11294,8 +11296,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const words = q.split(/\s+/).filter(Boolean);
 
       const scored = [];
+      const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+      const sourcesList = (typeof cachedSources !== 'undefined' && cachedSources.length > 0) ? cachedSources : (window.cachedSources || []);
 
-      (cachedVenues || []).forEach(function(v) {
+      venuesList.forEach(function(v) {
         const nameNorm = normalizeSearchStr(v.name);
         const nameNoSpaces = nameNorm.replace(/[^a-z0-9]/g, '');
         const handleNorm = normalizeSearchStr(v.instagram_handle || '');
@@ -11324,7 +11328,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         }
 
         if (score > 0) {
-          const existingSource = (cachedSources || []).find(function(s) { return s.venue_id === v.id; });
+          const existingSource = sourcesList.find(function(s) { return s.venue_id === v.id; });
           scored.push({
             venue: v,
             score: score,
@@ -11403,25 +11407,25 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (!container || container.style.display === 'none') return;
 
       if (event.key === 'ArrowDown') {
-        event.preventDefault();
+        if (event.preventDefault) event.preventDefault();
         const nextIdx = Math.min(addSourceActiveIndex + 1, addSourceCurrentResults.length - 1);
         setAddSourceActiveIndex(nextIdx);
         const opt = document.getElementById('venue-opt-' + nextIdx);
-        if (opt) opt.scrollIntoView({ block: 'nearest' });
+        if (opt && opt.scrollIntoView) opt.scrollIntoView({ block: 'nearest' });
       } else if (event.key === 'ArrowUp') {
-        event.preventDefault();
+        if (event.preventDefault) event.preventDefault();
         const prevIdx = Math.max(addSourceActiveIndex - 1, 0);
         setAddSourceActiveIndex(prevIdx);
         const opt = document.getElementById('venue-opt-' + prevIdx);
-        if (opt) opt.scrollIntoView({ block: 'nearest' });
+        if (opt && opt.scrollIntoView) opt.scrollIntoView({ block: 'nearest' });
       } else if (event.key === 'Enter') {
-        event.preventDefault();
-        event.stopPropagation();
+        if (event.preventDefault) event.preventDefault();
+        if (event.stopPropagation) event.stopPropagation();
         if (addSourceActiveIndex >= 0 && addSourceActiveIndex < addSourceCurrentResults.length) {
           selectAddSourceVenue(addSourceCurrentResults[addSourceActiveIndex].venue.id);
         }
       } else if (event.key === 'Escape') {
-        event.preventDefault();
+        if (event.preventDefault) event.preventDefault();
         container.style.display = 'none';
         const searchInput = document.getElementById('add-source-venue-search');
         if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
@@ -11429,7 +11433,9 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.selectAddSourceVenue = function(venueId) {
-      const v = (cachedVenues || []).find(function(item) { return item.id === venueId; });
+      const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+      const sourcesList = (typeof cachedSources !== 'undefined' && cachedSources.length > 0) ? cachedSources : (window.cachedSources || []);
+      const v = venuesList.find(function(item) { return item.id === venueId; });
       if (!v) return;
 
       // Cerrar dropdown de búsqueda
@@ -11456,7 +11462,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (addrEl) addrEl.innerText = v.address || v.city_name || '';
 
       // Comprobar fuentes existentes y datos de Instagram
-      const existingSource = (cachedSources || []).find(function(s) { return s.venue_id === v.id; });
+      const existingSource = sourcesList.find(function(s) { return s.venue_id === v.id; });
       const statusBanner = document.getElementById('add-source-venue-status-banner');
       const submitBtn = document.getElementById('btn-submit-add-source');
       const isEditInput = document.getElementById('add-source-is-edit');
@@ -11634,7 +11640,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       // Comprobar conflicto con otro venue
       const currentVenueId = parseInt(document.getElementById('add-source-venue-id')?.value, 10);
-      const conflictSource = (cachedSources || []).find(function(s) {
+      const sourcesList = (typeof cachedSources !== 'undefined' && cachedSources.length > 0) ? cachedSources : (window.cachedSources || []);
+      const conflictSource = sourcesList.find(function(s) {
         return s.instagram_username.toLowerCase() === res.username.toLowerCase() && s.venue_id !== currentVenueId;
       });
 

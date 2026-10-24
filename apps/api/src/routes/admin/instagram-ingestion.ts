@@ -128,21 +128,34 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources', async (c) => 
     RETURNING *;
   `;
 
-  const insertRes = await query(insertSql, [
-    venueId,
-    username,
-    profileUrl,
-    isActive,
-    postsPerRun,
-    includeReels,
-    userEmail,
-  ]);
+  try {
+    const insertRes = await query(insertSql, [
+      venueId,
+      username,
+      profileUrl,
+      isActive,
+      postsPerRun,
+      includeReels,
+      userEmail,
+    ]);
 
-  return c.json({
-    success: true,
-    message: `Fuente de ingesta configurada exitosamente para "${venueRes.rows[0].name}" (@${username}).`,
-    source: insertRes.rows[0],
-  }, 201);
+    return c.json({
+      success: true,
+      message: `Fuente de ingesta configurada exitosamente para "${venueRes.rows[0].name}" (@${username}).`,
+      source: insertRes.rows[0],
+    }, 201);
+  } catch (err: any) {
+    if (err?.code === '23505') {
+      if (err.constraint === 'uq_ingestion_venue') {
+        return c.json({ error: 'duplicate_venue', message: `El venue "${venueRes.rows[0].name}" ya tiene una fuente de ingesta configurada.` }, 409);
+      }
+      if (err.constraint === 'uq_ingestion_username') {
+        return c.json({ error: 'duplicate_username', message: `El perfil de Instagram @${username} ya está asociado a otra fuente de ingesta.` }, 409);
+      }
+      return c.json({ error: 'conflict', message: 'Conflicto de unicidad en la configuración de la fuente.' }, 409);
+    }
+    throw err;
+  }
 });
 
 /**
@@ -214,20 +227,27 @@ adminInstagramIngestionRoutes.patch('/instagram-ingestion-sources/:id', async (c
     RETURNING *;
   `;
 
-  const updateRes = await query(updateSql, [
-    username,
-    profileUrl,
-    postsPerRun,
-    includeReels,
-    isActive,
-    id,
-  ]);
+  try {
+    const updateRes = await query(updateSql, [
+      username,
+      profileUrl,
+      postsPerRun,
+      includeReels,
+      isActive,
+      id,
+    ]);
 
-  return c.json({
-    success: true,
-    message: 'Fuente de ingesta actualizada.',
-    source: updateRes.rows[0],
-  });
+    return c.json({
+      success: true,
+      message: 'Fuente de ingesta actualizada.',
+      source: updateRes.rows[0],
+    });
+  } catch (err: any) {
+    if (err?.code === '23505') {
+      return c.json({ error: 'duplicate_username', message: `El perfil @${username} ya está en uso por otra fuente.` }, 409);
+    }
+    throw err;
+  }
 });
 
 /**
