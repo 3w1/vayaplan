@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, normalizePrice, resolveGoogleMapsUrl } from './index';
+import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, normalizePrice, parseAndNormalizeInstagramInput, resolveGoogleMapsUrl } from './index';
 
 describe('computeEditorialDate', () => {
   describe('Horario de verano (CEST, UTC+2)', () => {
@@ -361,3 +361,114 @@ describe('Conversión Horaria Robusta — Europe/Madrid a UTC (parseMadridWallCl
     });
   });
 });
+
+describe('parseAndNormalizeInstagramInput', () => {
+  test('acepta username simple en minúsculas', () => {
+      const res = parseAndNormalizeInstagramInput('bar_linamorganfreeman');
+      expect(res.isValid).toBe(true);
+      expect(res.username).toBe('bar_linamorganfreeman');
+      expect(res.canonicalUrl).toBe('https://www.instagram.com/bar_linamorganfreeman/');
+      expect(res.error).toBeUndefined();
+    });
+
+    test('convierte username en mayúsculas a minúsculas', () => {
+      const res = parseAndNormalizeInstagramInput('LinaMorganFreeman');
+      expect(res.isValid).toBe(true);
+      expect(res.username).toBe('linamorganfreeman');
+      expect(res.canonicalUrl).toBe('https://www.instagram.com/linamorganfreeman/');
+    });
+
+    test('limpia prefijos @ o @@', () => {
+      const res1 = parseAndNormalizeInstagramInput('@bar_linamorganfreeman');
+      expect(res1.isValid).toBe(true);
+      expect(res1.username).toBe('bar_linamorganfreeman');
+      expect(res1.canonicalUrl).toBe('https://www.instagram.com/bar_linamorganfreeman/');
+
+      const res2 = parseAndNormalizeInstagramInput('@@ateneopalencia');
+      expect(res2.isValid).toBe(true);
+      expect(res2.username).toBe('ateneopalencia');
+    });
+
+    test('acepta y canonicaliza URL completa https://www.instagram.com/user/', () => {
+      const res = parseAndNormalizeInstagramInput('https://www.instagram.com/bar_linamorganfreeman/');
+      expect(res.isValid).toBe(true);
+      expect(res.username).toBe('bar_linamorganfreeman');
+      expect(res.canonicalUrl).toBe('https://www.instagram.com/bar_linamorganfreeman/');
+    });
+
+    test('acepta URL sin https o con m.instagram.com', () => {
+      const res1 = parseAndNormalizeInstagramInput('instagram.com/bar_linamorganfreeman');
+      expect(res1.isValid).toBe(true);
+      expect(res1.username).toBe('bar_linamorganfreeman');
+      expect(res1.canonicalUrl).toBe('https://www.instagram.com/bar_linamorganfreeman/');
+
+      const res2 = parseAndNormalizeInstagramInput('https://m.instagram.com/ateneopalencia');
+      expect(res2.isValid).toBe(true);
+      expect(res2.username).toBe('ateneopalencia');
+      expect(res2.canonicalUrl).toBe('https://www.instagram.com/ateneopalencia/');
+    });
+
+    test('elimina parámetros de seguimiento (?igsh=..., utm_source, etc.)', () => {
+      const res = parseAndNormalizeInstagramInput(
+        'https://www.instagram.com/bar_linamorganfreeman/?igsh=MWQ1ZGUxMzBkMA%3D%3D&utm_source=qr&utm_medium=social'
+      );
+      expect(res.isValid).toBe(true);
+      expect(res.username).toBe('bar_linamorganfreeman');
+      expect(res.canonicalUrl).toBe('https://www.instagram.com/bar_linamorganfreeman/');
+    });
+
+    test('rechaza URLs a publicaciones (/p/)', () => {
+      const res = parseAndNormalizeInstagramInput('https://www.instagram.com/p/C-xyz12345/');
+      expect(res.isValid).toBe(false);
+      expect(res.username).toBeNull();
+      expect(res.canonicalUrl).toBeNull();
+      expect(res.error).toContain('publicaciones');
+    });
+
+    test('rechaza URLs a reels (/reel/ o /reels/)', () => {
+      const res = parseAndNormalizeInstagramInput('https://www.instagram.com/reel/C-xyz12345/');
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('reels');
+    });
+
+    test('rechaza URLs a stories o explore', () => {
+      const res1 = parseAndNormalizeInstagramInput('https://www.instagram.com/stories/bar_linamorganfreeman/1234567/');
+      expect(res1.isValid).toBe(false);
+      expect(res1.error).toContain('stories');
+
+      const res2 = parseAndNormalizeInstagramInput('https://www.instagram.com/explore/');
+      expect(res2.isValid).toBe(false);
+    });
+
+    test('rechaza dominios que no pertenecen a instagram.com', () => {
+      const res1 = parseAndNormalizeInstagramInput('https://facebook.com/bar_linamorganfreeman');
+      expect(res1.isValid).toBe(false);
+      expect(res1.error).toContain('instagram.com');
+
+      const res2 = parseAndNormalizeInstagramInput('https://fake-instagram.com/bar_linamorganfreeman');
+      expect(res2.isValid).toBe(false);
+      expect(res2.error).toContain('instagram.com');
+    });
+
+    test('rechaza URL sin nombre de usuario', () => {
+      const res = parseAndNormalizeInstagramInput('https://www.instagram.com/');
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('nombre de usuario');
+    });
+
+    test('rechaza cadenas vacías, nulas o con tipos no válidos', () => {
+      expect(parseAndNormalizeInstagramInput('').isValid).toBe(false);
+      expect(parseAndNormalizeInstagramInput('   ').isValid).toBe(false);
+      expect(parseAndNormalizeInstagramInput(null).isValid).toBe(false);
+      expect(parseAndNormalizeInstagramInput(undefined).isValid).toBe(false);
+      expect(parseAndNormalizeInstagramInput(12345).isValid).toBe(false);
+    });
+
+    test('rechaza usuarios con caracteres no permitidos o longitud incorrecta', () => {
+      const res1 = parseAndNormalizeInstagramInput('a'); // Demasiado corto
+      expect(res1.isValid).toBe(false);
+
+      const res2 = parseAndNormalizeInstagramInput('user!name?'); // Caracteres inválidos
+      expect(res2.isValid).toBe(false);
+    });
+  });

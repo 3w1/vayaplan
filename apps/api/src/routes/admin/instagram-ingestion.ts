@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { query } from '@vayaplan/db';
+import { parseAndNormalizeInstagramInput } from '@vayaplan/shared';
 import { requireAdminAuth } from '../../middleware/auth';
 import type { AdminUser } from '@vayaplan/types';
 import {
@@ -71,8 +72,13 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources', async (c) => 
   }
 
   const venueId = parseInt(body.venue_id, 10);
-  const username = (body.instagram_username || '').trim().replace(/^@/, '').toLowerCase();
-  const profileUrl = (body.instagram_profile_url || `https://www.instagram.com/${username}/`).trim();
+  const rawIg = body.instagram_input || body.instagram_username || body.instagram_profile_url || '';
+  const parsedIg = parseAndNormalizeInstagramInput(rawIg);
+  if (!parsedIg.isValid) {
+    return c.json({ error: 'invalid_username', message: parsedIg.error || 'El usuario de Instagram es obligatorio y debe tener un formato válido.' }, 400);
+  }
+  const username = parsedIg.username!;
+  const profileUrl = parsedIg.canonicalUrl!;
   const postsPerRun = body.posts_per_run !== undefined ? parseInt(body.posts_per_run, 10) : 5;
   const includeReels = body.include_reels !== undefined ? Boolean(body.include_reels) : true;
   const isActive = body.is_active !== undefined ? Boolean(body.is_active) : true;
@@ -80,10 +86,6 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources', async (c) => 
   // Validaciones
   if (!venueId || isNaN(venueId)) {
     return c.json({ error: 'missing_venue', message: 'Debe seleccionar un venue existente del catálogo.' }, 400);
-  }
-
-  if (!username || username.length < 2) {
-    return c.json({ error: 'invalid_username', message: 'El usuario de Instagram es obligatorio y debe tener al menos 2 caracteres.' }, 400);
   }
 
   if (isNaN(postsPerRun) || postsPerRun < 1 || postsPerRun > 20) {
@@ -126,21 +128,34 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources', async (c) => 
     RETURNING *;
   `;
 
-  const insertRes = await query(insertSql, [
-    venueId,
-    username,
-    profileUrl,
-    isActive,
-    postsPerRun,
-    includeReels,
-    userEmail,
-  ]);
+  try {
+    const insertRes = await query(insertSql, [
+      venueId,
+      username,
+      profileUrl,
+      isActive,
+      postsPerRun,
+      includeReels,
+      userEmail,
+    ]);
 
-  return c.json({
-    success: true,
-    message: `Fuente de ingesta configurada exitosamente para "${venueRes.rows[0].name}" (@${username}).`,
-    source: insertRes.rows[0],
-  }, 201);
+    return c.json({
+      success: true,
+      message: `Fuente de ingesta configurada exitosamente para "${venueRes.rows[0].name}" (@${username}).`,
+      source: insertRes.rows[0],
+    }, 201);
+  } catch (err: any) {
+    if (err?.code === '23505') {
+      if (err.constraint === 'uq_ingestion_venue') {
+        return c.json({ error: 'duplicate_venue', message: `El venue "${venueRes.rows[0].name}" ya tiene una fuente de ingesta configurada.` }, 409);
+      }
+      if (err.constraint === 'uq_ingestion_username') {
+        return c.json({ error: 'duplicate_username', message: `El perfil de Instagram @${username} ya está asociado a otra fuente de ingesta.` }, 409);
+      }
+      return c.json({ error: 'conflict', message: 'Conflicto de unicidad en la configuración de la fuente.' }, 409);
+    }
+    throw err;
+  }
 });
 
 /**
@@ -166,12 +181,17 @@ adminInstagramIngestionRoutes.patch('/instagram-ingestion-sources/:id', async (c
   }
   const current = currentRes.rows[0];
 
-  const username = body.instagram_username !== undefined
-    ? body.instagram_username.trim().replace(/^@/, '').toLowerCase()
-    : current.instagram_username;
-  const profileUrl = body.instagram_profile_url !== undefined
-    ? body.instagram_profile_url.trim()
-    : current.instagram_profile_url;
+  let username = current.instagram_username;
+  let profileUrl = current.instagram_profile_url;
+  if (body.instagram_input !== undefined || body.instagram_username !== undefined || body.instagram_profile_url !== undefined) {
+    const rawIg = body.instagram_input || body.instagram_username || body.instagram_profile_url || '';
+    const parsedIg = parseAndNormalizeInstagramInput(rawIg);
+    if (!parsedIg.isValid) {
+      return c.json({ error: 'invalid_username', message: parsedIg.error || 'El usuario de Instagram no es válido.' }, 400);
+    }
+    username = parsedIg.username!;
+    profileUrl = parsedIg.canonicalUrl!;
+  }
   const postsPerRun = body.posts_per_run !== undefined
     ? parseInt(body.posts_per_run, 10)
     : current.posts_per_run;
@@ -207,20 +227,27 @@ adminInstagramIngestionRoutes.patch('/instagram-ingestion-sources/:id', async (c
     RETURNING *;
   `;
 
-  const updateRes = await query(updateSql, [
-    username,
-    profileUrl,
-    postsPerRun,
-    includeReels,
-    isActive,
-    id,
-  ]);
+  try {
+    const updateRes = await query(updateSql, [
+      username,
+      profileUrl,
+      postsPerRun,
+      includeReels,
+      isActive,
+      id,
+    ]);
 
-  return c.json({
-    success: true,
-    message: 'Fuente de ingesta actualizada.',
-    source: updateRes.rows[0],
-  });
+    return c.json({
+      success: true,
+      message: 'Fuente de ingesta actualizada.',
+      source: updateRes.rows[0],
+    });
+  } catch (err: any) {
+    if (err?.code === '23505') {
+      return c.json({ error: 'duplicate_username', message: `El perfil @${username} ya está en uso por otra fuente.` }, 409);
+    }
+    throw err;
+  }
 });
 
 /**

@@ -4207,42 +4207,105 @@ export function renderAdminHtml(): string {
       <div class="modal-body" style="padding:1.25rem;">
         <div id="add-source-error" class="editor-alert-error" style="display:none; margin-bottom:1rem;"></div>
 
-        <div style="display:flex; flex-direction:column; gap:1rem;">
+        <!-- Campos ocultos de estado -->
+        <input type="hidden" id="add-source-venue-id" value="">
+        <input type="hidden" id="add-source-is-edit" value="false">
+        <input type="hidden" id="add-source-edit-id" value="">
+        <!-- Compatibilidad retroactiva para selectores antiguos -->
+        <select id="add-source-venue-select" style="display:none;" aria-hidden="true">
+          <option value="">— Selecciona un local existente —</option>
+        </select>
+        <input type="hidden" id="add-source-username-input">
+        <input type="hidden" id="add-source-url-input">
+
+        <div style="display:flex; flex-direction:column; gap:1.15rem;">
+          <!-- 1. BUSCADOR DE LOCALES -->
           <div>
-            <label for="add-source-venue-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Local del Censo (Venue) *</label>
-            <select id="add-source-venue-select" required style="width:100%;">
-              <option value="">— Selecciona un local existente —</option>
-            </select>
-            <span style="font-size:0.75rem; color:var(--text-muted);">Solo se asocian venues existentes. No se crean nuevos venues.</span>
+            <div id="add-source-search-group">
+              <label for="add-source-venue-search" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.35rem; color:var(--text-main);">Buscar local *</label>
+              <div style="position:relative;">
+                <input type="text"
+                       id="add-source-venue-search"
+                       role="combobox"
+                       aria-autocomplete="list"
+                       aria-expanded="false"
+                       aria-controls="add-source-venue-results"
+                       placeholder="Escribe el nombre del bar o local…"
+                       style="width:100%; box-sizing:border-box; padding:0.65rem 0.85rem; font-size:0.925rem;"
+                       autocomplete="off"
+                       oninput="onAddSourceVenueSearchInput(this.value)"
+                       onkeydown="onAddSourceVenueSearchKeyDown(event)">
+                <div id="add-source-venue-results"
+                     role="listbox"
+                     style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:100; max-height:220px; overflow-y:auto; background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.12);">
+                </div>
+              </div>
+              <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:0.3rem;">Solo se asocian locales existentes en el censo. No se crean nuevos venues.</span>
+            </div>
+
+            <!-- CARD DE LOCAL SELECCIONADO -->
+            <div id="add-source-selected-venue-card" style="display:none; background:var(--bg-subtle); border:1px solid var(--border); border-radius:8px; padding:0.75rem 1rem;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
+                <div>
+                  <div style="font-size:0.7rem; font-weight:800; text-transform:uppercase; color:var(--primary); letter-spacing:0.04em;">Local Seleccionado</div>
+                  <div id="add-source-selected-name" style="font-weight:800; font-size:1.05rem; color:var(--text-main); margin-top:0.15rem;"></div>
+                  <div id="add-source-selected-address" style="font-size:0.8125rem; color:var(--text-muted); margin-top:0.15rem;"></div>
+                </div>
+                <button type="button" class="btn-secondary" style="font-size:0.75rem; padding:0.35rem 0.65rem;" onclick="changeSelectedSourceVenue()">Cambiar local</button>
+              </div>
+            </div>
+
+            <!-- BANNER DE ESTADO / DISCREPANCIA / RECUPERACIÓN -->
+            <div id="add-source-venue-status-banner" style="display:none; margin-top:0.6rem; padding:0.6rem 0.85rem; border-radius:6px; font-size:0.8125rem;"></div>
           </div>
 
+          <!-- 2. CAMPO ÚNICO PARA INSTAGRAM -->
           <div>
-            <label for="add-source-username-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Usuario de Instagram *</label>
-            <div style="position:relative; display:flex; align-items:center;">
-              <span style="position:absolute; left:0.75rem; color:var(--text-dim); font-weight:700;">@</span>
-              <input type="text" id="add-source-username-input" required placeholder="ej: portal1986" style="width:100%; padding-left:1.85rem;" oninput="onAddSourceUsernameInput(this.value)">
+            <label for="add-source-instagram-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.35rem; color:var(--text-main);">Instagram del local *</label>
+            <input type="text"
+                   id="add-source-instagram-input"
+                   placeholder="ej: portal1986 o https://www.instagram.com/portal1986/"
+                   style="width:100%; box-sizing:border-box; font-size:0.925rem; padding:0.65rem 0.85rem;"
+                   oninput="onAddSourceInstagramUnifiedInput(this.value)">
+            <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:0.25rem;">Pega el usuario o el enlace de su perfil</span>
+            <div id="add-source-instagram-inline-error" style="display:none; color:var(--color-red, #dc2626); font-size:0.775rem; margin-top:0.35rem; font-weight:600;"></div>
+
+            <!-- Previsualización canónica -->
+            <div id="add-source-instagram-preview" style="display:none; margin-top:0.5rem; padding:0.6rem 0.85rem; background:var(--bg-page); border:1px solid var(--border); border-radius:6px; font-size:0.8125rem;">
+              <div style="font-size:0.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Previsualización canónica:</div>
+              <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem; flex-wrap:wrap;">
+                <span id="add-source-preview-handle" style="font-weight:700; color:#059669;"></span>
+                <span style="color:var(--text-dim);">•</span>
+                <a id="add-source-preview-url" href="#" target="_blank" rel="noopener noreferrer" style="color:var(--primary); text-decoration:underline; word-break:break-all;"></a>
+              </div>
             </div>
+
+            <!-- Advertencia de conflicto de cuenta duplicada -->
+            <div id="add-source-conflict-warning" style="display:none; margin-top:0.5rem; padding:0.5rem 0.75rem; background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; border-radius:6px; font-size:0.775rem; font-weight:600;"></div>
           </div>
 
-          <div>
-            <label for="add-source-url-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">URL de Perfil Público (Opcional)</label>
-            <input type="url" id="add-source-url-input" placeholder="https://www.instagram.com/..." style="width:100%; font-size:0.85rem;">
-          </div>
+          <!-- 3. OPCIONES AVANZADAS DESPLEGABLES -->
+          <details id="add-source-advanced-details" style="border:1px solid var(--border); border-radius:8px; padding:0.65rem 0.85rem; background:var(--bg-subtle);">
+            <summary style="font-size:0.8125rem; font-weight:700; cursor:pointer; color:var(--text-main);">Opciones avanzadas</summary>
+            <div style="margin-top:0.75rem; display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; align-items:center;">
+              <div>
+                <label for="add-source-posts-limit" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Posts por ejecución</label>
+                <input type="number" id="add-source-posts-limit" min="1" max="20" value="5" style="width:90px;">
+                <span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:0.2rem;">Entre 1 y 20 posts</span>
+              </div>
+              <div style="display:flex; flex-direction:column; justify-content:center; gap:0.5rem;">
+                <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer;">
+                  <input type="checkbox" id="add-source-include-reels" checked> Incluir Reels
+                </label>
+                <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer; color:#059669;">
+                  <input type="checkbox" id="add-source-is-active" checked> Activo
+                </label>
+              </div>
+            </div>
+          </details>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; background:var(--bg-subtle); padding:0.75rem; border-radius:8px; border:1px solid var(--border);">
-            <div>
-              <label for="add-source-posts-limit" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Posts por ejecución</label>
-              <input type="number" id="add-source-posts-limit" min="1" max="20" value="5" style="width:90px;">
-              <span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:0.2rem;">Entre 1 y 20 posts</span>
-            </div>
-            <div style="display:flex; flex-direction:column; justify-content:center; gap:0.5rem;">
-              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer;">
-                <input type="checkbox" id="add-source-include-reels" checked> Incluir Reels
-              </label>
-              <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.8125rem; font-weight:700; cursor:pointer; color:#059669;">
-                <input type="checkbox" id="add-source-is-active" checked> Activo
-              </label>
-            </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.4;">
+            ℹ️ Guardar la fuente no ejecuta la ingesta ni publica eventos.
           </div>
         </div>
       </div>
@@ -4682,6 +4745,7 @@ export function renderAdminHtml(): string {
         const res = await apiFetch('/api/v1/admin/venues?all=true');
         const data = await res.json();
         cachedVenues = data.venues || [];
+        window.cachedVenues = cachedVenues;
 
         // Rellenar selects
         const selects = ['rec-venue-id'];
@@ -10975,6 +11039,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources');
         const data = await res.json();
         cachedSources = data.sources || [];
+        window.cachedSources = cachedSources;
         selectedSourceIds.clear();
         updateSelectedSourcesButtons();
 
@@ -11143,32 +11208,528 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (btn) btn.disabled = count === 0;
     };
 
+    let addSourceActiveIndex = -1;
+    let addSourceCurrentResults = [];
+    let addSourceIsDirty = false;
+
+    // Helper para normalizar texto para búsqueda sin tildes ni mayúsculas
+    function normalizeSearchStr(str) {
+      if (!str) return '';
+      return String(str).toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+    }
+
+    // Helper para parsear y normalizar entrada de Instagram en cliente
+    function parseClientInstagram(input) {
+      if (!input || typeof input !== 'string') {
+        return { isValid: false, username: null, canonicalUrl: null, error: 'El campo de Instagram no puede estar vacío.' };
+      }
+      const raw = input.trim();
+      if (!raw) {
+        return { isValid: false, username: null, canonicalUrl: null, error: 'El campo de Instagram no puede estar vacío.' };
+      }
+
+      if (raw.indexOf('http://') === 0 || raw.indexOf('https://') === 0 || raw.indexOf('instagram.com') !== -1 || raw.indexOf('/') !== -1) {
+        let parsed;
+        try {
+          const urlToParse = (raw.indexOf('http://') === 0 || raw.indexOf('https://') === 0) ? raw : 'https://' + raw;
+          parsed = new URL(urlToParse);
+        } catch (e) {
+          return { isValid: false, username: null, canonicalUrl: null, error: 'La URL de Instagram no tiene un formato válido.' };
+        }
+
+        const host = parsed.hostname.toLowerCase();
+        const isInstagramHost = host === 'instagram.com' || host === 'www.instagram.com' || host === 'm.instagram.com';
+        if (!isInstagramHost) {
+          return { isValid: false, username: null, canonicalUrl: null, error: 'El enlace debe pertenecer al dominio oficial instagram.com.' };
+        }
+
+        const pathParts = parsed.pathname.split('/').filter(function(p) { return p.trim() !== ''; });
+        if (pathParts.length === 0) {
+          return { isValid: false, username: null, canonicalUrl: null, error: 'La URL debe incluir el nombre de usuario del perfil.' };
+        }
+
+        const firstSegment = pathParts[0].toLowerCase();
+        const disallowed = ['p', 'reel', 'reels', 'stories', 'explore', 'tags', 'direct', 'accounts', 'developer', 'about'];
+        if (disallowed.indexOf(firstSegment) !== -1) {
+          const lbl = firstSegment === 'p' ? 'publicaciones' : (firstSegment === 'reel' || firstSegment === 'reels') ? 'reels' : firstSegment;
+          return { isValid: false, username: null, canonicalUrl: null, error: 'No se admiten enlaces a ' + lbl + '. Debe ser la URL del perfil principal.' };
+        }
+
+        const cleanUser = firstSegment.replace(/^@+/, '');
+        if (!/^[a-zA-Z0-9._]{2,30}$/.test(cleanUser)) {
+          return { isValid: false, username: null, canonicalUrl: null, error: 'El usuario de Instagram en la URL debe tener entre 2 y 30 caracteres válidos.' };
+        }
+
+        return {
+          isValid: true,
+          username: cleanUser,
+          canonicalUrl: 'https://www.instagram.com/' + cleanUser + '/'
+        };
+      }
+
+      const cleanUser = raw.replace(/^@+/, '').toLowerCase();
+      if (!/^[a-zA-Z0-9._]{2,30}$/.test(cleanUser)) {
+        return {
+          isValid: false,
+          username: null,
+          canonicalUrl: null,
+          error: 'El usuario de Instagram debe tener entre 2 y 30 caracteres (letras, números, puntos y guiones bajos).'
+        };
+      }
+
+      return {
+        isValid: true,
+        username: cleanUser,
+        canonicalUrl: 'https://www.instagram.com/' + cleanUser + '/'
+      };
+    }
+
+    // Algoritmo de filtrado de locales para el buscador de fuentes
+    function filterVenuesForSource(query) {
+      const q = normalizeSearchStr(query);
+      if (!q) return [];
+
+      const qNoSpaces = q.replace(/[^a-z0-9]/g, '');
+      const words = q.split(/\s+/).filter(Boolean);
+
+      const scored = [];
+      const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+      const sourcesList = (typeof cachedSources !== 'undefined' && cachedSources.length > 0) ? cachedSources : (window.cachedSources || []);
+
+      venuesList.forEach(function(v) {
+        const nameNorm = normalizeSearchStr(v.name);
+        const nameNoSpaces = nameNorm.replace(/[^a-z0-9]/g, '');
+        const handleNorm = normalizeSearchStr(v.instagram_handle || '');
+        const addrNorm = normalizeSearchStr(v.address || '');
+        const cityNorm = normalizeSearchStr(v.city_name || '');
+
+        let score = 0;
+
+        if (nameNorm === q) {
+          score = 100;
+        } else if (nameNoSpaces === qNoSpaces) {
+          score = 95;
+        } else if (nameNorm.startsWith(q)) {
+          score = 80;
+        } else if (nameNoSpaces.startsWith(qNoSpaces)) {
+          score = 75;
+        } else if (words.length > 1 && words.every(function(w) { return nameNorm.indexOf(w) !== -1; })) {
+          score = 65;
+        } else if (nameNoSpaces.indexOf(qNoSpaces) !== -1) {
+          // Coincidencia de subcadena (ej: "Lina" o "Morgan" dentro de "LinaMorganFreeman")
+          score = 55;
+        } else if (handleNorm && (handleNorm.indexOf(q) !== -1 || handleNorm.indexOf(qNoSpaces) !== -1)) {
+          score = 45;
+        } else if (words.every(function(w) { return (nameNorm + ' ' + handleNorm + ' ' + addrNorm).indexOf(w) !== -1; })) {
+          score = 30;
+        }
+
+        if (score > 0) {
+          const existingSource = sourcesList.find(function(s) { return s.venue_id === v.id; });
+          scored.push({
+            venue: v,
+            score: score,
+            hasSource: Boolean(existingSource),
+            source: existingSource || null
+          });
+        }
+      });
+
+      scored.sort(function(a, b) {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.venue.name.localeCompare(b.venue.name);
+      });
+
+      return scored.slice(0, 15);
+    }
+
+    window.onAddSourceVenueSearchInput = function(val) {
+      const results = filterVenuesForSource(val);
+      renderAddSourceVenueResults(results, 0);
+    };
+
+    window.renderAddSourceVenueResults = function(results, activeIdx) {
+      const container = document.getElementById('add-source-venue-results');
+      const searchInput = document.getElementById('add-source-venue-search');
+      if (!container) return;
+
+      addSourceCurrentResults = results;
+      addSourceActiveIndex = typeof activeIdx === 'number' ? activeIdx : -1;
+
+      if (!results || results.length === 0) {
+        container.innerHTML = '<div style="padding:0.75rem 1rem; color:var(--text-muted); font-size:0.85rem; text-align:center;">No se encontraron locales</div>';
+        container.style.display = 'block';
+        if (searchInput) searchInput.setAttribute('aria-expanded', 'true');
+        return;
+      }
+
+      let html = '';
+      results.forEach(function(item, idx) {
+        const v = item.venue;
+        const isActive = idx === addSourceActiveIndex;
+        const addr = v.address || v.city_name || '';
+        const handle = v.instagram_handle ? '@' + v.instagram_handle : (item.source ? '@' + item.source.instagram_username : '');
+        const metaLine = [addr, handle ? 'IG: ' + handle : ''].filter(Boolean).join(' • ');
+
+        html += '<div id="venue-opt-' + idx + '" class="venue-search-item" role="option" aria-selected="' + (isActive ? 'true' : 'false') + '" ' +
+          'style="padding:0.65rem 0.85rem; cursor:pointer; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; background:' + (isActive ? 'var(--bg-selected, #f5f3ff)' : '#ffffff') + ';" ' +
+          'onmouseenter="setAddSourceActiveIndex(' + idx + ')" ' +
+          'onclick="selectAddSourceVenue(' + v.id + ')">' +
+          '<div>' +
+            '<div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">' + escapeHtml(v.name) + '</div>' +
+            (metaLine ? '<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.15rem;">' + escapeHtml(metaLine) + '</div>' : '') +
+          '</div>' +
+          (item.hasSource ? '<span style="font-size:0.6875rem; font-weight:700; color:#6c3bff; background:#f0ebff; padding:0.2rem 0.5rem; border-radius:4px; white-space:nowrap;">Fuente configurada</span>' : '') +
+        '</div>';
+      });
+
+      container.innerHTML = html;
+      container.style.display = 'block';
+      if (searchInput) searchInput.setAttribute('aria-expanded', 'true');
+    };
+
+    window.setAddSourceActiveIndex = function(idx) {
+      addSourceActiveIndex = idx;
+      const container = document.getElementById('add-source-venue-results');
+      if (!container) return;
+      const items = container.querySelectorAll('.venue-search-item');
+      items.forEach(function(el, i) {
+        el.style.backgroundColor = (i === idx) ? 'var(--bg-selected, #f5f3ff)' : '#ffffff';
+        el.setAttribute('aria-selected', i === idx ? 'true' : 'false');
+      });
+    };
+
+    window.onAddSourceVenueSearchKeyDown = function(event) {
+      const container = document.getElementById('add-source-venue-results');
+      if (!container || container.style.display === 'none') return;
+
+      if (event.key === 'ArrowDown') {
+        if (event.preventDefault) event.preventDefault();
+        const nextIdx = Math.min(addSourceActiveIndex + 1, addSourceCurrentResults.length - 1);
+        setAddSourceActiveIndex(nextIdx);
+        const opt = document.getElementById('venue-opt-' + nextIdx);
+        if (opt && opt.scrollIntoView) opt.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'ArrowUp') {
+        if (event.preventDefault) event.preventDefault();
+        const prevIdx = Math.max(addSourceActiveIndex - 1, 0);
+        setAddSourceActiveIndex(prevIdx);
+        const opt = document.getElementById('venue-opt-' + prevIdx);
+        if (opt && opt.scrollIntoView) opt.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter') {
+        if (event.preventDefault) event.preventDefault();
+        if (event.stopPropagation) event.stopPropagation();
+        if (addSourceActiveIndex >= 0 && addSourceActiveIndex < addSourceCurrentResults.length) {
+          selectAddSourceVenue(addSourceCurrentResults[addSourceActiveIndex].venue.id);
+        }
+      } else if (event.key === 'Escape') {
+        if (event.preventDefault) event.preventDefault();
+        container.style.display = 'none';
+        const searchInput = document.getElementById('add-source-venue-search');
+        if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
+      }
+    };
+
+    window.selectAddSourceVenue = function(venueId) {
+      const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+      const sourcesList = (typeof cachedSources !== 'undefined' && cachedSources.length > 0) ? cachedSources : (window.cachedSources || []);
+      const v = venuesList.find(function(item) { return item.id === venueId; });
+      if (!v) return;
+
+      // Cerrar dropdown de búsqueda
+      const container = document.getElementById('add-source-venue-results');
+      if (container) container.style.display = 'none';
+      const searchInput = document.getElementById('add-source-venue-search');
+      if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
+
+      // Guardar venue_id
+      const idInput = document.getElementById('add-source-venue-id');
+      if (idInput) idInput.value = String(v.id);
+      const selectCompat = document.getElementById('add-source-venue-select');
+      if (selectCompat) selectCompat.value = String(v.id);
+
+      // Mostrar card de venue seleccionado y ocultar buscador
+      const searchBox = document.getElementById('add-source-search-group');
+      const card = document.getElementById('add-source-selected-venue-card');
+      const nameEl = document.getElementById('add-source-selected-name');
+      const addrEl = document.getElementById('add-source-selected-address');
+
+      if (searchBox) searchBox.style.display = 'none';
+      if (card) card.style.display = 'block';
+      if (nameEl) nameEl.innerText = v.name;
+      if (addrEl) addrEl.innerText = v.address || v.city_name || '';
+
+      // Comprobar fuentes existentes y datos de Instagram
+      const existingSource = sourcesList.find(function(s) { return s.venue_id === v.id; });
+      const statusBanner = document.getElementById('add-source-venue-status-banner');
+      const submitBtn = document.getElementById('btn-submit-add-source');
+      const isEditInput = document.getElementById('add-source-is-edit');
+      const editIdInput = document.getElementById('add-source-edit-id');
+      const igInput = document.getElementById('add-source-instagram-input');
+
+      let initialIg = '';
+
+      if (existingSource) {
+        // PRIORIDAD A: Fuente ya configurada para este venue
+        if (isEditInput) isEditInput.value = 'true';
+        if (editIdInput) editIdInput.value = String(existingSource.id);
+        if (submitBtn) submitBtn.innerText = 'Guardar cambios';
+
+        initialIg = existingSource.instagram_username || existingSource.instagram_profile_url || '';
+
+        // Ajustes existentes
+        document.getElementById('add-source-posts-limit').value = String(existingSource.posts_per_run || 5);
+        document.getElementById('add-source-include-reels').checked = Boolean(existingSource.include_reels);
+        document.getElementById('add-source-is-active').checked = Boolean(existingSource.is_active);
+
+        // Mensaje / Discrepancia
+        let msg = 'ℹ️ Este local ya tiene una fuente configurada (@' + existingSource.instagram_username + ').';
+        if (v.instagram_handle && v.instagram_handle.toLowerCase() !== existingSource.instagram_username.toLowerCase()) {
+          msg += ' Discrepancia con el censo (@' + v.instagram_handle + '). Se mantiene la configuración existente mientras no se modifique.';
+        }
+        if (statusBanner) {
+          statusBanner.innerHTML = '<span style="font-size:0.8125rem; color:#4338ca; font-weight:600;">' + escapeHtml(msg) + '</span>';
+          statusBanner.style.background = '#e0e7ff';
+          statusBanner.style.border = '1px solid #c7d2fe';
+          statusBanner.style.display = 'block';
+        }
+      } else if (v.instagram_handle) {
+        // PRIORIDAD B: Sin fuente, pero con Instagram en censo
+        if (isEditInput) isEditInput.value = 'false';
+        if (editIdInput) editIdInput.value = '';
+        if (submitBtn) submitBtn.innerText = 'Guardar Fuente';
+
+        initialIg = v.instagram_handle;
+
+        document.getElementById('add-source-posts-limit').value = '5';
+        document.getElementById('add-source-include-reels').checked = true;
+        document.getElementById('add-source-is-active').checked = true;
+
+        if (statusBanner) {
+          statusBanner.innerHTML = '<span style="font-size:0.8125rem; color:#065f46; font-weight:600;">✓ Datos recuperados del censo (@' + escapeHtml(v.instagram_handle) + '). Puedes editar la cuenta si es necesario.</span>';
+          statusBanner.style.background = '#ecfdf5';
+          statusBanner.style.border = '1px solid #a7f3d0';
+          statusBanner.style.display = 'block';
+        }
+      } else {
+        // PRIORIDAD C: Sin Instagram disponible
+        if (isEditInput) isEditInput.value = 'false';
+        if (editIdInput) editIdInput.value = '';
+        if (submitBtn) submitBtn.innerText = 'Guardar Fuente';
+
+        initialIg = '';
+
+        document.getElementById('add-source-posts-limit').value = '5';
+        document.getElementById('add-source-include-reels').checked = true;
+        document.getElementById('add-source-is-active').checked = true;
+
+        if (statusBanner) {
+          statusBanner.innerHTML = '<span style="font-size:0.8125rem; color:#92400e; font-weight:600;">ℹ️ Este local no tiene Instagram guardado en el censo. Pega su usuario o enlace para configurar la fuente.</span>';
+          statusBanner.style.background = '#fef3c7';
+          statusBanner.style.border = '1px solid #fde68a';
+          statusBanner.style.display = 'block';
+        }
+      }
+
+      if (igInput) {
+        igInput.value = initialIg;
+        onAddSourceInstagramUnifiedInput(initialIg);
+        if (!initialIg) {
+          setTimeout(function() { igInput.focus(); }, 50);
+        }
+      }
+
+      addSourceIsDirty = false;
+    };
+
+    window.changeSelectedSourceVenue = function() {
+      if (addSourceIsDirty) {
+        if (!confirm('¿Deseas cambiar de local? Se descartarán los cambios no guardados en el formulario.')) {
+          return;
+        }
+      }
+
+      // Limpiar selección de venue
+      const idInput = document.getElementById('add-source-venue-id');
+      if (idInput) idInput.value = '';
+      const selectCompat = document.getElementById('add-source-venue-select');
+      if (selectCompat) selectCompat.value = '';
+      const isEditInput = document.getElementById('add-source-is-edit');
+      if (isEditInput) isEditInput.value = 'false';
+      const editIdInput = document.getElementById('add-source-edit-id');
+      if (editIdInput) editIdInput.value = '';
+
+      // Mostrar buscador y ocultar card seleccionada
+      const searchBox = document.getElementById('add-source-search-group');
+      const card = document.getElementById('add-source-selected-venue-card');
+      const searchInput = document.getElementById('add-source-venue-search');
+      const resultsDropdown = document.getElementById('add-source-venue-results');
+
+      if (card) card.style.display = 'none';
+      if (searchBox) searchBox.style.display = 'block';
+      if (resultsDropdown) resultsDropdown.style.display = 'none';
+
+      // Limpiar datos autocompletados
+      const igInput = document.getElementById('add-source-instagram-input');
+      if (igInput) igInput.value = '';
+      onAddSourceInstagramUnifiedInput('');
+
+      const statusBanner = document.getElementById('add-source-venue-status-banner');
+      if (statusBanner) statusBanner.style.display = 'none';
+
+      const errBox = document.getElementById('add-source-error');
+      if (errBox) errBox.style.display = 'none';
+
+      const submitBtn = document.getElementById('btn-submit-add-source');
+      if (submitBtn) submitBtn.innerText = 'Guardar Fuente';
+
+      if (searchInput) {
+        searchInput.value = '';
+        setTimeout(function() { searchInput.focus(); }, 50);
+      }
+
+      addSourceIsDirty = false;
+    };
+
+    window.onAddSourceInstagramUnifiedInput = function(val) {
+      addSourceIsDirty = true;
+      const previewBox = document.getElementById('add-source-instagram-preview');
+      const previewHandle = document.getElementById('add-source-preview-handle');
+      const previewUrl = document.getElementById('add-source-preview-url');
+      const inlineErr = document.getElementById('add-source-instagram-inline-error');
+      const hiddenUser = document.getElementById('add-source-username-input');
+      const hiddenUrl = document.getElementById('add-source-url-input');
+      const conflictBox = document.getElementById('add-source-conflict-warning');
+
+      const trimmed = (val || '').trim();
+      if (!trimmed) {
+        if (previewBox) previewBox.style.display = 'none';
+        if (inlineErr) inlineErr.style.display = 'none';
+        if (conflictBox) conflictBox.style.display = 'none';
+        if (hiddenUser) hiddenUser.value = '';
+        if (hiddenUrl) hiddenUrl.value = '';
+        return;
+      }
+
+      const res = parseClientInstagram(trimmed);
+      if (!res.isValid) {
+        if (previewBox) previewBox.style.display = 'none';
+        if (conflictBox) conflictBox.style.display = 'none';
+        if (inlineErr) {
+          inlineErr.innerText = res.error || 'Formato no válido';
+          inlineErr.style.display = 'block';
+        }
+        if (hiddenUser) hiddenUser.value = '';
+        if (hiddenUrl) hiddenUrl.value = '';
+        return;
+      }
+
+      // Válido
+      if (inlineErr) inlineErr.style.display = 'none';
+      if (hiddenUser) hiddenUser.value = res.username;
+      if (hiddenUrl) hiddenUrl.value = res.canonicalUrl;
+
+      if (previewHandle) previewHandle.innerText = '@' + res.username;
+      if (previewUrl) {
+        previewUrl.href = res.canonicalUrl;
+        previewUrl.innerText = res.canonicalUrl;
+      }
+      if (previewBox) previewBox.style.display = 'block';
+
+      // Comprobar conflicto con otro venue
+      const currentVenueId = parseInt(document.getElementById('add-source-venue-id')?.value, 10);
+      const sourcesList = (typeof cachedSources !== 'undefined' && cachedSources.length > 0) ? cachedSources : (window.cachedSources || []);
+      const conflictSource = sourcesList.find(function(s) {
+        return s.instagram_username.toLowerCase() === res.username.toLowerCase() && s.venue_id !== currentVenueId;
+      });
+
+      if (conflictBox) {
+        if (conflictSource) {
+          conflictBox.innerText = '⚠️ Conflicto: La cuenta @' + res.username + ' ya está vinculada a otro local ("' + (conflictSource.venue_name || 'Venue #' + conflictSource.venue_id) + '"). No se permiten cuentas duplicadas.';
+          conflictBox.style.display = 'block';
+        } else {
+          conflictBox.style.display = 'none';
+        }
+      }
+    };
+
     window.openAddSourceModal = function() {
       const errBox = document.getElementById('add-source-error');
       if (errBox) errBox.style.display = 'none';
 
-      document.getElementById('add-source-venue-select').value = '';
-      document.getElementById('add-source-username-input').value = '';
-      document.getElementById('add-source-url-input').value = '';
+      const searchInput = document.getElementById('add-source-venue-search');
+      if (searchInput) searchInput.value = '';
+
+      const resultsDropdown = document.getElementById('add-source-venue-results');
+      if (resultsDropdown) resultsDropdown.style.display = 'none';
+
+      const searchGroup = document.getElementById('add-source-search-group');
+      if (searchGroup) searchGroup.style.display = 'block';
+
+      const card = document.getElementById('add-source-selected-venue-card');
+      if (card) card.style.display = 'none';
+
+      const banner = document.getElementById('add-source-venue-status-banner');
+      if (banner) banner.style.display = 'none';
+
+      const inlineErr = document.getElementById('add-source-instagram-inline-error');
+      if (inlineErr) inlineErr.style.display = 'none';
+
+      const previewBox = document.getElementById('add-source-instagram-preview');
+      if (previewBox) previewBox.style.display = 'none';
+
+      const conflictBox = document.getElementById('add-source-conflict-warning');
+      if (conflictBox) conflictBox.style.display = 'none';
+
+      const idInput = document.getElementById('add-source-venue-id');
+      if (idInput) idInput.value = '';
+
+      const isEditInput = document.getElementById('add-source-is-edit');
+      if (isEditInput) isEditInput.value = 'false';
+
+      const editIdInput = document.getElementById('add-source-edit-id');
+      if (editIdInput) editIdInput.value = '';
+
+      const selectCompat = document.getElementById('add-source-venue-select');
+      if (selectCompat) selectCompat.value = '';
+
+      const igInput = document.getElementById('add-source-instagram-input');
+      if (igInput) igInput.value = '';
+
+      const userCompat = document.getElementById('add-source-username-input');
+      if (userCompat) userCompat.value = '';
+
+      const urlCompat = document.getElementById('add-source-url-input');
+      if (urlCompat) urlCompat.value = '';
+
       document.getElementById('add-source-posts-limit').value = '5';
       document.getElementById('add-source-include-reels').checked = true;
       document.getElementById('add-source-is-active').checked = true;
 
+      const submitBtn = document.getElementById('btn-submit-add-source');
+      if (submitBtn) submitBtn.innerText = 'Guardar Fuente';
+
+      addSourceIsDirty = false;
+      addSourceActiveIndex = -1;
+      addSourceCurrentResults = [];
+
       openModal('modal-add-source');
+      setTimeout(function() {
+        if (searchInput) searchInput.focus();
+      }, 60);
     };
 
     window.onAddSourceUsernameInput = function(val) {
-      const clean = (val || '').trim().replace(/^@/, '');
-      const urlInput = document.getElementById('add-source-url-input');
-      if (urlInput && (!urlInput.value.includes('instagram.com/') || urlInput.value.includes('instagram.com/' + clean.slice(0, -1)))) {
-        urlInput.value = clean ? 'https://www.instagram.com/' + clean + '/' : '';
-      }
+      onAddSourceInstagramUnifiedInput(val);
     };
 
     window.submitAddSource = async function() {
-      const venueId = parseInt(document.getElementById('add-source-venue-select')?.value, 10);
-      const username = (document.getElementById('add-source-username-input')?.value || '').trim().replace(/^@/, '');
-      const profileUrl = (document.getElementById('add-source-url-input')?.value || '').trim();
+      const venueId = parseInt(document.getElementById('add-source-venue-id')?.value || document.getElementById('add-source-venue-select')?.value, 10);
+      const isEdit = document.getElementById('add-source-is-edit')?.value === 'true';
+      const editId = parseInt(document.getElementById('add-source-edit-id')?.value, 10);
+      const rawIg = document.getElementById('add-source-instagram-input')?.value || document.getElementById('add-source-username-input')?.value || '';
       const postsPerRun = parseInt(document.getElementById('add-source-posts-limit')?.value, 10);
       const includeReels = document.getElementById('add-source-include-reels')?.checked;
       const isActive = document.getElementById('add-source-is-active')?.checked;
@@ -11180,10 +11741,15 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (errBox) { errBox.innerText = 'Debes seleccionar un local existente del catálogo.'; errBox.style.display = 'block'; }
         return;
       }
-      if (!username) {
-        if (errBox) { errBox.innerText = 'El nombre de usuario de Instagram es obligatorio.'; errBox.style.display = 'block'; }
+
+      const parsed = parseClientInstagram(rawIg);
+      if (!parsed.isValid) {
+        if (errBox) { errBox.innerText = parsed.error || 'El usuario de Instagram es obligatorio y debe tener un formato válido.'; errBox.style.display = 'block'; }
+        const inlineErr = document.getElementById('add-source-instagram-inline-error');
+        if (inlineErr) { inlineErr.innerText = parsed.error || 'Inválido'; inlineErr.style.display = 'block'; }
         return;
       }
+
       if (isNaN(postsPerRun) || postsPerRun < 1 || postsPerRun > 20) {
         if (errBox) { errBox.innerText = 'El número de posts debe ser entre 1 y 20.'; errBox.style.display = 'block'; }
         return;
@@ -11195,15 +11761,20 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       try {
         const payload = {
           venue_id: venueId,
-          instagram_username: username,
-          instagram_profile_url: profileUrl || null,
+          instagram_username: parsed.username,
+          instagram_profile_url: parsed.canonicalUrl,
           posts_per_run: postsPerRun,
           include_reels: Boolean(includeReels),
           is_active: Boolean(isActive)
         };
 
-        const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources', {
-          method: 'POST',
+        const url = isEdit && editId
+          ? '/api/v1/admin/instagram-ingestion-sources/' + editId
+          : '/api/v1/admin/instagram-ingestion-sources';
+        const method = isEdit && editId ? 'PATCH' : 'POST';
+
+        const res = await apiFetch(url, {
+          method: method,
           body: JSON.stringify(payload)
         });
 
@@ -11213,13 +11784,14 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           return;
         }
 
+        addSourceIsDirty = false;
         closeModal('modal-add-source');
         alert('✓ ' + (data.message || 'Fuente configurada con éxito.'));
         loadAdminSources();
       } catch (err) {
         if (errBox) { errBox.innerText = 'Error de conexión: ' + err.message; errBox.style.display = 'block'; }
       } finally {
-        if (btn) { btn.disabled = false; btn.innerText = 'Guardar Fuente'; }
+        if (btn) { btn.disabled = false; btn.innerText = isEdit ? 'Guardar cambios' : 'Guardar Fuente'; }
       }
     };
 
