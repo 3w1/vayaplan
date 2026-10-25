@@ -64,7 +64,9 @@ export interface ApifyInstagramRawPost {
   likesCount?: number;
   commentsCount?: number;
   type?: string;
+  videoUrl?: string;
   images?: string[];
+  taggedUsers?: any[];
   childPosts?: Array<{
     id?: string;
     shortCode?: string;

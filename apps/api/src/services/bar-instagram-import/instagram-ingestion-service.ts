@@ -110,16 +110,96 @@ function sanitizeProposedTime(caption: string, detectedTime: string | null): { t
 }
 
 /**
- * Ejecutor principal de ingesta de Instagram para una lista de fuentes
+ * Mínimo absoluto exigido por Apify para el parámetro maxTotalChargeUsd.
+ * Cualquier valor inferior es rechazado por la API de Apify con HTTP 400.
  */
-export async function runInstagramIngestion(options: {
+export const APIFY_MIN_CHARGE_USD = 0.005;
+
+/**
+ * Estimación defensiva de coste por post en la tarifa Free de Apify
+ * ($0.0017 / post de coste base + margen para tiempo de cómputo y proxy).
+ */
+export const APIFY_DEFAULT_COST_PER_POST_USD = 0.003;
+
+/**
+ * Resuelve y valida el límite monetario de gasto en dólares (maxTotalChargeUsd)
+ * aplicable a una invocación individual del actor apify/instagram-post-scraper.
+ *
+ * Política de gasto:
+ * 1. Si se proporciona overrideMaxTotalChargeUsd explícito, se valida estrictamente (debe ser >= 0.005).
+ * 2. Si no, se evalúa la variable de entorno APIFY_MAX_TOTAL_CHARGE_USD (si existe, debe ser >= 0.005).
+ * 3. Si no existe configuración previa, se calcula defensivamente en base al límite de posts:
+ *    max(0.005, Number((postsLimit * 0.003).toFixed(4))).
+ *
+ * En ningún caso se omite maxTotalChargeUsd (lo cual permitiría gasto ilimitado) ni se permite un
+ * fallback silencioso ante valores inválidos.
+ */
+export function resolveApifyMaxTotalChargeUsd(postsLimit: number, overrideMaxTotalChargeUsd?: number): number {
+  if (overrideMaxTotalChargeUsd !== undefined) {
+    if (
+      typeof overrideMaxTotalChargeUsd !== 'number' ||
+      isNaN(overrideMaxTotalChargeUsd) ||
+      overrideMaxTotalChargeUsd < APIFY_MIN_CHARGE_USD
+    ) {
+      throw new Error(`overrideMaxTotalChargeUsd inválido (${overrideMaxTotalChargeUsd}). Debe ser un número >= ${APIFY_MIN_CHARGE_USD} USD.`);
+    }
+    return Number(overrideMaxTotalChargeUsd.toFixed(4));
+  }
+
+  const envVal = process.env.APIFY_MAX_TOTAL_CHARGE_USD;
+  if (envVal !== undefined && envVal.trim() !== '') {
+    const parsed = Number(envVal);
+    if (isNaN(parsed) || parsed < APIFY_MIN_CHARGE_USD) {
+      throw new Error(`Variable de entorno APIFY_MAX_TOTAL_CHARGE_USD inválida (${envVal}). Debe ser un número >= ${APIFY_MIN_CHARGE_USD} USD.`);
+    }
+    return Number(parsed.toFixed(4));
+  }
+
+  return Math.max(APIFY_MIN_CHARGE_USD, Number((postsLimit * APIFY_DEFAULT_COST_PER_POST_USD).toFixed(4)));
+}
+
+export interface RunInstagramIngestionOptions {
   sourceIds?: number[];
   onlyActive?: boolean;
   executionType?: 'manual_single' | 'manual_selected' | 'manual_all' | 'cron_scheduled';
   mockPostsProvider?: (username: string, limit: number, includeReels?: boolean) => Promise<ApifyInstagramRawPost[]>;
   overridePostsLimit?: number;
   overrideIncludeReels?: boolean;
-}): Promise<IngestionRunResult> {
+  overrideMaxTotalChargeUsd?: number;
+}
+
+/**
+ * Ejecutor principal de ingesta de Instagram para una lista de fuentes
+ */
+export async function runInstagramIngestion(options: RunInstagramIngestionOptions): Promise<IngestionRunResult> {
+  // Validación estricta de parámetros reutilizables antes de adquirir lock
+  if (options.overridePostsLimit !== undefined) {
+    if (
+      typeof options.overridePostsLimit !== 'number' ||
+      !Number.isInteger(options.overridePostsLimit) ||
+      options.overridePostsLimit < 1 ||
+      options.overridePostsLimit > 20
+    ) {
+      throw new Error('overridePostsLimit debe ser un número entero entre 1 y 20.');
+    }
+  }
+
+  if (options.overrideIncludeReels !== undefined) {
+    if (typeof options.overrideIncludeReels !== 'boolean') {
+      throw new Error('overrideIncludeReels debe ser un booleano (true o false).');
+    }
+  }
+
+  if (options.overrideMaxTotalChargeUsd !== undefined) {
+    if (
+      typeof options.overrideMaxTotalChargeUsd !== 'number' ||
+      isNaN(options.overrideMaxTotalChargeUsd) ||
+      options.overrideMaxTotalChargeUsd < APIFY_MIN_CHARGE_USD
+    ) {
+      throw new Error(`overrideMaxTotalChargeUsd debe ser un número >= ${APIFY_MIN_CHARGE_USD} USD.`);
+    }
+  }
+
   const executionId = `ig_run_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const startedAt = new Date().toISOString();
 
@@ -227,7 +307,9 @@ export async function runInstagramIngestion(options: {
           posts = await options.mockPostsProvider(source.instagram_username, postsLimit, includeReels);
         } else {
           // En modo producción / Apify, si hay token de Apify disponible
-          posts = await fetchPostsFromApify(source.instagram_username, postsLimit, includeReels);
+          posts = await fetchPostsFromApify(source.instagram_username, postsLimit, includeReels, {
+            maxTotalChargeUsd: options.overrideMaxTotalChargeUsd,
+          });
         }
 
         sourceResult.postsExtracted = posts.length;
@@ -237,7 +319,13 @@ export async function runInstagramIngestion(options: {
 
         for (const post of posts) {
           try {
-            // Respetar include_reels
+            // Descarte local de vídeos/Reels cuando includeReels es false:
+            // - El actor apify/instagram-post-scraper no admite 'includeReels' en su inputSchema.
+            // - Por tanto, Apify puede devolver vídeos/Reels presentes en el feed y consumen cuota.
+            // - Descarte preventivo: Se descartan localmente ANTES de clasificación, subida de imágenes a R2 y persistencia.
+            // - Ausencia de peticiones compensatorias: NO se solicitan publicaciones adicionales para suplir las descartadas.
+            // - Carruseles (Sidecar): Los posts multislide tienen type 'Sidecar' y son admitidos como carrusel de imágenes;
+            //   únicamente los posts puramente de vídeo ('Video' o con videoUrl exclusivo) son descartados.
             if (!includeReels && (post.type === 'Video' || post.videoUrl)) {
               continue;
             }
@@ -461,11 +549,20 @@ export async function runInstagramIngestion(options: {
         );
       } catch (srcErr: any) {
         sourceResult.status = 'error';
-        sourceResult.error = srcErr.message || String(srcErr);
+        const isTimeout =
+          srcErr.name === 'TimeoutError' ||
+          srcErr.name === 'AbortError' ||
+          srcErr.message?.includes('timeout') ||
+          srcErr.message?.includes('aborted');
+
+        sourceResult.error = isTimeout
+          ? `Timeout local alcanzado en la extracción de @${source.instagram_username}. El estado del actor remoto en Apify es indeterminado; no se realizaron reintentos automáticos para evitar costes duplicados.`
+          : (srcErr.message || String(srcErr));
+
         result.errors.push({
           sourceId: source.id,
           username: source.instagram_username,
-          error: sourceResult.error,
+          error: sourceResult.error || 'Error indeterminado',
         });
 
         await query(
@@ -498,9 +595,24 @@ export async function runInstagramIngestion(options: {
 }
 
 /**
- * Llamada real al scraper de Apify (apify/instagram-post-scraper)
+ * Llamada al scraper de Apify (apify/instagram-post-scraper).
+ *
+ * Contrato del Actor:
+ * - Parámetros oficiales soportados en inputSchema:
+ *   ['username', 'resultsLimit', 'skipPinnedPosts', 'includeMusicData', 'onlyPostsNewerThan', 'dataDetailLevel'].
+ *   Nota: 'includeReels' NO existe en el esquema y NO se envía.
+ * - skipPinnedPosts: false no garantiza orden cronológico estricto de las publicaciones más recientes.
+ * - Control de gasto: maxTotalChargeUsd se calcula y envía obligatoriamente como parámetro de query string.
+ * - Trazabilidad y timeout: El endpoint síncrono run-sync-get-dataset-items retorna directamente el dataset
+ *   sin runId en el payload. Si ocurre un timeout local de 60s, el socket se interrumpe pero el actor remoto
+ *   podría continuar su ejecución en Apify. No se realizan reintentos automáticos para prevenir sobrecostes.
  */
-export async function fetchPostsFromApify(username: string, limit: number, includeReels: boolean): Promise<ApifyInstagramRawPost[]> {
+export async function fetchPostsFromApify(
+  username: string,
+  limit: number,
+  includeReels: boolean,
+  options?: { maxTotalChargeUsd?: number }
+): Promise<ApifyInstagramRawPost[]> {
   if (isTestExecution() && process.env.ALLOW_REAL_APIFY_IN_TESTS !== 'true') {
     throw new Error('[APIFY_SAFETY_GUARD] Real Apify scraping calls are strictly blocked in test environments. Provide a mockPostsProvider.');
   }
@@ -510,7 +622,9 @@ export async function fetchPostsFromApify(username: string, limit: number, inclu
     throw new Error('APIFY_TOKEN no configurado en el entorno.');
   }
 
-  const endpoint = `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(apifyToken)}&maxTotalChargeUsd=0.01`;
+  const chargeLimit = resolveApifyMaxTotalChargeUsd(limit, options?.maxTotalChargeUsd);
+
+  const endpoint = `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(apifyToken)}&maxTotalChargeUsd=${chargeLimit}`;
   const input = {
     username: [username],
     resultsLimit: limit,
@@ -521,7 +635,7 @@ export async function fetchPostsFromApify(username: string, limit: number, inclu
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
-    signal: AbortSignal.timeout(60000), // 60s timeout
+    signal: AbortSignal.timeout(60000), // 60s timeout local del socket
   });
 
   if (!res.ok) {
