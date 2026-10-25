@@ -290,10 +290,56 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources/:id/run', async
     return c.json({ error: 'not_found', message: 'Fuente de ingesta no encontrada.' }, 404);
   }
 
+  let body: any = {};
+  const contentType = c.req.header('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid_json', message: 'Cuerpo de petición JSON no válido.' }, 400);
+    }
+  } else {
+    // Si no tiene header JSON pero envió cuerpo, intentar parsear defensivamente
+    try {
+      body = await c.req.json();
+    } catch {
+      body = {};
+    }
+  }
+
+  let overridePostsLimit: number | undefined;
+  if (body?.override_posts_limit !== undefined) {
+    if (
+      typeof body.override_posts_limit !== 'number' ||
+      !Number.isInteger(body.override_posts_limit) ||
+      body.override_posts_limit < 1 ||
+      body.override_posts_limit > 20
+    ) {
+      return c.json({
+        error: 'invalid_override_posts_limit',
+        message: 'override_posts_limit debe ser un entero entre 1 y 20.',
+      }, 400);
+    }
+    overridePostsLimit = body.override_posts_limit;
+  }
+
+  let overrideIncludeReels: boolean | undefined;
+  if (body?.override_include_reels !== undefined) {
+    if (typeof body.override_include_reels !== 'boolean') {
+      return c.json({
+        error: 'invalid_override_include_reels',
+        message: 'override_include_reels debe ser un booleano (true o false).',
+      }, 400);
+    }
+    overrideIncludeReels = body.override_include_reels;
+  }
+
   try {
     const report = await runInstagramIngestion({
       sourceIds: [id],
       executionType: 'manual_single',
+      overridePostsLimit,
+      overrideIncludeReels,
     });
 
     return c.json({
