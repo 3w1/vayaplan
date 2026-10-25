@@ -11,6 +11,7 @@ import { normalizePrice, detectPriceFromText } from '@vayaplan/shared';
  */
 const PATTERNS = {
   // 1. Señal de fecha explícita o relativa
+  dateIso: /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/,
   dateExplicit: /\b(\d{1,2})\s*(?:de|\/|-)\s*(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|\d{1,2})\b/i,
   dateRelative: /\b(este\s+(?:viernes|s[aá]bado|domingo|jueves)|el\s+(?:viernes|s[aá]bado|domingo)|el\s+pr[oó]ximo\s+(?:viernes|s[aá]bado|domingo|\d{1,2}\s+de\s+[a-z]+)|hoy|ma[ñn]ana)\b/i,
   dateDayNumber: /\b(?:s[aá]bado|viernes|domingo|jueves)\s+(\d{1,2})\b/i,
@@ -132,20 +133,29 @@ export function classifyBarPost(
   let provisionalCategory: BarProvisionalCategory = null;
 
   // A. Detectar FECHA
-  const explicitMatch = caption.match(PATTERNS.dateExplicit);
-  if (explicitMatch) {
-    signals.push(`Fecha explícita detectada: "${explicitMatch[0]}"`);
-    detectedDate = normalizeExplicitDate(explicitMatch[1], explicitMatch[2], post.timestamp);
+  const isoMatch = caption.match(PATTERNS.dateIso);
+  if (isoMatch) {
+    const y = isoMatch[1];
+    const m = isoMatch[2].padStart(2, '0');
+    const d = isoMatch[3].padStart(2, '0');
+    detectedDate = `${y}-${m}-${d}`;
+    signals.push(`Fecha explícita detectada: "${isoMatch[0]}"`);
   } else {
-    const dayNumMatch = caption.match(PATTERNS.dateDayNumber);
-    if (dayNumMatch) {
-      signals.push(`Fecha con día concreto: "${dayNumMatch[0]}"`);
-      detectedDate = normalizeDayNumber(dayNumMatch[1], post.timestamp);
+    const explicitMatch = caption.match(PATTERNS.dateExplicit);
+    if (explicitMatch) {
+      signals.push(`Fecha explícita detectada: "${explicitMatch[0]}"`);
+      detectedDate = normalizeExplicitDate(explicitMatch[1], explicitMatch[2], post.timestamp);
     } else {
-      const relMatch = caption.match(PATTERNS.dateRelative);
-      if (relMatch) {
-        signals.push(`Fecha relativa detectada: "${relMatch[0]}"`);
-        detectedDate = normalizeRelativeDate(relMatch[0], post.timestamp);
+      const dayNumMatch = caption.match(PATTERNS.dateDayNumber);
+      if (dayNumMatch) {
+        signals.push(`Fecha con día concreto: "${dayNumMatch[0]}"`);
+        detectedDate = normalizeDayNumber(dayNumMatch[1], post.timestamp);
+      } else {
+        const relMatch = caption.match(PATTERNS.dateRelative);
+        if (relMatch) {
+          signals.push(`Fecha relativa detectada: "${relMatch[0]}"`);
+          detectedDate = normalizeRelativeDate(relMatch[0], post.timestamp);
+        }
       }
     }
   }
@@ -314,7 +324,7 @@ export function classifyBarPost(
     };
   }
 
-  if (signalCount === 1) {
+  if (signals.length === 1) {
     return {
       classification: 'CONTENIDO_GENERAL',
       reason: 'Publicación general o social sin convocatoria de evento específico.',

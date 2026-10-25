@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { app } from '../../../index';
 import { query } from '@vayaplan/db';
 import { sign } from 'hono/jwt';
@@ -15,7 +15,14 @@ import type { ApifyInstagramRawPost } from '../../../services/bar-instagram-impo
 
 describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
   let adminToken: string;
-  let testVenueId: number;
+  let fixtureVenue1Id: number;
+  let fixtureVenue2Id: number;
+  let fixtureVenueFree1Id: number;
+  let fixtureVenueFree2Id: number;
+  let fixtureSource1Id: number;
+  let fixtureSource2Id: number;
+  const fixtureUser1 = `fixture_user_${Date.now()}_1`;
+  const fixtureUser2 = `fixture_user_${Date.now()}_2`;
 
   beforeAll(async () => {
     // Generar token JWT válido de admin
@@ -28,23 +35,74 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
       JWT_SECRET
     );
 
-    // Obtener un venue existente en vayaplan_test
-    const vRes = await query(`SELECT id FROM venues WHERE is_active = true ORDER BY id ASC LIMIT 1;`);
-    testVenueId = vRes.rows[0].id;
+    // Crear venues sintéticos para las pruebas
+    const v1 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Ingestion Fixture Venue 1', $1, 'Calle Ingestion 1', true) RETURNING id;`,
+      [`ingestion-fixture-1-${Date.now()}`]
+    );
+    fixtureVenue1Id = v1.rows[0].id;
+
+    const v2 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Ingestion Fixture Venue 2', $1, 'Calle Ingestion 2', true) RETURNING id;`,
+      [`ingestion-fixture-2-${Date.now()}`]
+    );
+    fixtureVenue2Id = v2.rows[0].id;
+
+    const vf1 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Ingestion Fixture Free 1', $1, 'Calle Ingestion Free 1', true) RETURNING id;`,
+      [`ingestion-fixture-free1-${Date.now()}`]
+    );
+    fixtureVenueFree1Id = vf1.rows[0].id;
+
+    const vf2 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Ingestion Fixture Free 2', $1, 'Calle Ingestion Free 2', true) RETURNING id;`,
+      [`ingestion-fixture-free2-${Date.now()}`]
+    );
+    fixtureVenueFree2Id = vf2.rows[0].id;
+
+    // Crear fuentes sintéticas
+    const s1 = await query(
+      `INSERT INTO instagram_ingestion_sources (venue_id, instagram_username, is_active)
+       VALUES ($1, $2, true) RETURNING id;`,
+      [fixtureVenue1Id, fixtureUser1]
+    );
+    fixtureSource1Id = s1.rows[0].id;
+
+    const s2 = await query(
+      `INSERT INTO instagram_ingestion_sources (venue_id, instagram_username, is_active)
+       VALUES ($1, $2, true) RETURNING id;`,
+      [fixtureVenue2Id, fixtureUser2]
+    );
+    fixtureSource2Id = s2.rows[0].id;
+  });
+
+  afterAll(async () => {
+    // Limpiar propuestas de prueba residuales
+    await query(`DELETE FROM curation_proposals WHERE instagram_post_shortcode LIKE 'mock%';`);
+
+    // Limpiar fuentes de prueba residuales
+    await query(
+      `DELETE FROM instagram_ingestion_sources 
+       WHERE id = ANY($1) 
+          OR instagram_username LIKE 'testbar_%' 
+          OR instagram_username LIKE 'temp_%' 
+          OR instagram_username LIKE 'fixture_user_%';`,
+      [[fixtureSource1Id, fixtureSource2Id].filter(Boolean)]
+    );
+
+    // Limpiar venues sintéticos
+    await query(
+      `DELETE FROM venues WHERE id = ANY($1);`,
+      [[fixtureVenue1Id, fixtureVenue2Id, fixtureVenueFree1Id, fixtureVenueFree2Id].filter(Boolean)]
+    );
   });
 
   // 1. Crear configuración de ingesta con venue existente
   test('1. Permite crear configuración de ingesta con venue existente', async () => {
-    // Usar un venue sin fuente asignada
-    const availableVenueRes = await query(
-      `SELECT v.id FROM venues v 
-       WHERE v.is_active = true 
-         AND v.id NOT IN (SELECT venue_id FROM instagram_ingestion_sources) 
-       LIMIT 1;`
-    );
-    expect(availableVenueRes.rows.length).toBeGreaterThan(0);
-    const targetVenueId = availableVenueRes.rows[0].id;
-
     const res = await app.request('/api/v1/admin/instagram-ingestion-sources', {
       method: 'POST',
       headers: {
@@ -52,7 +110,7 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
         Authorization: `Bearer ${adminToken}`,
       },
       body: JSON.stringify({
-        venue_id: targetVenueId,
+        venue_id: fixtureVenueFree1Id,
         instagram_username: `testbar_${Date.now()}`,
         instagram_profile_url: 'https://www.instagram.com/testbar/',
         posts_per_run: 8,
@@ -64,7 +122,7 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
     expect(res.status).toBe(201);
     const data = await res.json();
     expect(data.success).toBe(true);
-    expect(data.source.venue_id).toBe(targetVenueId);
+    expect(data.source.venue_id).toBe(fixtureVenueFree1Id);
     expect(data.source.posts_per_run).toBe(8);
   });
 
@@ -89,10 +147,6 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
 
   // 3. Bloquear duplicado de venue
   test('3. Bloquea añadir el mismo venue dos veces (409 Conflict)', async () => {
-    // Tomar un venue que ya tenga fuente
-    const existing = await query(`SELECT venue_id FROM instagram_ingestion_sources LIMIT 1;`);
-    const usedVenueId = existing.rows[0].venue_id;
-
     const res = await app.request('/api/v1/admin/instagram-ingestion-sources', {
       method: 'POST',
       headers: {
@@ -100,7 +154,7 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
         Authorization: `Bearer ${adminToken}`,
       },
       body: JSON.stringify({
-        venue_id: usedVenueId,
+        venue_id: fixtureVenue1Id,
         instagram_username: `different_user_${Date.now()}`,
       }),
     });
@@ -112,17 +166,6 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
 
   // 4. Bloquear duplicado de username
   test('4. Bloquea añadir el mismo usuario de Instagram dos veces (409 Conflict)', async () => {
-    const existing = await query(`SELECT instagram_username FROM instagram_ingestion_sources LIMIT 1;`);
-    const usedUsername = existing.rows[0].instagram_username;
-
-    // Buscar un venue libre
-    const availableVenueRes = await query(
-      `SELECT v.id FROM venues v 
-       WHERE v.id NOT IN (SELECT venue_id FROM instagram_ingestion_sources) 
-       LIMIT 1;`
-    );
-    const freeVenueId = availableVenueRes.rows[0].id;
-
     const res = await app.request('/api/v1/admin/instagram-ingestion-sources', {
       method: 'POST',
       headers: {
@@ -130,8 +173,8 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
         Authorization: `Bearer ${adminToken}`,
       },
       body: JSON.stringify({
-        venue_id: freeVenueId,
-        instagram_username: usedUsername,
+        venue_id: fixtureVenueFree2Id,
+        instagram_username: fixtureUser1,
       }),
     });
 
@@ -142,9 +185,8 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
 
   // 5. Activar y desactivar una fuente
   test('5. Permite pausar (desactivar) y reactivar una fuente de ingesta', async () => {
-    const existing = await query(`SELECT id, is_active FROM instagram_ingestion_sources LIMIT 1;`);
-    const sourceId = existing.rows[0].id;
-    const initialStatus = existing.rows[0].is_active;
+    const sourceId = fixtureSource1Id;
+    const initialStatus = true;
 
     // Pausar
     const res1 = await app.request(`/api/v1/admin/instagram-ingestion-sources/${sourceId}`, {
@@ -153,11 +195,11 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ is_active: !initialStatus }),
+      body: JSON.stringify({ is_active: false }),
     });
     expect(res1.status).toBe(200);
     const data1 = await res1.json();
-    expect(data1.source.is_active).toBe(!initialStatus);
+    expect(data1.source.is_active).toBe(false);
 
     // Reactivar
     const res2 = await app.request(`/api/v1/admin/instagram-ingestion-sources/${sourceId}`, {
@@ -166,11 +208,11 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ is_active: initialStatus }),
+      body: JSON.stringify({ is_active: true }),
     });
     expect(res2.status).toBe(200);
     const data2 = await res2.json();
-    expect(data2.source.is_active).toBe(initialStatus);
+    expect(data2.source.is_active).toBe(true);
   });
 
   // 6. Eliminar configuración sin eliminar venue
@@ -227,7 +269,7 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
       commentsCount: 5,
       dimensionsWidth: 1080,
       dimensionsHeight: 1080,
-      ownerUsername: 'lamalhabladapalencia',
+      ownerUsername: fixtureUser1,
       taggedUsers: [],
     };
 
@@ -243,13 +285,11 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
       commentsCount: 2,
       dimensionsWidth: 1080,
       dimensionsHeight: 1080,
-      ownerUsername: 'lamalhabladapalencia',
+      ownerUsername: fixtureUser1,
       taggedUsers: [],
     };
 
-    const sourceRes = await query(`SELECT id FROM instagram_ingestion_sources WHERE instagram_username = 'lamalhabladapalencia';`);
-    expect(sourceRes.rows.length).toBeGreaterThan(0);
-    const sourceId = sourceRes.rows[0].id;
+    const sourceId = fixtureSource1Id;
 
     // Ejecutar con mock provider
     const report = await runInstagramIngestion({
@@ -303,14 +343,10 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
 
   // 14. Fallo en una fuente no bloquea las demás
   test('14. Un fallo en una fuente no interrumpe el procesamiento de las restantes', async () => {
-    const sources = await query(`SELECT id, instagram_username FROM instagram_ingestion_sources ORDER BY id ASC LIMIT 2;`);
-    expect(sources.rows.length).toBe(2);
-    const [s1, s2] = sources.rows;
-
     const report = await runInstagramIngestion({
-      sourceIds: [s1.id, s2.id],
+      sourceIds: [fixtureSource1Id, fixtureSource2Id],
       mockPostsProvider: async (username) => {
-        if (username === s1.instagram_username) {
+        if (username === fixtureUser1) {
           throw new Error('Simulated network timeout for source 1');
         }
         return [];
@@ -319,30 +355,41 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
 
     expect(report.sourcesProcessed).toBe(2);
     expect(report.errors.length).toBe(1);
-    expect(report.errors[0].sourceId).toBe(s1.id);
-    expect(report.resultsBySource.find(r => r.sourceId === s2.id)?.status).toBe('success');
+    expect(report.errors[0].sourceId).toBe(fixtureSource1Id);
+    expect(report.resultsBySource.find((r) => r.sourceId === fixtureSource2Id)?.status).toBe('success');
   });
 
   // 15. Cron programado solo procesa fuentes activas
   test('15. El filtro de ingesta programada procesa únicamente fuentes con is_active = true', async () => {
-    // Desactivar temporalmente una fuente
-    const firstSource = await query(`SELECT id FROM instagram_ingestion_sources LIMIT 1;`);
-    const fid = firstSource.rows[0].id;
-    await query(`UPDATE instagram_ingestion_sources SET is_active = false WHERE id = $1;`, [fid]);
+    // Snapshot para preservar el estado previo de las fuentes tras la prueba
+    const prevSources = await query(`SELECT id, last_status, last_error, last_run_id, last_ingested_at FROM instagram_ingestion_sources;`);
 
-    const activeCount = await query(`SELECT count(*) FROM instagram_ingestion_sources WHERE is_active = true;`);
-    const expectedActive = parseInt(activeCount.rows[0].count, 10);
+    try {
+      // Desactivar temporalmente la fuente fixture 1
+      await query(`UPDATE instagram_ingestion_sources SET is_active = false WHERE id = $1;`, [fixtureSource1Id]);
 
-    const report = await runInstagramIngestion({
-      onlyActive: true,
-      executionType: 'cron_scheduled',
-      mockPostsProvider: async () => [],
-    });
+      const activeCount = await query(`SELECT count(*) FROM instagram_ingestion_sources WHERE is_active = true;`);
+      const expectedActive = parseInt(activeCount.rows[0].count, 10);
 
-    expect(report.sourcesProcessed).toBe(expectedActive);
+      const report = await runInstagramIngestion({
+        onlyActive: true,
+        executionType: 'cron_scheduled',
+        mockPostsProvider: async () => [],
+      });
 
-    // Restaurar a activo
-    await query(`UPDATE instagram_ingestion_sources SET is_active = true WHERE id = $1;`, [fid]);
+      expect(report.sourcesProcessed).toBe(expectedActive);
+    } finally {
+      // Restaurar estado e is_active
+      await query(`UPDATE instagram_ingestion_sources SET is_active = true WHERE id = $1;`, [fixtureSource1Id]);
+      for (const s of prevSources.rows) {
+        await query(
+          `UPDATE instagram_ingestion_sources
+           SET last_status = $1, last_error = $2, last_run_id = $3, last_ingested_at = $4
+           WHERE id = $5;`,
+          [s.last_status, s.last_error, s.last_run_id, s.last_ingested_at, s.id]
+        );
+      }
+    }
   });
 
   // 16. Prevención de ejecuciones concurrentes simultáneas

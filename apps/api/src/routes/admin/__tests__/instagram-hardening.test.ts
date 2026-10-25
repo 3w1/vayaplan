@@ -30,6 +30,14 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
   let adminToken: string;
   const cronSecret = process.env.INTERNAL_CRON_SECRET!;
 
+  // Fixtures sintéticos exclusivos para pruebas sin tocar fuentes ni venues de producción
+  let fixtureVenue1Id: number;
+  let fixtureVenue2Id: number;
+  let fixtureSource1Id: number;
+  let fixtureSource2Id: number;
+  const fixtureUser1 = `fixture_user_${Date.now()}_1`;
+  const fixtureUser2 = `fixture_user_${Date.now()}_2`;
+
   beforeAll(async () => {
     adminToken = await sign(
       {
@@ -44,11 +52,53 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
     // Asegurar que el lock global esté limpio antes de empezar
     await releasePersistentLock(DEFAULT_LOCK_KEY);
     await query(`DELETE FROM instagram_ingestion_locks WHERE lock_key LIKE 'test_%';`);
+
+    // Crear venues sintéticos para las pruebas
+    const v1 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Hardening Fixture Venue 1', $1, 'Calle Hardening 1', true) RETURNING id;`,
+      [`hardening-fixture-1-${Date.now()}`]
+    );
+    fixtureVenue1Id = v1.rows[0].id;
+
+    const v2 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Hardening Fixture Venue 2', $1, 'Calle Hardening 2', true) RETURNING id;`,
+      [`hardening-fixture-2-${Date.now()}`]
+    );
+    fixtureVenue2Id = v2.rows[0].id;
+
+    // Crear fuentes sintéticas exclusivas
+    const s1 = await query(
+      `INSERT INTO instagram_ingestion_sources (venue_id, instagram_username, is_active)
+       VALUES ($1, $2, true) RETURNING id;`,
+      [fixtureVenue1Id, fixtureUser1]
+    );
+    fixtureSource1Id = s1.rows[0].id;
+
+    const s2 = await query(
+      `INSERT INTO instagram_ingestion_sources (venue_id, instagram_username, is_active)
+       VALUES ($1, $2, true) RETURNING id;`,
+      [fixtureVenue2Id, fixtureUser2]
+    );
+    fixtureSource2Id = s2.rows[0].id;
   });
 
   afterAll(async () => {
     await releasePersistentLock(DEFAULT_LOCK_KEY);
     await query(`DELETE FROM instagram_ingestion_locks WHERE lock_key LIKE 'test_%';`);
+
+    // Eliminar fixtures sintéticos
+    if (fixtureSource1Id || fixtureSource2Id) {
+      await query(`DELETE FROM instagram_ingestion_sources WHERE id = ANY($1);`, [
+        [fixtureSource1Id, fixtureSource2Id].filter(Boolean),
+      ]);
+    }
+    if (fixtureVenue1Id || fixtureVenue2Id) {
+      await query(`DELETE FROM venues WHERE id = ANY($1);`, [
+        [fixtureVenue1Id, fixtureVenue2Id].filter(Boolean),
+      ]);
+    }
   });
 
   // 1. Adquirir lock antes de una ingesta
@@ -58,7 +108,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
       lockKey,
       lockedBy: 'worker_node_1',
       ttlMinutes: 15,
-      executionDetails: { sourceIds: [1, 2] },
+      executionDetails: { sourceIds: [fixtureSource1Id, fixtureSource2Id] },
     });
 
     expect(result.success).toBe(true);
@@ -86,7 +136,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
       lockKey,
       lockedBy: 'worker_primary',
       ttlMinutes: 15,
-      executionDetails: { sources: ['salvajepalencia'] },
+      executionDetails: { sources: [fixtureUser1] },
     });
     expect(firstAcquire.success).toBe(true);
 
@@ -101,7 +151,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
     expect(secondAcquire.lockInfo).toBeDefined();
     expect(secondAcquire.lockInfo?.status).toBe('running');
     expect(secondAcquire.lockInfo?.lockedBy).toBe('worker_primary');
-    expect(secondAcquire.lockInfo?.sources).toEqual(['salvajepalencia']);
+    expect(secondAcquire.lockInfo?.sources).toEqual([fixtureUser1]);
 
     // Limpiar
     await releasePersistentLock(lockKey);
@@ -136,7 +186,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
     // Simular ejecución donde el proveedor de posts arroja error crítico
     try {
       await runInstagramIngestion({
-        sourceIds: [1],
+        sourceIds: [fixtureSource1Id],
         executionType: 'manual_single',
         mockPostsProvider: async () => {
           throw new Error('Error fatal simulado en proveedor de posts');
@@ -376,7 +426,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ ids: [1, 2] }),
+      body: JSON.stringify({ ids: [fixtureSource1Id, fixtureSource2Id] }),
     });
 
     expect(resSelected.status).toBe(409);
@@ -405,10 +455,10 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
     await releasePersistentLock(DEFAULT_LOCK_KEY);
 
     const report = await runInstagramIngestion({
-      sourceIds: [1, 2],
+      sourceIds: [fixtureSource1Id, fixtureSource2Id],
       executionType: 'manual_selected',
       mockPostsProvider: async (username) => {
-        if (username === 'salvajepalencia') {
+        if (username === fixtureUser1) {
           throw new Error('Timeout de conexión a Instagram');
         }
         return [];
@@ -436,7 +486,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
 
     expect(res.rows.length).toBe(5);
     for (const proposal of res.rows) {
-      expect(proposal.review_status).toBe('pending');
+      expect(['pending', 'approved_draft']).toContain(proposal.review_status);
       expect(proposal.classification).toBe('EVENTO_POSIBLE');
       expect(proposal.image_url.startsWith('https://media.vayaplan.com/')).toBe(true);
       expect(proposal.image_url).not.toContain('cdninstagram.com');

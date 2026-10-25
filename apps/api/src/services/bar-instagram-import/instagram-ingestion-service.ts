@@ -1,4 +1,4 @@
-import { query } from '@vayaplan/db';
+import { query, isTestExecution } from '@vayaplan/db';
 import { classifyBarPost } from './bar-classifier';
 import { uploadPostImageToR2 } from './r2-image-pipeline';
 import type { ApifyInstagramRawPost } from './bar-types';
@@ -492,6 +492,10 @@ export async function runInstagramIngestion(options: {
  * Llamada real al scraper de Apify (apify/instagram-post-scraper)
  */
 async function fetchPostsFromApify(username: string, limit: number, includeReels: boolean): Promise<ApifyInstagramRawPost[]> {
+  if (isTestExecution() && process.env.ALLOW_REAL_APIFY_IN_TESTS !== 'true') {
+    throw new Error('[APIFY_SAFETY_GUARD] Real Apify scraping calls are strictly blocked in test environments. Provide a mockPostsProvider.');
+  }
+
   const apifyToken = process.env.APIFY_TOKEN;
   if (!apifyToken) {
     throw new Error('APIFY_TOKEN no configurado en el entorno.');

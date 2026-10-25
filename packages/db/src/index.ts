@@ -1,9 +1,25 @@
 import { Pool, types, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
+import {
+  assertTestDatabaseAllowed,
+  isTestExecution,
+  isMutationQuery,
+  isAuthorizedTestDatabase,
+  extractDatabaseName,
+} from './safety-guard';
+
+export {
+  assertTestDatabaseAllowed,
+  isTestExecution,
+  isMutationQuery,
+  isAuthorizedTestDatabase,
+  extractDatabaseName,
+};
 
 // Retornar columnas tipo DATE (OID 1082) como string 'YYYY-MM-DD' sin conversión a Date local
 types.setTypeParser(1082, (val: string) => val);
 
 let poolInstance: Pool | null = null;
+let currentPoolConnectionString = '';
 
 /**
  * Obtiene o inicializa la instancia singleton del Pool de PostgreSQL
@@ -11,15 +27,31 @@ let poolInstance: Pool | null = null;
 export function getDbPool(): Pool {
   if (!poolInstance) {
     const isProduction = (process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+    const isTest = isTestExecution();
+    const testDbUrl = process.env.TEST_DATABASE_URL?.trim();
     const dbUrl = process.env.DATABASE_URL?.trim();
 
-    if (isProduction && !dbUrl) {
-      throw new Error('DATABASE_URL is required in production');
+    let connectionString = testDbUrl || dbUrl;
+
+    if (isTest) {
+      if (!connectionString) {
+        throw new Error(
+          '[DATABASE_SAFETY_GUARD] Aborted: Explicit test database configuration is missing. In test mode, you must explicitly set TEST_DATABASE_URL or a DATABASE_URL pointing to an authorized test database (e.g. "vayaplan_test").'
+        );
+      }
+      // Protección estricta: bloquea la inicialización si se intenta conectar a producción en tests
+      assertTestDatabaseAllowed(connectionString);
+    } else {
+      if (isProduction && !connectionString) {
+        throw new Error('DATABASE_URL is required in production');
+      }
+
+      if (!connectionString) {
+        connectionString = `postgresql://${process.env.POSTGRES_USER || 'vayaplan_user'}:${process.env.POSTGRES_PASSWORD || ''}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'vayaplan'}`;
+      }
     }
 
-    const connectionString =
-      dbUrl ||
-      `postgresql://${process.env.POSTGRES_USER || 'vayaplan_user'}:${process.env.POSTGRES_PASSWORD || ''}@${process.env.POSTGRES_HOST || 'localhost'}:${process.env.POSTGRES_PORT || '5432'}/${process.env.POSTGRES_DB || 'vayaplan'}`;
+    currentPoolConnectionString = connectionString;
 
     poolInstance = new Pool({
       connectionString,
@@ -50,6 +82,9 @@ export async function query<T extends QueryResultRow = any>(
   params?: any[]
 ): Promise<QueryResult<T>> {
   const pool = getDbPool();
+  if (isTestExecution() && isMutationQuery(text)) {
+    assertTestDatabaseAllowed(currentPoolConnectionString);
+  }
   return pool.query<T>(text, params);
 }
 
@@ -58,6 +93,9 @@ export async function query<T extends QueryResultRow = any>(
  */
 export async function getClient(): Promise<PoolClient> {
   const pool = getDbPool();
+  if (isTestExecution()) {
+    assertTestDatabaseAllowed(currentPoolConnectionString);
+  }
   return pool.connect();
 }
 
@@ -97,5 +135,6 @@ export async function closePool(): Promise<void> {
   if (poolInstance) {
     await poolInstance.end();
     poolInstance = null;
+    currentPoolConnectionString = '';
   }
 }
