@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { app } from '../../../index';
 import { query } from '@vayaplan/db';
 import { sign } from 'hono/jwt';
@@ -31,6 +31,11 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
     // Obtener un venue existente en vayaplan_test
     const vRes = await query(`SELECT id FROM venues WHERE is_active = true ORDER BY id ASC LIMIT 1;`);
     testVenueId = vRes.rows[0].id;
+  });
+
+  afterAll(async () => {
+    // Limpiar fuentes de prueba residuales
+    await query(`DELETE FROM instagram_ingestion_sources WHERE instagram_username LIKE 'testbar_%' OR instagram_username LIKE 'temp_%';`);
   });
 
   // 1. Crear configuración de ingesta con venue existente
@@ -303,46 +308,71 @@ describe('Gestión de Venues de Ingesta Instagram y Cron Programado', () => {
 
   // 14. Fallo en una fuente no bloquea las demás
   test('14. Un fallo en una fuente no interrumpe el procesamiento de las restantes', async () => {
-    const sources = await query(`SELECT id, instagram_username FROM instagram_ingestion_sources ORDER BY id ASC LIMIT 2;`);
+    const sources = await query(`SELECT id, instagram_username, last_status, last_error, last_run_id, last_ingested_at FROM instagram_ingestion_sources ORDER BY id ASC LIMIT 2;`);
     expect(sources.rows.length).toBe(2);
     const [s1, s2] = sources.rows;
 
-    const report = await runInstagramIngestion({
-      sourceIds: [s1.id, s2.id],
-      mockPostsProvider: async (username) => {
-        if (username === s1.instagram_username) {
-          throw new Error('Simulated network timeout for source 1');
-        }
-        return [];
-      },
-    });
+    try {
+      const report = await runInstagramIngestion({
+        sourceIds: [s1.id, s2.id],
+        mockPostsProvider: async (username) => {
+          if (username === s1.instagram_username) {
+            throw new Error('Simulated network timeout for source 1');
+          }
+          return [];
+        },
+      });
 
-    expect(report.sourcesProcessed).toBe(2);
-    expect(report.errors.length).toBe(1);
-    expect(report.errors[0].sourceId).toBe(s1.id);
-    expect(report.resultsBySource.find(r => r.sourceId === s2.id)?.status).toBe('success');
+      expect(report.sourcesProcessed).toBe(2);
+      expect(report.errors.length).toBe(1);
+      expect(report.errors[0].sourceId).toBe(s1.id);
+      expect(report.resultsBySource.find(r => r.sourceId === s2.id)?.status).toBe('success');
+    } finally {
+      for (const s of [s1, s2]) {
+        await query(
+          `UPDATE instagram_ingestion_sources
+           SET last_status = $1, last_error = $2, last_run_id = $3, last_ingested_at = $4
+           WHERE id = $5;`,
+          [s.last_status, s.last_error, s.last_run_id, s.last_ingested_at, s.id]
+        );
+      }
+    }
   });
 
   // 15. Cron programado solo procesa fuentes activas
   test('15. El filtro de ingesta programada procesa únicamente fuentes con is_active = true', async () => {
+    // Snapshot para preservar el estado previo de las fuentes tras la prueba
+    const prevSources = await query(`SELECT id, last_status, last_error, last_run_id, last_ingested_at FROM instagram_ingestion_sources;`);
+
     // Desactivar temporalmente una fuente
     const firstSource = await query(`SELECT id FROM instagram_ingestion_sources LIMIT 1;`);
     const fid = firstSource.rows[0].id;
-    await query(`UPDATE instagram_ingestion_sources SET is_active = false WHERE id = $1;`, [fid]);
 
-    const activeCount = await query(`SELECT count(*) FROM instagram_ingestion_sources WHERE is_active = true;`);
-    const expectedActive = parseInt(activeCount.rows[0].count, 10);
+    try {
+      await query(`UPDATE instagram_ingestion_sources SET is_active = false WHERE id = $1;`, [fid]);
 
-    const report = await runInstagramIngestion({
-      onlyActive: true,
-      executionType: 'cron_scheduled',
-      mockPostsProvider: async () => [],
-    });
+      const activeCount = await query(`SELECT count(*) FROM instagram_ingestion_sources WHERE is_active = true;`);
+      const expectedActive = parseInt(activeCount.rows[0].count, 10);
 
-    expect(report.sourcesProcessed).toBe(expectedActive);
+      const report = await runInstagramIngestion({
+        onlyActive: true,
+        executionType: 'cron_scheduled',
+        mockPostsProvider: async () => [],
+      });
 
-    // Restaurar a activo
-    await query(`UPDATE instagram_ingestion_sources SET is_active = true WHERE id = $1;`, [fid]);
+      expect(report.sourcesProcessed).toBe(expectedActive);
+    } finally {
+      // Restaurar estado e is_active
+      await query(`UPDATE instagram_ingestion_sources SET is_active = true WHERE id = $1;`, [fid]);
+      for (const s of prevSources.rows) {
+        await query(
+          `UPDATE instagram_ingestion_sources
+           SET last_status = $1, last_error = $2, last_run_id = $3, last_ingested_at = $4
+           WHERE id = $5;`,
+          [s.last_status, s.last_error, s.last_run_id, s.last_ingested_at, s.id]
+        );
+      }
+    }
   });
 
   // 16. Prevención de ejecuciones concurrentes simultáneas
