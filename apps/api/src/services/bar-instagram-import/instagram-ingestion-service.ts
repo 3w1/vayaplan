@@ -39,6 +39,7 @@ export interface IngestionRunResult {
   durationMs: number;
   sourcesProcessed: number;
   totalPostsScraped: number;
+  videosSkipped: number;
   proposalsCreated: number;
   duplicatesSkipped: number;
   errors: Array<{ sourceId: number; username: string; error: string }>;
@@ -49,6 +50,7 @@ export interface IngestionRunResult {
     status: 'success' | 'partial' | 'error';
     error?: string;
     postsExtracted: number;
+    videosSkipped: number;
     proposalsCreated: number;
   }>;
 }
@@ -138,10 +140,12 @@ export function resolveApifyMaxTotalChargeUsd(postsLimit: number, overrideMaxTot
   if (overrideMaxTotalChargeUsd !== undefined) {
     if (
       typeof overrideMaxTotalChargeUsd !== 'number' ||
-      isNaN(overrideMaxTotalChargeUsd) ||
+      !Number.isFinite(overrideMaxTotalChargeUsd) ||
       overrideMaxTotalChargeUsd < APIFY_MIN_CHARGE_USD
     ) {
-      throw new Error(`overrideMaxTotalChargeUsd inválido (${overrideMaxTotalChargeUsd}). Debe ser un número >= ${APIFY_MIN_CHARGE_USD} USD.`);
+      throw new Error(
+        `overrideMaxTotalChargeUsd inválido (${overrideMaxTotalChargeUsd}). Debe ser un número finito >= ${APIFY_MIN_CHARGE_USD} USD.`
+      );
     }
     return Number(overrideMaxTotalChargeUsd.toFixed(4));
   }
@@ -149,8 +153,10 @@ export function resolveApifyMaxTotalChargeUsd(postsLimit: number, overrideMaxTot
   const envVal = process.env.APIFY_MAX_TOTAL_CHARGE_USD;
   if (envVal !== undefined && envVal.trim() !== '') {
     const parsed = Number(envVal);
-    if (isNaN(parsed) || parsed < APIFY_MIN_CHARGE_USD) {
-      throw new Error(`Variable de entorno APIFY_MAX_TOTAL_CHARGE_USD inválida (${envVal}). Debe ser un número >= ${APIFY_MIN_CHARGE_USD} USD.`);
+    if (!Number.isFinite(parsed) || parsed < APIFY_MIN_CHARGE_USD) {
+      throw new Error(
+        `Variable de entorno APIFY_MAX_TOTAL_CHARGE_USD inválida (${envVal}). Debe ser un número finito >= ${APIFY_MIN_CHARGE_USD} USD.`
+      );
     }
     return Number(parsed.toFixed(4));
   }
@@ -193,10 +199,10 @@ export async function runInstagramIngestion(options: RunInstagramIngestionOption
   if (options.overrideMaxTotalChargeUsd !== undefined) {
     if (
       typeof options.overrideMaxTotalChargeUsd !== 'number' ||
-      isNaN(options.overrideMaxTotalChargeUsd) ||
+      !Number.isFinite(options.overrideMaxTotalChargeUsd) ||
       options.overrideMaxTotalChargeUsd < APIFY_MIN_CHARGE_USD
     ) {
-      throw new Error(`overrideMaxTotalChargeUsd debe ser un número >= ${APIFY_MIN_CHARGE_USD} USD.`);
+      throw new Error(`overrideMaxTotalChargeUsd debe ser un número finito >= ${APIFY_MIN_CHARGE_USD} USD.`);
     }
   }
 
@@ -237,6 +243,7 @@ export async function runInstagramIngestion(options: RunInstagramIngestionOption
     durationMs: 0,
     sourcesProcessed: 0,
     totalPostsScraped: 0,
+    videosSkipped: 0,
     proposalsCreated: 0,
     duplicatesSkipped: 0,
     errors: [],
@@ -289,6 +296,7 @@ export async function runInstagramIngestion(options: RunInstagramIngestionOption
         status: 'success' as 'success' | 'partial' | 'error',
         error: undefined as string | undefined,
         postsExtracted: 0,
+        videosSkipped: 0,
         proposalsCreated: 0,
       };
 
@@ -327,6 +335,12 @@ export async function runInstagramIngestion(options: RunInstagramIngestionOption
             // - Carruseles (Sidecar): Los posts multislide tienen type 'Sidecar' y son admitidos como carrusel de imágenes;
             //   únicamente los posts puramente de vídeo ('Video' o con videoUrl exclusivo) son descartados.
             if (!includeReels && (post.type === 'Video' || post.videoUrl)) {
+              sourceResult.videosSkipped++;
+              result.videosSkipped++;
+              const postIdentifier = post.shortCode || post.id || 'sin_identificador';
+              console.log(
+                `[Instagram Ingestion] Publicación ${postIdentifier} (@${source.instagram_username}) omitida localmente por ser vídeo/Reel (include_reels=false).`
+              );
               continue;
             }
 
@@ -600,7 +614,8 @@ export async function runInstagramIngestion(options: RunInstagramIngestionOption
  * Contrato del Actor:
  * - Parámetros oficiales soportados en inputSchema:
  *   ['username', 'resultsLimit', 'skipPinnedPosts', 'includeMusicData', 'onlyPostsNewerThan', 'dataDetailLevel'].
- *   Nota: 'includeReels' NO existe en el esquema y NO se envía.
+ *   Nota: 'includeReels' NO existe en el esquema y NO se envía. El parámetro _includeReels se conserva
+ *   opcional en la firma por compatibilidad, pero el descarte de vídeos/Reels ocurre exclusivamente en el llamador local.
  * - skipPinnedPosts: false no garantiza orden cronológico estricto de las publicaciones más recientes.
  * - Control de gasto: maxTotalChargeUsd se calcula y envía obligatoriamente como parámetro de query string.
  * - Trazabilidad y timeout: El endpoint síncrono run-sync-get-dataset-items retorna directamente el dataset
@@ -610,9 +625,14 @@ export async function runInstagramIngestion(options: RunInstagramIngestionOption
 export async function fetchPostsFromApify(
   username: string,
   limit: number,
-  includeReels: boolean,
+  _includeReels?: boolean,
   options?: { maxTotalChargeUsd?: number }
 ): Promise<ApifyInstagramRawPost[]> {
+  if (!username || typeof username !== 'string' || !username.trim()) {
+    throw new Error('username de Instagram requerido y no válido.');
+  }
+  const sanitizedUsername = username.trim();
+
   if (isTestExecution() && process.env.ALLOW_REAL_APIFY_IN_TESTS !== 'true') {
     throw new Error('[APIFY_SAFETY_GUARD] Real Apify scraping calls are strictly blocked in test environments. Provide a mockPostsProvider.');
   }
@@ -626,7 +646,7 @@ export async function fetchPostsFromApify(
 
   const endpoint = `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(apifyToken)}&maxTotalChargeUsd=${chargeLimit}`;
   const input = {
-    username: [username],
+    username: [sanitizedUsername],
     resultsLimit: limit,
     skipPinnedPosts: false,
   };

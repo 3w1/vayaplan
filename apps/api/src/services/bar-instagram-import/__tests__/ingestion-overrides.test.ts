@@ -109,7 +109,9 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
     expect(capturedIncludeReels).toBe(false);
     expect(report.sourcesProcessed).toBe(1);
     expect(report.totalPostsScraped).toBe(2);
-    // El reel debió ser descartado localmente porque includeReels=false
+    // Trazabilidad: 1 reel descartado localmente porque includeReels=false
+    expect(report.videosSkipped).toBe(1);
+    expect(report.resultsBySource[0].videosSkipped).toBe(1);
     expect(report.proposalsCreated).toBe(1);
 
     // Verificar en BD que la configuración persistente NO ha cambiado
@@ -187,7 +189,31 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
         sourceIds: [TEST_SOURCE_ID],
         overrideMaxTotalChargeUsd: 0.001,
       })
-    ).rejects.toThrow('overrideMaxTotalChargeUsd debe ser un número >= 0.005 USD');
+    ).rejects.toThrow('overrideMaxTotalChargeUsd debe ser un número finito >= 0.005 USD');
+
+    // Servicio: overrideMaxTotalChargeUsd = Infinity
+    await expect(
+      runInstagramIngestion({
+        sourceIds: [TEST_SOURCE_ID],
+        overrideMaxTotalChargeUsd: Infinity,
+      })
+    ).rejects.toThrow('overrideMaxTotalChargeUsd debe ser un número finito');
+
+    // Servicio: overrideMaxTotalChargeUsd = -Infinity
+    await expect(
+      runInstagramIngestion({
+        sourceIds: [TEST_SOURCE_ID],
+        overrideMaxTotalChargeUsd: -Infinity,
+      })
+    ).rejects.toThrow('overrideMaxTotalChargeUsd debe ser un número finito');
+
+    // Servicio: overrideMaxTotalChargeUsd = NaN
+    await expect(
+      runInstagramIngestion({
+        sourceIds: [TEST_SOURCE_ID],
+        overrideMaxTotalChargeUsd: NaN,
+      })
+    ).rejects.toThrow('overrideMaxTotalChargeUsd debe ser un número finito');
 
     // Ruta HTTP: POST /api/v1/admin/instagram-ingestion-sources/:id/run con límite inválido
     const resLimitInvalid = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
@@ -257,7 +283,7 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
     }
   });
 
-  it('5. Descarte local de vídeos/Reels antes de clasificación, persistencia y sin peticiones compensatorias', async () => {
+  it('5. Descarte local de vídeos/Reels antes de clasificación, persistencia y trazabilidad sin compensación', async () => {
     let callCount = 0;
 
     const mockProvider = async (username: string, limit: number, includeReels?: boolean): Promise<ApifyInstagramRawPost[]> => {
@@ -273,13 +299,22 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
           displayUrl: 'https://media.vayaplan.com/bars/portal-cafe-copas/DersOuAuW_H.jpg',
         },
         {
-          id: 'post_video_reel_dropped',
-          shortCode: 'post_video_reel_dropped',
+          id: 'post_video_reel_dropped_1',
+          shortCode: 'post_video_reel_dropped_1',
           type: 'Video',
-          videoUrl: 'https://instagram.com/reel/post_video_reel_dropped/',
-          caption: 'Reel descartado',
+          videoUrl: 'https://instagram.com/reel/post_video_reel_dropped_1/',
+          caption: 'Reel descartado 1',
           timestamp: '2026-11-10T14:00:00.000Z',
           displayUrl: 'https://media.vayaplan.com/test3.jpg',
+        },
+        {
+          id: 'post_video_reel_dropped_2',
+          shortCode: 'post_video_reel_dropped_2',
+          type: 'Video',
+          videoUrl: 'https://instagram.com/reel/post_video_reel_dropped_2/',
+          caption: 'Reel descartado 2',
+          timestamp: '2026-11-10T15:00:00.000Z',
+          displayUrl: 'https://media.vayaplan.com/test4.jpg',
         },
       ];
     };
@@ -287,25 +322,33 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
     const report = await runInstagramIngestion({
       sourceIds: [TEST_SOURCE_ID],
       executionType: 'manual_single',
-      overridePostsLimit: 2,
+      overridePostsLimit: 3,
       overrideIncludeReels: false,
       mockPostsProvider: mockProvider,
     });
 
     // Sin peticiones compensatorias: el extractor solo fue invocado una vez
     expect(callCount).toBe(1);
-    expect(report.totalPostsScraped).toBe(2);
-    // Solo el sidecar pasó a propuesta; el video fue descartado
+    expect(report.totalPostsScraped).toBe(3);
+    // Trazabilidad de descartes: 2 vídeos descartados
+    expect(report.videosSkipped).toBe(2);
+    expect(report.resultsBySource[0].videosSkipped).toBe(2);
+    // Solo el sidecar pasó a propuesta; los 2 vídeos fueron descartados
     expect(report.proposalsCreated).toBe(1);
 
-    // Verificar que en base de datos NO existe ninguna propuesta con el shortcode del vídeo descartado
-    const checkDb = await query(
-      `SELECT id FROM curation_proposals WHERE instagram_post_shortcode = 'post_video_reel_dropped';`
+    // Verificar que en base de datos NO existe ninguna propuesta con los shortcodes de los vídeos descartados
+    const checkDb1 = await query(
+      `SELECT id FROM curation_proposals WHERE instagram_post_shortcode = 'post_video_reel_dropped_1';`
     );
-    expect(checkDb.rows.length).toBe(0);
+    expect(checkDb1.rows.length).toBe(0);
+
+    const checkDb2 = await query(
+      `SELECT id FROM curation_proposals WHERE instagram_post_shortcode = 'post_video_reel_dropped_2';`
+    );
+    expect(checkDb2.rows.length).toBe(0);
   });
 
-  it('6. Política de control de gasto: cálculo dinámico, límites mínimos y rechazo de valores inválidos', () => {
+  it('6. Política de control de gasto: cálculo dinámico, límites mínimos y rechazo de valores inválidos (blindaje contra Infinity)', () => {
     // 1. Límite mínimo de Apify respetado (0.005)
     expect(APIFY_MIN_CHARGE_USD).toBe(0.005);
     expect(resolveApifyMaxTotalChargeUsd(1)).toBe(0.005); // 1 * 0.003 = 0.003 -> clamped to 0.005
@@ -316,21 +359,40 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
     expect(resolveApifyMaxTotalChargeUsd(20)).toBe(0.06);  // 20 * 0.003 = 0.06
 
     // 3. Override explícito válido
+    expect(resolveApifyMaxTotalChargeUsd(3, 0.005)).toBe(0.005);
     expect(resolveApifyMaxTotalChargeUsd(3, 0.01)).toBe(0.01);
-    expect(resolveApifyMaxTotalChargeUsd(5, 0.025)).toBe(0.025);
+    expect(resolveApifyMaxTotalChargeUsd(5, 0.02)).toBe(0.02);
 
-    // 4. Rechazo de override explícito inválido (< 0.005 o NaN)
+    // 4. Rechazo de override explícito inválido (< 0.005, NaN, Infinity, -Infinity)
+    expect(() => resolveApifyMaxTotalChargeUsd(3, 0.001)).toThrow('overrideMaxTotalChargeUsd inválido');
     expect(() => resolveApifyMaxTotalChargeUsd(3, 0.004)).toThrow('overrideMaxTotalChargeUsd inválido');
     expect(() => resolveApifyMaxTotalChargeUsd(3, NaN)).toThrow('overrideMaxTotalChargeUsd inválido');
+    expect(() => resolveApifyMaxTotalChargeUsd(3, Infinity)).toThrow('overrideMaxTotalChargeUsd inválido');
+    expect(() => resolveApifyMaxTotalChargeUsd(3, -Infinity)).toThrow('overrideMaxTotalChargeUsd inválido');
 
     // 5. Variable de entorno APIFY_MAX_TOTAL_CHARGE_USD
     process.env.APIFY_MAX_TOTAL_CHARGE_USD = '0.02';
     expect(resolveApifyMaxTotalChargeUsd(3)).toBe(0.02);
 
-    process.env.APIFY_MAX_TOTAL_CHARGE_USD = '0.002'; // Inválido (< 0.005)
+    process.env.APIFY_MAX_TOTAL_CHARGE_USD = '0.001'; // Inválido (< 0.005)
     expect(() => resolveApifyMaxTotalChargeUsd(3)).toThrow('APIFY_MAX_TOTAL_CHARGE_USD inválida');
 
+    process.env.APIFY_MAX_TOTAL_CHARGE_USD = 'Infinity'; // Inválido
+    expect(() => resolveApifyMaxTotalChargeUsd(3)).toThrow('APIFY_MAX_TOTAL_CHARGE_USD inválida');
+
+    process.env.APIFY_MAX_TOTAL_CHARGE_USD = '-Infinity'; // Inválido
+    expect(() => resolveApifyMaxTotalChargeUsd(3)).toThrow('APIFY_MAX_TOTAL_CHARGE_USD inválida');
+
+    process.env.APIFY_MAX_TOTAL_CHARGE_USD = 'NaN'; // Inválido
+    expect(() => resolveApifyMaxTotalChargeUsd(3)).toThrow('APIFY_MAX_TOTAL_CHARGE_USD inválida');
+
+    // Cadena vacía o espacios debe usar el cálculo dinámico
+    process.env.APIFY_MAX_TOTAL_CHARGE_USD = '   ';
+    expect(resolveApifyMaxTotalChargeUsd(3)).toBe(0.009);
+
+    // Variable no definida debe usar el cálculo dinámico
     delete process.env.APIFY_MAX_TOTAL_CHARGE_USD;
+    expect(resolveApifyMaxTotalChargeUsd(3)).toBe(0.009);
   });
 
   it('7. Timeout local: socket abortado, estado error en BD, sin reintentos automáticos y lock liberado', async () => {
@@ -401,7 +463,11 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
     expect(Number(eventsRes.rows[0].count)).toBe(0);
   });
 
-  it('10. Bloqueo de llamadas reales a Apify en entorno de test sin mock', async () => {
+  it('10. Bloqueo de llamadas reales a Apify y validación defensiva de username', async () => {
+    // Si username está vacío o solo contiene espacios, debe fallar antes de Apify sin consumir cuota
+    await expect(fetchPostsFromApify('', 3, false)).rejects.toThrow('username de Instagram requerido y no válido');
+    await expect(fetchPostsFromApify('   ', 3, false)).rejects.toThrow('username de Instagram requerido y no válido');
+
     // Si se invoca fetchPostsFromApify sin mockPostsProvider ni bypass explícito de seguridad, debe lanzar excepción
     await expect(fetchPostsFromApify('salvajepalencia', 3, false)).rejects.toThrow(
       '[APIFY_SAFETY_GUARD] Real Apify scraping calls are strictly blocked in test environments.'
