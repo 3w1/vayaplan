@@ -44,10 +44,11 @@ afterAll(async () => {
       [createdEventIds]
     );
   }
+  await testPool.query(`DELETE FROM events WHERE venue_id = $1;`, [testVenueId]);
   if (createdProposalIds.length > 0) {
     await testPool.query(
-      `DELETE FROM curation_proposals WHERE id = ANY($1::int[]);`,
-      [createdProposalIds]
+      `DELETE FROM curation_proposals WHERE id = ANY($1::int[]) OR venue_id = $2;`,
+      [createdProposalIds, testVenueId]
     );
   }
   await testPool.query(`DELETE FROM venues WHERE id = $1;`, [testVenueId]);

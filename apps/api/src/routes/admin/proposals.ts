@@ -462,7 +462,13 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
         effectivePriceCents = norm.priceCents;
         isFree = norm.priceCents === 0;
         effectivePriceStatus = norm.priceCents > 0 ? 'CONFIRMED' : 'UNKNOWN';
-      } catch {
+      } catch (err: any) {
+        if (body.price !== undefined || body.price_cents !== undefined) {
+          return c.json({
+            error: 'invalid_price',
+            message: `Precio inválido: ${err.message}`,
+          }, 400);
+        }
         effectivePriceCents = null;
         effectivePriceStatus = 'UNKNOWN';
       }

@@ -30,6 +30,14 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
   let adminToken: string;
   const cronSecret = process.env.INTERNAL_CRON_SECRET!;
 
+  // Fixtures sintéticos exclusivos para pruebas sin tocar fuentes ni venues de producción
+  let fixtureVenue1Id: number;
+  let fixtureVenue2Id: number;
+  let fixtureSource1Id: number;
+  let fixtureSource2Id: number;
+  const fixtureUser1 = `fixture_user_${Date.now()}_1`;
+  const fixtureUser2 = `fixture_user_${Date.now()}_2`;
+
   beforeAll(async () => {
     adminToken = await sign(
       {
@@ -44,11 +52,53 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
     // Asegurar que el lock global esté limpio antes de empezar
     await releasePersistentLock(DEFAULT_LOCK_KEY);
     await query(`DELETE FROM instagram_ingestion_locks WHERE lock_key LIKE 'test_%';`);
+
+    // Crear venues sintéticos para las pruebas
+    const v1 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Hardening Fixture Venue 1', $1, 'Calle Hardening 1', true) RETURNING id;`,
+      [`hardening-fixture-1-${Date.now()}`]
+    );
+    fixtureVenue1Id = v1.rows[0].id;
+
+    const v2 = await query(
+      `INSERT INTO venues (city_id, name, slug, address, is_active)
+       VALUES (1, 'Hardening Fixture Venue 2', $1, 'Calle Hardening 2', true) RETURNING id;`,
+      [`hardening-fixture-2-${Date.now()}`]
+    );
+    fixtureVenue2Id = v2.rows[0].id;
+
+    // Crear fuentes sintéticas exclusivas
+    const s1 = await query(
+      `INSERT INTO instagram_ingestion_sources (venue_id, instagram_username, is_active)
+       VALUES ($1, $2, true) RETURNING id;`,
+      [fixtureVenue1Id, fixtureUser1]
+    );
+    fixtureSource1Id = s1.rows[0].id;
+
+    const s2 = await query(
+      `INSERT INTO instagram_ingestion_sources (venue_id, instagram_username, is_active)
+       VALUES ($1, $2, true) RETURNING id;`,
+      [fixtureVenue2Id, fixtureUser2]
+    );
+    fixtureSource2Id = s2.rows[0].id;
   });
 
   afterAll(async () => {
     await releasePersistentLock(DEFAULT_LOCK_KEY);
     await query(`DELETE FROM instagram_ingestion_locks WHERE lock_key LIKE 'test_%';`);
+
+    // Eliminar fixtures sintéticos
+    if (fixtureSource1Id || fixtureSource2Id) {
+      await query(`DELETE FROM instagram_ingestion_sources WHERE id = ANY($1);`, [
+        [fixtureSource1Id, fixtureSource2Id].filter(Boolean),
+      ]);
+    }
+    if (fixtureVenue1Id || fixtureVenue2Id) {
+      await query(`DELETE FROM venues WHERE id = ANY($1);`, [
+        [fixtureVenue1Id, fixtureVenue2Id].filter(Boolean),
+      ]);
+    }
   });
 
   // 1. Adquirir lock antes de una ingesta
@@ -58,7 +108,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
       lockKey,
       lockedBy: 'worker_node_1',
       ttlMinutes: 15,
-      executionDetails: { sourceIds: [1, 2] },
+      executionDetails: { sourceIds: [fixtureSource1Id, fixtureSource2Id] },
     });
 
     expect(result.success).toBe(true);
@@ -86,7 +136,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
       lockKey,
       lockedBy: 'worker_primary',
       ttlMinutes: 15,
-      executionDetails: { sources: ['salvajepalencia'] },
+      executionDetails: { sources: [fixtureUser1] },
     });
     expect(firstAcquire.success).toBe(true);
 
@@ -101,7 +151,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
     expect(secondAcquire.lockInfo).toBeDefined();
     expect(secondAcquire.lockInfo?.status).toBe('running');
     expect(secondAcquire.lockInfo?.lockedBy).toBe('worker_primary');
-    expect(secondAcquire.lockInfo?.sources).toEqual(['salvajepalencia']);
+    expect(secondAcquire.lockInfo?.sources).toEqual([fixtureUser1]);
 
     // Limpiar
     await releasePersistentLock(lockKey);
@@ -133,38 +183,22 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
   test('4. Libera el lock en finally al ocurrir un fallo controlado durante la ingesta', async () => {
     await releasePersistentLock(DEFAULT_LOCK_KEY);
 
-    const prevSources = await query(
-      `SELECT id, last_status, last_error, last_run_id, last_ingested_at FROM instagram_ingestion_sources WHERE id = 1;`
-    );
-
     // Simular ejecución donde el proveedor de posts arroja error crítico
     try {
-      try {
-        await runInstagramIngestion({
-          sourceIds: [1],
-          executionType: 'manual_single',
-          mockPostsProvider: async () => {
-            throw new Error('Error fatal simulado en proveedor de posts');
-          },
-        });
-      } catch (err: any) {
-        expect(err.message).toBe('Error fatal simulado en proveedor de posts');
-      }
-
-      // Verificar que el lock persistente se liberó en finally
-      const lockStatus = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
-      expect(lockStatus.locked).toBe(false);
-    } finally {
-      if (prevSources.rows.length > 0) {
-        const s = prevSources.rows[0];
-        await query(
-          `UPDATE instagram_ingestion_sources
-           SET last_status = $1, last_error = $2, last_run_id = $3, last_ingested_at = $4
-           WHERE id = $5;`,
-          [s.last_status, s.last_error, s.last_run_id, s.last_ingested_at, s.id]
-        );
-      }
+      await runInstagramIngestion({
+        sourceIds: [fixtureSource1Id],
+        executionType: 'manual_single',
+        mockPostsProvider: async () => {
+          throw new Error('Error fatal simulado en proveedor de posts');
+        },
+      });
+    } catch (err: any) {
+      expect(err.message).toBe('Error fatal simulado en proveedor de posts');
     }
+
+    // Verificar que el lock persistente se liberó en finally
+    const lockStatus = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
+    expect(lockStatus.locked).toBe(false);
   });
 
   // 5. Expirar automáticamente el lock si el proceso muere (TTL)
@@ -392,7 +426,7 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
         'Content-Type': 'application/json',
         Authorization: `Bearer ${adminToken}`,
       },
-      body: JSON.stringify({ ids: [1, 2] }),
+      body: JSON.stringify({ ids: [fixtureSource1Id, fixtureSource2Id] }),
     });
 
     expect(resSelected.status).toBe(409);
@@ -420,38 +454,23 @@ describe('Endurecimiento de Ingesta Instagram (Lock Persistente y Validación R2
   test('11. Verifica que un fallo parcial en una fuente no deja el lock persistente bloqueado', async () => {
     await releasePersistentLock(DEFAULT_LOCK_KEY);
 
-    const prevSources = await query(
-      `SELECT id, last_status, last_error, last_run_id, last_ingested_at FROM instagram_ingestion_sources WHERE id IN (1, 2);`
-    );
+    const report = await runInstagramIngestion({
+      sourceIds: [fixtureSource1Id, fixtureSource2Id],
+      executionType: 'manual_selected',
+      mockPostsProvider: async (username) => {
+        if (username === fixtureUser1) {
+          throw new Error('Timeout de conexión a Instagram');
+        }
+        return [];
+      },
+    });
 
-    try {
-      const report = await runInstagramIngestion({
-        sourceIds: [1, 2],
-        executionType: 'manual_selected',
-        mockPostsProvider: async (username) => {
-          if (username === 'salvajepalencia') {
-            throw new Error('Timeout de conexión a Instagram');
-          }
-          return [];
-        },
-      });
+    expect(report.sourcesProcessed).toBe(2);
+    expect(report.errors.length).toBe(1);
 
-      expect(report.sourcesProcessed).toBe(2);
-      expect(report.errors.length).toBe(1);
-
-      // Verificar que el lock se liberó
-      const lockStatus = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
-      expect(lockStatus.locked).toBe(false);
-    } finally {
-      for (const s of prevSources.rows) {
-        await query(
-          `UPDATE instagram_ingestion_sources
-           SET last_status = $1, last_error = $2, last_run_id = $3, last_ingested_at = $4
-           WHERE id = $5;`,
-          [s.last_status, s.last_error, s.last_run_id, s.last_ingested_at, s.id]
-        );
-      }
-    }
+    // Verificar que el lock se liberó
+    const lockStatus = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
+    expect(lockStatus.locked).toBe(false);
   });
 
   // 12. Verificar que las 5 propuestas del piloto siguen pending
