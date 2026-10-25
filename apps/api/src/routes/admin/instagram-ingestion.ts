@@ -290,10 +290,24 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources/:id/run', async
     return c.json({ error: 'not_found', message: 'Fuente de ingesta no encontrada.' }, 404);
   }
 
+  let body: any = {};
+  try {
+    body = await c.req.json();
+  } catch {}
+
+  const overridePostsLimit = typeof body?.override_posts_limit === 'number'
+    ? Math.min(Math.max(Math.floor(body.override_posts_limit), 1), 20)
+    : undefined;
+  const overrideIncludeReels = typeof body?.override_include_reels === 'boolean'
+    ? body.override_include_reels
+    : undefined;
+
   try {
     const report = await runInstagramIngestion({
       sourceIds: [id],
       executionType: 'manual_single',
+      overridePostsLimit,
+      overrideIncludeReels,
     });
 
     return c.json({

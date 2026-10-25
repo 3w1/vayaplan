@@ -116,7 +116,9 @@ export async function runInstagramIngestion(options: {
   sourceIds?: number[];
   onlyActive?: boolean;
   executionType?: 'manual_single' | 'manual_selected' | 'manual_all' | 'cron_scheduled';
-  mockPostsProvider?: (username: string, limit: number) => Promise<ApifyInstagramRawPost[]>;
+  mockPostsProvider?: (username: string, limit: number, includeReels?: boolean) => Promise<ApifyInstagramRawPost[]>;
+  overridePostsLimit?: number;
+  overrideIncludeReels?: boolean;
 }): Promise<IngestionRunResult> {
   const executionId = `ig_run_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const startedAt = new Date().toISOString();
@@ -211,14 +213,21 @@ export async function runInstagramIngestion(options: {
       };
 
       try {
-        const postsLimit = Math.min(Math.max(source.posts_per_run || 5, 1), 20);
+        const postsLimit = options.overridePostsLimit !== undefined
+          ? Math.min(Math.max(options.overridePostsLimit, 1), 20)
+          : Math.min(Math.max(source.posts_per_run || 5, 1), 20);
+
+        const includeReels = options.overrideIncludeReels !== undefined
+          ? options.overrideIncludeReels
+          : Boolean(source.include_reels);
+
         let posts: ApifyInstagramRawPost[] = [];
 
         if (options.mockPostsProvider) {
-          posts = await options.mockPostsProvider(source.instagram_username, postsLimit);
+          posts = await options.mockPostsProvider(source.instagram_username, postsLimit, includeReels);
         } else {
           // En modo producción / Apify, si hay token de Apify disponible
-          posts = await fetchPostsFromApify(source.instagram_username, postsLimit, source.include_reels);
+          posts = await fetchPostsFromApify(source.instagram_username, postsLimit, includeReels);
         }
 
         sourceResult.postsExtracted = posts.length;
@@ -229,7 +238,7 @@ export async function runInstagramIngestion(options: {
         for (const post of posts) {
           try {
             // Respetar include_reels
-            if (!source.include_reels && (post.type === 'Video' || post.videoUrl)) {
+            if (!includeReels && (post.type === 'Video' || post.videoUrl)) {
               continue;
             }
 
@@ -491,7 +500,7 @@ export async function runInstagramIngestion(options: {
 /**
  * Llamada real al scraper de Apify (apify/instagram-post-scraper)
  */
-async function fetchPostsFromApify(username: string, limit: number, includeReels: boolean): Promise<ApifyInstagramRawPost[]> {
+export async function fetchPostsFromApify(username: string, limit: number, includeReels: boolean): Promise<ApifyInstagramRawPost[]> {
   if (isTestExecution() && process.env.ALLOW_REAL_APIFY_IN_TESTS !== 'true') {
     throw new Error('[APIFY_SAFETY_GUARD] Real Apify scraping calls are strictly blocked in test environments. Provide a mockPostsProvider.');
   }
