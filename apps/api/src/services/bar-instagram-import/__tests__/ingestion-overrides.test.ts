@@ -142,11 +142,11 @@ describe('Ingestion Overrides — Controlled Verification of Salvaje', () => {
 
       expect(interceptedUrl).toContain('https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items');
       expect(interceptedUrl).toContain('token=test_mock_token_123');
+      expect(interceptedUrl).toContain('maxTotalChargeUsd=0.01');
       expect(interceptedBody).toEqual({
         username: ['salvajepalencia'],
         resultsLimit: 3,
         skipPinnedPosts: false,
-        includeReels: false,
       });
     } finally {
       globalThis.fetch = origFetch;

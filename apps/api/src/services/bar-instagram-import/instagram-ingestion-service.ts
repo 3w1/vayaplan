@@ -510,12 +510,11 @@ export async function fetchPostsFromApify(username: string, limit: number, inclu
     throw new Error('APIFY_TOKEN no configurado en el entorno.');
   }
 
-  const endpoint = `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(apifyToken)}`;
+  const endpoint = `https://api.apify.com/v2/acts/apify~instagram-post-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(apifyToken)}&maxTotalChargeUsd=0.01`;
   const input = {
     username: [username],
     resultsLimit: limit,
     skipPinnedPosts: false,
-    includeReels: includeReels,
   };
 
   const res = await fetch(endpoint, {
