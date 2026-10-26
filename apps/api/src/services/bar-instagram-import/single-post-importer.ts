@@ -1,15 +1,21 @@
+import http from 'node:http';
+import https from 'node:https';
+import dns from 'node:dns';
+import net from 'node:net';
 import { query } from '@vayaplan/db';
 import sharp from 'sharp';
 import { putR2Object, getPublicUrlForKey } from '../r2-client';
 import { validateInstagramPostUrl } from './url-validator';
 import { resolveApifyMaxTotalChargeUsd, sanitizeProposedTime } from './instagram-ingestion-service';
-import { acquirePersistentLock, releasePersistentLock } from './persistent-lock';
+import { DEFAULT_LOCK_KEY, acquirePersistentLock, releasePersistentLock } from './persistent-lock';
 import { classifyBarPost } from './bar-classifier';
 import { matchPostWithPublishedEvents } from './event-matcher';
 import type { ApifyInstagramRawPost } from './bar-types';
 
 export const MAX_SINGLE_POST_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
+export const MAX_IMAGE_INPUT_PIXELS = 40_000_000; // 40 MPx
 export const SINGLE_POST_APIFY_BUDGET_USD = 0.005; // Mínimo absoluto exigido por Apify
+export const ALLOWED_IMAGE_FORMATS = new Set(['jpeg', 'jpg', 'png', 'webp']);
 
 let testPostFetcherOverride: ((canonicalUrl: string, chargeLimit: number) => Promise<any[]>) | null = null;
 let testImageFetcherOverride: ((url: string) => Promise<Buffer>) | null = null;
@@ -42,28 +48,118 @@ export interface ImportSingleInstagramPostResult {
 }
 
 /**
- * Valida que una URL de imagen no apunte a localhost, IPs privadas o esquemas inseguros.
+ * Determina si una dirección IP (IPv4 o IPv6) pertenece a rangos privados,
+ * reservados, de loopback, enlace local, broadcast o CGNAT (RFC 1918, RFC 3927, RFC 4193, RFC 6598).
+ * Analiza también direcciones IPv4 mapeadas en IPv6 (::ffff:0:0/96).
+ */
+export function isPrivateOrReservedIp(ip: string): boolean {
+  const family = net.isIP(ip);
+  if (family === 0) return true; // Bloquear si no es una IP sintáctica válida
+
+  if (family === 4) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some(n => isNaN(n) || n < 0 || n > 255)) return true;
+    const [a, b, c, d] = parts;
+
+    // 0.0.0.0/8 (Red actual)
+    if (a === 0) return true;
+    // 10.0.0.0/8 (Privada RFC 1918)
+    if (a === 10) return true;
+    // 100.64.0.0/10 (CGNAT RFC 6598)
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    // 127.0.0.0/8 (Loopback)
+    if (a === 127) return true;
+    // 169.254.0.0/16 (Enlace local RFC 3927 / Cloud metadata como 169.254.169.254)
+    if (a === 169 && b === 254) return true;
+    // 172.16.0.0/12 (Privada RFC 1918)
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    // 192.0.0.0/24 (Asignaciones IETF)
+    if (a === 192 && b === 0 && c === 0) return true;
+    // 192.0.2.0/24 (TEST-NET-1)
+    if (a === 192 && b === 0 && c === 2) return true;
+    // 192.88.99.0/24 (Relay 6to4)
+    if (a === 192 && b === 88 && c === 99) return true;
+    // 192.168.0.0/16 (Privada RFC 1918)
+    if (a === 192 && b === 168) return true;
+    // 198.18.0.0/15 (Pruebas de red)
+    if (a === 198 && b >= 18 && b <= 19) return true;
+    // 198.51.100.0/24 (TEST-NET-2)
+    if (a === 198 && b === 51 && c === 100) return true;
+    // 203.0.113.0/24 (TEST-NET-3)
+    if (a === 203 && b === 0 && c === 113) return true;
+    // 224.0.0.0/4 (Multicast) y 240.0.0.0/4 (Reservado / Broadcast 255.255.255.255)
+    if (a >= 224) return true;
+
+    return false;
+  }
+
+  if (family === 6) {
+    const lower = ip.toLowerCase();
+
+    // IPv4-mapped IPv6 (::ffff:x.x.x.x o notación hexadecimal)
+    if (lower.startsWith('::ffff:')) {
+      const rest = lower.slice(7);
+      if (net.isIPv4(rest)) {
+        return isPrivateOrReservedIp(rest);
+      }
+      const hexParts = rest.split(':');
+      if (hexParts.length === 2) {
+        const p1 = parseInt(hexParts[0], 16);
+        const p2 = parseInt(hexParts[1], 16);
+        if (!isNaN(p1) && !isNaN(p2)) {
+          const a = (p1 >> 8) & 0xff;
+          const b = p1 & 0xff;
+          const c = (p2 >> 8) & 0xff;
+          const d = p2 & 0xff;
+          return isPrivateOrReservedIp(`${a}.${b}.${c}.${d}`);
+        }
+      }
+    }
+
+    // ::/128 y ::1/128 (Loopback y sin especificar)
+    if (lower === '::' || lower === '::1') return true;
+    // fc00::/7 (ULA - Unique Local Addresses: fc00:... a fdff:...)
+    if (/^f[cd][0-9a-f]{2}:/i.test(lower)) return true;
+    // fe80::/10 (Link-local unicast: fe80:... a febf:...)
+    if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true;
+    // ff00::/8 (Multicast)
+    if (/^ff[0-9a-f]{2}:/i.test(lower)) return true;
+    // 2001:db8::/32 (Documentación)
+    if (lower.startsWith('2001:db8:')) return true;
+    // 64:ff9b::/96 (Traducción IPv4/IPv6)
+    if (lower.startsWith('64:ff9b:')) return true;
+
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Valida estáticamente que una URL de imagen no apunte a esquemas inseguros,
+ * puertos inusuales, credenciales o destinos locales/privados conocidos.
  */
 export function isSafeImageUrl(rawUrl: string): boolean {
   try {
     const u = new URL(rawUrl);
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
     if (u.username || u.password) return false;
+    if (u.port && u.port !== '80' && u.port !== '443') return false;
+
     const h = u.hostname.toLowerCase();
     if (
       h === 'localhost' ||
-      h === '127.0.0.1' ||
-      h === '::1' ||
-      h === '0.0.0.0' ||
-      h === '169.254.169.254' ||
-      h.endsWith('.internal') ||
-      h.endsWith('.local')
+      h.endsWith('.localhost') ||
+      h.endsWith('.local') ||
+      h.endsWith('.internal')
     ) {
       return false;
     }
-    if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h)) {
+
+    if (net.isIP(h) && isPrivateOrReservedIp(h)) {
       return false;
     }
+
     return true;
   } catch {
     return false;
@@ -71,8 +167,156 @@ export function isSafeImageUrl(rawUrl: string): boolean {
 }
 
 /**
- * Descarga y almacena de forma segura una imagen en Cloudflare R2 con validación anti-SSRF,
- * decodificación mediante Sharp y límite de tamaño.
+ * Descarga de forma segura un buffer de imagen con protección anti-SSRF rigurosa:
+ * 1. Prohíbe explícitamente redirecciones HTTP (redirect: 'error').
+ * 2. Valida la resolución DNS en tiempo de conexión denegando IPs privadas o reservadas.
+ * 3. Aplica límite de tamaño (15 MB) mediante lectura por chunks (streaming) abortable.
+ * 4. Aplica timeout global de socket.
+ */
+export async function fetchSafeImageBuffer(
+  rawUrl: string,
+  maxBytes: number = MAX_SINGLE_POST_IMAGE_SIZE_BYTES,
+  timeoutMs: number = 15000
+): Promise<Buffer> {
+  if (!isSafeImageUrl(rawUrl)) {
+    throw new Error('SSRF guard: URL de imagen no segura o destino no permitido.');
+  }
+
+  const parsedUrl = new URL(rawUrl);
+  const isHttps = parsedUrl.protocol === 'https:';
+  const clientModule = isHttps ? https : http;
+
+  return new Promise<Buffer>((resolve, reject) => {
+    let finished = false;
+
+    const cleanupAndReject = (err: Error) => {
+      if (finished) return;
+      finished = true;
+      try {
+        req.destroy();
+      } catch (_) {}
+      reject(err);
+    };
+
+    const req = clientModule.request(
+      parsedUrl,
+      {
+        method: 'GET',
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'image/jpeg,image/png,image/webp,*/*',
+        },
+        lookup: (hostname, options, callback) => {
+          if (net.isIP(hostname)) {
+            if (isPrivateOrReservedIp(hostname)) {
+              return callback(
+                new Error(`SSRF blocked: IP literal privada o reservada: ${hostname}`) as any,
+                '' as any,
+                4 as any
+              );
+            }
+            return callback(null, hostname as any, (net.isIPv6(hostname) ? 6 : 4) as any);
+          }
+
+          dns.lookup(hostname, options, (err, ...res) => {
+            if (err) return callback(err as any, '' as any, 4 as any);
+            const addrs = Array.isArray(res[0])
+              ? res[0]
+              : [{ address: res[0], family: res[1] }];
+
+            for (const addr of addrs) {
+              if (addr && addr.address && isPrivateOrReservedIp(addr.address)) {
+                return callback(
+                  new Error(
+                    `SSRF blocked: Hostname "${hostname}" resuelve a IP privada o reservada: ${addr.address}`
+                  ) as any,
+                  '' as any,
+                  4 as any
+                );
+              }
+            }
+            callback(null, ...(res as [any, any]));
+          });
+        },
+      },
+      (res) => {
+        // 1. Redirecciones: prohibidas expresamente (redirect: 'error')
+        if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode)) {
+          return cleanupAndReject(
+            new Error(
+              `image_redirect_blocked: Redirección HTTP ${res.statusCode} denegada. Solo se admite descarga directa desde el origen verificado.`
+            )
+          );
+        }
+
+        if (res.statusCode !== 200) {
+          return cleanupAndReject(
+            new Error(`image_http_error: El servidor de imágenes respondió con HTTP ${res.statusCode}`)
+          );
+        }
+
+        // 2. Comprobación preliminar de Content-Length
+        const clHeader = res.headers['content-length'];
+        if (clHeader) {
+          const declaredLen = parseInt(clHeader, 10);
+          if (!isNaN(declaredLen) && declaredLen > maxBytes) {
+            return cleanupAndReject(
+              new Error(
+                `image_too_large: El tamaño declarado de la imagen (${declaredLen} bytes) excede el máximo permitido de 15 MB.`
+              )
+            );
+          }
+        }
+
+        // 3. Lectura por chunks (streaming) abortable
+        const chunks: Buffer[] = [];
+        let downloadedBytes = 0;
+
+        res.on('data', (chunk: Buffer) => {
+          downloadedBytes += chunk.length;
+          if (downloadedBytes > maxBytes) {
+            return cleanupAndReject(
+              new Error(
+                `image_too_large: La imagen descargada excedió el límite máximo de 15 MB (${downloadedBytes} bytes leídos).`
+              )
+            );
+          }
+          chunks.push(chunk);
+        });
+
+        res.on('end', () => {
+          if (finished) return;
+          finished = true;
+          resolve(Buffer.concat(chunks, downloadedBytes));
+        });
+
+        res.on('error', (streamErr) => {
+          cleanupAndReject(streamErr);
+        });
+      }
+    );
+
+    req.setTimeout(timeoutMs, () => {
+      cleanupAndReject(
+        new Error(`image_timeout: Tiempo de espera agotado al descargar la imagen (${timeoutMs} ms)`)
+      );
+    });
+
+    req.on('error', (reqErr) => {
+      cleanupAndReject(reqErr);
+    });
+
+    req.end();
+  });
+}
+
+/**
+ * Descarga y almacena de forma segura una imagen en Cloudflare R2:
+ * 1. Descarga con control de tamaño, SSRF y sin redirecciones.
+ * 2. Valida formatos permitidos (JPEG, PNG, WebP) y límite de píxeles (40 MPx).
+ * 3. Decodifica y re-codifica con Sharp (auto-orientación, aplanado de alfa, resize 1440x1440 y JPEG progresivo).
+ * 4. Almacena en Cloudflare R2 bajo la clave determinista `bars/${venueSlug}/${shortCode}.jpg`.
  */
 export async function downloadAndUploadPostImageToR2(
   post: ApifyInstagramRawPost,
@@ -93,57 +337,74 @@ export async function downloadAndUploadPostImageToR2(
     throw new Error('La publicación no contiene una URL de imagen (displayUrl).');
   }
 
-  if (!isSafeImageUrl(post.displayUrl)) {
-    throw new Error('La URL de la imagen devuelta apunta a un destino no seguro o no permitido.');
-  }
-
-  let buffer: Buffer;
-
+  let rawBuffer: Buffer;
   if (mockImageFetcher) {
-    buffer = await mockImageFetcher(post.displayUrl);
+    rawBuffer = await mockImageFetcher(post.displayUrl);
   } else {
-    const res = await fetch(post.displayUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      signal: AbortSignal.timeout(15000), // 15s timeout
-    });
-
-    if (!res.ok) {
-      throw new Error(`Fallo al descargar la imagen de ${post.displayUrl} (HTTP ${res.status}).`);
-    }
-
-    const arrayBuffer = await res.arrayBuffer();
-    buffer = Buffer.from(arrayBuffer);
+    rawBuffer = await fetchSafeImageBuffer(post.displayUrl);
   }
 
-  if (buffer.length > MAX_SINGLE_POST_IMAGE_SIZE_BYTES) {
-    throw new Error(`El tamaño de la imagen (${buffer.length} bytes) supera el límite máximo permitido.`);
-  }
-
-  // Validar y decodificar formato con Sharp para asegurar que no es un archivo malicioso
-  let width = post.dimensionsWidth || 0;
-  let height = post.dimensionsHeight || 0;
-  let format = 'jpeg';
-
+  // 1. Validar formato y dimensiones preliminares con Sharp
+  let meta: any;
   try {
-    const meta = await sharp(buffer).metadata();
-    if (!meta.format) {
-      throw new Error('Formato de imagen no reconocido.');
-    }
-    format = meta.format;
-    if (meta.width) width = meta.width;
-    if (meta.height) height = meta.height;
+    meta = await sharp(rawBuffer, {
+      limitInputPixels: MAX_IMAGE_INPUT_PIXELS,
+      failOn: 'truncated',
+    }).metadata();
   } catch (sharpErr: any) {
     throw new Error(`Archivo de imagen corrupto o inválido: ${sharpErr.message}`);
   }
 
-  const contentType = format === 'png' ? 'image/png' : 'image/jpeg';
+  if (!meta.format || !ALLOWED_IMAGE_FORMATS.has(meta.format.toLowerCase())) {
+    throw new Error(
+      `Formato de imagen no permitido: "${meta.format || 'desconocido'}". Solo se admiten JPEG, PNG y WebP.`
+    );
+  }
 
+  if (!meta.width || !meta.height || meta.width * meta.height > MAX_IMAGE_INPUT_PIXELS) {
+    throw new Error(
+      `Dimensiones de imagen no válidas o exceden el límite de seguridad (máximo 40 MPx).`
+    );
+  }
+
+  // 2. Decodificación, saneamiento y normalización completa a JPEG:
+  // - Auto-rotación según orientación EXIF.
+  // - Redimensionamiento acotado a 1440x1440 sin ampliar imágenes pequeñas.
+  // - Aplanado de canal alfa (transparencias PNG/WebP) sobre fondo blanco.
+  // - Re-codificación en formato JPEG progresivo (calidad 85), descartando metadatos residuales.
+  let normalizedBuffer: Buffer;
+  let finalWidth = meta.width;
+  let finalHeight = meta.height;
+
+  try {
+    const pipeline = sharp(rawBuffer, {
+      limitInputPixels: MAX_IMAGE_INPUT_PIXELS,
+      failOn: 'truncated',
+    })
+      .rotate()
+      .resize({
+        width: 1440,
+        height: 1440,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .flatten({ background: '#ffffff' })
+      .jpeg({ quality: 85, progressive: true });
+
+    normalizedBuffer = await pipeline.toBuffer();
+    const finalMeta = await sharp(normalizedBuffer).metadata();
+    if (finalMeta.width) finalWidth = finalMeta.width;
+    if (finalMeta.height) finalHeight = finalMeta.height;
+  } catch (procErr: any) {
+    throw new Error(`Error durante la decodificación y normalización de la imagen: ${procErr.message}`);
+  }
+
+  const contentType = 'image/jpeg';
+
+  // 3. Subir buffer normalizado a Cloudflare R2
   await putR2Object({
     key: r2Key,
-    body: buffer,
+    body: normalizedBuffer,
     contentType,
     cacheControl: 'public, max-age=31536000, immutable',
   });
@@ -153,15 +414,16 @@ export async function downloadAndUploadPostImageToR2(
   return {
     r2Key,
     finalUrl,
-    sizeBytes: buffer.length,
-    width,
-    height,
+    sizeBytes: normalizedBuffer.length,
+    width: finalWidth,
+    height: finalHeight,
     contentType,
   };
 }
 
 /**
- * Importa puntualmente una publicación de Instagram como propuesta de curación.
+ * Importa puntualmente una publicación de Instagram como propuesta de curación pendiente.
+ * Reutiliza el lock global compartido con la ingesta periódica para asegurar exclusión mutua atómica.
  */
 export async function importSingleInstagramPost(
   params: ImportSingleInstagramPostParams
@@ -201,72 +463,9 @@ export async function importSingleInstagramPost(
     venueSlug = vCheck.rows[0].slug || `venue-${venueId}`;
   }
 
-  // 3. Comprobar duplicados en base de datos ANTES de adquirir lock o llamar a Apify
-  const dupProposalPre = await query(
-    `SELECT id, title, review_status, classification, venue_id, created_event_id, updated_at
-     FROM curation_proposals
-     WHERE instagram_post_shortcode = $1 OR source_url = $2
-     LIMIT 1;`,
-    [shortcode, canonicalUrl]
-  );
-
-  if (dupProposalPre.rows.length > 0) {
-    return {
-      success: true,
-      status: 200,
-      alreadyExisted: true,
-      recordType: 'proposal',
-      proposal: dupProposalPre.rows[0],
-    };
-  }
-
-  const dupEventPre = await query(
-    `SELECT id, title, editorial_date, status, venue_id
-     FROM events
-     WHERE source_url = $1 OR dedupe_key LIKE $2
-     LIMIT 1;`,
-    [canonicalUrl, `%#${shortcode}`]
-  );
-
-  if (dupEventPre.rows.length > 0) {
-    return {
-      success: true,
-      status: 200,
-      alreadyExisted: true,
-      recordType: 'event',
-      event: dupEventPre.rows[0],
-    };
-  }
-
-  // 4. Concurrencia: Adquirir lock persistente específico para este shortcode
-  const lockKey = `single_post_${shortcode}`;
-  const lockedBy = `single_import_${shortcode}_${Date.now()}`;
-
-  const lockRes = await acquirePersistentLock({
-    lockKey,
-    lockedBy,
-    ttlMinutes: 2,
-    executionDetails: {
-      action: 'import_single_post',
-      url: canonicalUrl,
-      shortcode,
-      venueId: venueId || null,
-      user: userEmail || 'unknown',
-    },
-  });
-
-  if (!lockRes.success) {
-    return {
-      success: false,
-      status: 409,
-      code: 'import_in_progress',
-      error: 'Ya hay una operación de importación en curso para esta misma publicación. Espere unos momentos.',
-    };
-  }
-
-  try {
-    // 5. Repetir comprobación de duplicado tras adquirir el lock
-    const dupProposalLocked = await query(
+  // Helper para comprobar duplicados unívocos en curation_proposals y events
+  async function findDuplicateRecord(): Promise<{ recordType: 'proposal' | 'event'; record: any } | null> {
+    const propRes = await query(
       `SELECT id, title, review_status, classification, venue_id, created_event_id, updated_at
        FROM curation_proposals
        WHERE instagram_post_shortcode = $1 OR source_url = $2
@@ -274,13 +473,82 @@ export async function importSingleInstagramPost(
       [shortcode, canonicalUrl]
     );
 
-    if (dupProposalLocked.rows.length > 0) {
+    if (propRes.rows.length > 0) {
+      return { recordType: 'proposal', record: propRes.rows[0] };
+    }
+
+    const eventRes = await query(
+      `SELECT id, title, editorial_date, status, venue_id
+       FROM events
+       WHERE source_url = $1
+          OR source_url = $2
+          OR source_url = $3
+       LIMIT 1;`,
+      [
+        canonicalUrl,
+        canonicalUrl.replace(/\/$/, ''),
+        canonicalUrl.replace('www.instagram.com', 'instagram.com'),
+      ]
+    );
+
+    if (eventRes.rows.length > 0) {
+      return { recordType: 'event', record: eventRes.rows[0] };
+    }
+
+    return null;
+  }
+
+  // 3. Comprobar duplicados ANTES de adquirir lock o llamar a Apify
+  const dupPre = await findDuplicateRecord();
+  if (dupPre) {
+    return {
+      success: true,
+      status: 200,
+      alreadyExisted: true,
+      recordType: dupPre.recordType,
+      proposal: dupPre.recordType === 'proposal' ? dupPre.record : undefined,
+      event: dupPre.recordType === 'event' ? dupPre.record : undefined,
+    };
+  }
+
+  // 4. Concurrencia atómica: Adquirir el lock persistente GLOBAL compartido con la ingesta periódica
+  const executionId = `single_import_${shortcode}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+  const lockRes = await acquirePersistentLock({
+    lockKey: DEFAULT_LOCK_KEY,
+    lockedBy: executionId,
+    ttlMinutes: 2, // 2 minutos de TTL acotado para importación puntual
+    executionDetails: {
+      action: 'import_single_post',
+      url: canonicalUrl,
+      shortcode,
+      venueId: venueId || null,
+      user: userEmail || 'unknown',
+      startedAt: new Date().toISOString(),
+    },
+  });
+
+  if (!lockRes.success) {
+    const lockStarted = lockRes.lockInfo?.startedAt || 'recientemente';
+    return {
+      success: false,
+      status: 409,
+      code: 'ingestion_in_progress',
+      error: `Ya existe una ejecución de ingesta o importación de Instagram en curso iniciada a las ${lockStarted}. Espere unos momentos a que finalice.`,
+    };
+  }
+
+  try {
+    // 5. Repetir comprobación de duplicados DESPUÉS de adquirir el lock persistente
+    const dupPostLock = await findDuplicateRecord();
+    if (dupPostLock) {
       return {
         success: true,
         status: 200,
         alreadyExisted: true,
-        recordType: 'proposal',
-        proposal: dupProposalLocked.rows[0],
+        recordType: dupPostLock.recordType,
+        proposal: dupPostLock.recordType === 'proposal' ? dupPostLock.record : undefined,
+        event: dupPostLock.recordType === 'event' ? dupPostLock.record : undefined,
       };
     }
 
@@ -289,7 +557,24 @@ export async function importSingleInstagramPost(
     let rawItems: any[];
 
     if (effectivePostFetcher) {
-      rawItems = await effectivePostFetcher(canonicalUrl, chargeLimit);
+      try {
+        rawItems = await effectivePostFetcher(canonicalUrl, chargeLimit);
+      } catch (mockErr: any) {
+        if (
+          mockErr.name === 'TimeoutError' ||
+          mockErr.name === 'AbortError' ||
+          mockErr.message?.toLowerCase().includes('timeout')
+        ) {
+          return {
+            success: false,
+            status: 504,
+            code: 'apify_timeout',
+            error:
+              'Tiempo de espera agotado al consultar Apify (60s). El estado de la tarea en el proveedor puede ser indeterminado y no se realizaron reintentos automáticos.',
+          };
+        }
+        throw mockErr;
+      }
     } else {
       const isTest = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
       if (isTest && process.env.ALLOW_REAL_APIFY_IN_TESTS !== 'true') {
@@ -310,37 +595,65 @@ export async function importSingleInstagramPost(
         apifyToken
       )}&maxTotalChargeUsd=${chargeLimit}`;
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: [canonicalUrl],
-          resultsLimit: 1,
-          skipPinnedPosts: false,
-        }),
-        signal: AbortSignal.timeout(60000), // 60s timeout de socket
-      });
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: [canonicalUrl],
+            resultsLimit: 1,
+            skipPinnedPosts: false,
+          }),
+          signal: AbortSignal.timeout(60000), // 60s timeout de socket
+        });
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
+        if (!res.ok) {
+          const rawErr = await res.text().catch(() => '');
+          const sanitizedErr = rawErr
+            .replace(/<[^>]*>/g, '')
+            .replace(/[\r\n\t]+/g, ' ')
+            .slice(0, 150)
+            .trim();
+          return {
+            success: false,
+            status: 502,
+            code: 'apify_http_error',
+            error: `Error al consultar Apify (HTTP ${res.status}): ${sanitizedErr || 'Respuesta de error no especificada'}`,
+          };
+        }
+
+        rawItems = (await res.json()) as any[];
+      } catch (fetchErr: any) {
+        if (
+          fetchErr.name === 'TimeoutError' ||
+          fetchErr.name === 'AbortError' ||
+          fetchErr.message?.toLowerCase().includes('timeout')
+        ) {
+          return {
+            success: false,
+            status: 504,
+            code: 'apify_timeout',
+            error:
+              'Tiempo de espera agotado al consultar Apify (60s). El estado de la tarea en el proveedor puede ser indeterminado y no se realizaron reintentos automáticos.',
+          };
+        }
         return {
           success: false,
           status: 502,
-          code: 'apify_http_error',
-          error: `Error al consultar Apify (HTTP ${res.status}): ${errText.slice(0, 200)}`,
+          code: 'apify_network_error',
+          error: `Error de red al conectar con Apify: ${fetchErr.message?.slice(0, 150) || 'Error desconocido'}`,
         };
       }
-
-      rawItems = (await res.json()) as any[];
     }
 
-    // 7. Validaciones estrictas de resultado
+    // 7. Validaciones defensivas del dataset devuelto
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
       return {
         success: false,
         status: 422,
         code: 'post_not_found',
-        error: 'No se pudo recuperar la publicación desde Instagram. Puede pertenecer a una cuenta privada, haber sido eliminada o requerir inicio de sesión.',
+        error:
+          'No se pudo recuperar la publicación desde Instagram. Puede pertenecer a una cuenta privada, haber sido eliminada o requerir inicio de sesión.',
       };
     }
 
@@ -391,7 +704,7 @@ export async function importSingleInstagramPost(
       };
     }
 
-    // 8. Descarga de imagen y subida a Cloudflare R2 con protecciones
+    // 8. Descarga de imagen segura, normalización con Sharp y subida a Cloudflare R2
     let r2Image;
     try {
       r2Image = await downloadAndUploadPostImageToR2(rawPost, venueSlug, effectiveImageFetcher || undefined);
@@ -570,7 +883,7 @@ export async function importSingleInstagramPost(
       proposal: createdProposal,
     };
   } finally {
-    // 12. Liberación garantizada del lock persistente en bloque finally
-    await releasePersistentLock(lockKey);
+    // 12. Liberación garantizada del lock persistente verificando la propiedad
+    await releasePersistentLock(DEFAULT_LOCK_KEY, executionId);
   }
 }

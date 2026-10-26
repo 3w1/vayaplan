@@ -39,7 +39,7 @@ export type InstagramPostUrlValidationResult =
   | ValidInstagramPostUrlResult
   | InvalidInstagramPostUrlResult;
 
-const STRICT_PATH_REGEX = /^\/(p|reel)\/([A-Za-z0-9_-]{5,30})\/?$/;
+const STRICT_PATH_REGEX = /^\/(p|reel)\/([A-Za-z0-9_-]{5,40})\/?$/;
 
 export function validateInstagramPostUrl(rawUrl: string): InstagramPostUrlValidationResult {
   if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {

@@ -7,6 +7,7 @@ const rawTestDbUrl =
   'postgres://vayaplan_user:vayaplan_dev_secret_2026@172.20.0.3:5432/vayaplan_test';
 
 process.env.DATABASE_URL = rawTestDbUrl.trim();
+process.env.MOCK_R2 = 'true';
 
 const { app } = await import('../../../index');
 const { JWT_SECRET } = await import('../../../middleware/auth');
@@ -15,8 +16,11 @@ const {
   setTestPostFetcherOverride,
   setTestImageFetcherOverride,
   SINGLE_POST_APIFY_BUDGET_USD,
+  isPrivateOrReservedIp,
+  isSafeImageUrl,
+  downloadAndUploadPostImageToR2,
 } = await import('../../../services/bar-instagram-import/single-post-importer');
-const { acquirePersistentLock, releasePersistentLock } = await import(
+const { DEFAULT_LOCK_KEY, acquirePersistentLock, releasePersistentLock, getPersistentLockStatus } = await import(
   '../../../services/bar-instagram-import/persistent-lock'
 );
 
@@ -68,11 +72,13 @@ afterAll(async () => {
   }
   await testPool.query(`DELETE FROM curation_proposals WHERE instagram_post_shortcode LIKE 'TEST_%';`);
   await testPool.query(`DELETE FROM venues WHERE id = $1;`, [testVenueId]);
-  await testPool.query(`DELETE FROM instagram_ingestion_locks WHERE lock_key LIKE 'single_post_%';`);
+  await testPool.query(`DELETE FROM instagram_ingestion_locks WHERE lock_key = $1;`, [DEFAULT_LOCK_KEY]);
   await testPool.end();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Asegurar que el lock global está libre antes de cada prueba
+  await releasePersistentLock(DEFAULT_LOCK_KEY);
   // Configurar fetcher de imagen mock por defecto que devuelve una imagen JPEG válida
   setTestImageFetcherOverride(async () => validImageBuffer);
 });
@@ -159,6 +165,10 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     const data = await res.json();
     expect(data.error).toBe('venue_not_found');
     expect(apifyCalled).toBe(false);
+
+    // Verificar que el lock global permanece libre
+    const lockStatus = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
+    expect(lockStatus.locked).toBe(false);
   });
 
   test('5. Importación exitosa con venue asignado: clasifica, sube a R2 y crea propuesta pending (201)', async () => {
@@ -217,6 +227,10 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     // Cero escrituras en la tabla events
     const postEvents = await testPool.query('SELECT count(*) as count FROM events;');
     expect(Number(postEvents.rows[0].count)).toBe(Number(initialEvents.rows[0].count));
+
+    // El lock global debe haber quedado liberado en finally
+    const lockStatus = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
+    expect(lockStatus.locked).toBe(false);
   });
 
   test('6. Importación exitosa con venue_id = NULL: crea propuesta sin local asignado (201)', async () => {
@@ -262,24 +276,76 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(dbRow.rows[0].venue_id).toBeNull();
   });
 
-  test('7. Deduplicación pre-Apify: si el post ya existe, devuelve 200 con alreadyExisted y 0 llamadas al scraper', async () => {
-    const shortcode = 'TEST_DEDUP_EXISTING';
+  test('7. Deduplicación pre-Apify: proposals en pending, archived y approved_draft devuelven 200 sin alterar su estado', async () => {
+    const statuses = ['pending', 'archived', 'approved_draft'];
 
-    // 1. Insertar propuesta previa
+    for (const status of statuses) {
+      const shortcode = `TEST_DEDUP_STATUS_${status.toUpperCase()}`;
+
+      const insertPre = await testPool.query(`
+        INSERT INTO curation_proposals (
+          title, venue_id, source_url, source_type, instagram_post_shortcode,
+          image_url, confidence, classification, review_status, requires_manual_review
+        ) VALUES (
+          'Propuesta Existente ${status}', $1, 'https://www.instagram.com/p/${shortcode}/', 'instagram', '${shortcode}',
+          'https://r2.vayaplan.com/bars/test.jpg', 'ALTA', 'EVENTO_POSIBLE', '${status}', true
+        ) RETURNING id, review_status;
+      `, [testVenueId]);
+
+      const existingId = insertPre.rows[0].id;
+      createdProposalIds.push(existingId);
+
+      let apifyCalled = false;
+      setTestPostFetcherOverride(async () => {
+        apifyCalled = true;
+        return [];
+      });
+
+      const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: `https://www.instagram.com/p/${shortcode}/`,
+          venue_id: testVenueId,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.alreadyExisted).toBe(true);
+      expect(data.recordType).toBe('proposal');
+      expect(data.proposal.id).toBe(existingId);
+      expect(data.proposal.review_status).toBe(status); // Estado original preservado
+      expect(apifyCalled).toBe(false);
+
+      // Confirmar en BD que el estado no fue modificado
+      const checkDb = await testPool.query('SELECT review_status FROM curation_proposals WHERE id = $1;', [existingId]);
+      expect(checkDb.rows[0].review_status).toBe(status);
+    }
+  });
+
+  test('8. Deduplicación cruzada: post importado sin venue y reintentado con venue produce la misma identidad y no duplica', async () => {
+    const shortcode = 'TEST_DEDUP_CROSS_VENUE';
+
+    // 1. Insertar propuesta previa sin venue (venue_id = NULL)
     const insertPre = await testPool.query(`
       INSERT INTO curation_proposals (
         title, venue_id, source_url, source_type, instagram_post_shortcode,
         image_url, confidence, classification, review_status, requires_manual_review
       ) VALUES (
-        'Propuesta Existente', $1, 'https://www.instagram.com/p/${shortcode}/', 'instagram', '${shortcode}',
+        'Propuesta Sin Venue Original', NULL, 'https://www.instagram.com/p/${shortcode}/', 'instagram', '${shortcode}',
         'https://r2.vayaplan.com/bars/test.jpg', 'ALTA', 'EVENTO_POSIBLE', 'pending', true
       ) RETURNING id;
-    `, [testVenueId]);
+    `);
 
     const existingId = insertPre.rows[0].id;
     createdProposalIds.push(existingId);
 
-    // 2. Intentar importar de nuevo
+    // 2. Intentar importar de nuevo ahora asignándole un venue
     let apifyCalled = false;
     setTestPostFetcherOverride(async () => {
       apifyCalled = true;
@@ -302,24 +368,78 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     const data = await res.json();
     expect(data.success).toBe(true);
     expect(data.alreadyExisted).toBe(true);
-    expect(data.recordType).toBe('proposal');
     expect(data.proposal.id).toBe(existingId);
-    expect(apifyCalled).toBe(false); // Cero llamadas remotas
+    expect(apifyCalled).toBe(false);
+
+    // Verificar que solo existe exactamente una fila para este shortcode en BD
+    const countRes = await testPool.query(
+      `SELECT count(*) FROM curation_proposals WHERE instagram_post_shortcode = $1;`,
+      [shortcode]
+    );
+    expect(Number(countRes.rows[0].count)).toBe(1);
   });
 
-  test('8. Concurrencia: bloquea segunda petición simultánea sobre el mismo shortcode (409 import_in_progress)', async () => {
-    const shortcode = 'TEST_CONCURRENT_LOCK';
-    const lockKey = `single_post_${shortcode}`;
+  test('9. Deduplicación con eventos: evento existente con source_url coincidente devuelve 200 con recordType: event', async () => {
+    const shortcode = 'TEST_DEDUP_EVENT_MATCH';
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
 
-    // Simular que otra petición adquirió el lock persistente
+    // 1. Crear evento en events con source_url correspondiente al post
+    const eventInsert = await testPool.query(`
+      INSERT INTO events (
+        city_id, venue_id, title, category, start_time, editorial_date, is_free,
+        source_type, source_url, status
+      ) VALUES (
+        1, $1, 'Concierto Ya Creado en Eventos', 'musica', '2026-11-05 21:00:00+01', '2026-11-05', true,
+        'instagram', $2, 'published'
+      ) RETURNING id;
+    `, [testVenueId, canonicalUrl]);
+
+    const existingEventId = eventInsert.rows[0].id;
+
+    try {
+      let apifyCalled = false;
+      setTestPostFetcherOverride(async () => {
+        apifyCalled = true;
+        return [];
+      });
+
+      const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: canonicalUrl }),
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.alreadyExisted).toBe(true);
+      expect(data.recordType).toBe('event');
+      expect(data.event.id).toBe(existingEventId);
+      expect(apifyCalled).toBe(false);
+    } finally {
+      await testPool.query('DELETE FROM events WHERE id = $1;', [existingEventId]);
+    }
+  });
+
+  test('10. Coordinación atómica con lock global: si la ingesta global está activa, responde 409 ingestion_in_progress sin llamar a Apify', async () => {
+    // 1. Simular que la ingesta periódica o manual adquirió el lock global
     const lock = await acquirePersistentLock({
-      lockKey,
-      lockedBy: 'test_session_active',
-      ttlMinutes: 2,
+      lockKey: DEFAULT_LOCK_KEY,
+      lockedBy: 'cron_worker_active_session',
+      ttlMinutes: 5,
     });
     expect(lock.success).toBe(true);
 
     try {
+      let apifyCalled = false;
+      setTestPostFetcherOverride(async () => {
+        apifyCalled = true;
+        return [];
+      });
+
       const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
         method: 'POST',
         headers: {
@@ -327,19 +447,45 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: `https://www.instagram.com/p/${shortcode}/`,
+          url: 'https://www.instagram.com/p/TEST_CONCURRENT_LOCK/',
         }),
       });
 
       expect(res.status).toBe(409);
       const data = await res.json();
-      expect(data.error).toBe('import_in_progress');
+      expect(data.error).toBe('ingestion_in_progress');
+      expect(apifyCalled).toBe(false);
     } finally {
-      await releasePersistentLock(lockKey);
+      await releasePersistentLock(DEFAULT_LOCK_KEY, 'cron_worker_active_session');
     }
   });
 
-  test('9. Respuestas inesperadas del proveedor: dataset vacío (422) y discordancia de shortcode (422)', async () => {
+  test('11. Propiedad del lock persistente: releasePersistentLock no libera un lock perteneciente a otra ejecución', async () => {
+    const realLockedBy = 'session_legitima_01';
+    const fakeLockedBy = 'session_intrusa_02';
+
+    const lock = await acquirePersistentLock({
+      lockKey: DEFAULT_LOCK_KEY,
+      lockedBy: realLockedBy,
+      ttlMinutes: 2,
+    });
+    expect(lock.success).toBe(true);
+
+    try {
+      // Intentar liberar con id equivocado
+      const releasedFake = await releasePersistentLock(DEFAULT_LOCK_KEY, fakeLockedBy);
+      expect(releasedFake).toBe(false);
+
+      // Verificar que el lock sigue ocupado
+      const statusAfter = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
+      expect(statusAfter.locked).toBe(true);
+      expect(statusAfter.lockInfo?.lockedBy).toBe(realLockedBy);
+    } finally {
+      await releasePersistentLock(DEFAULT_LOCK_KEY, realLockedBy);
+    }
+  });
+
+  test('12. Respuestas inesperadas del proveedor: dataset vacío (422) y discordancia de shortcode (422)', async () => {
     // 1. Dataset vacío (post privado / no encontrado)
     setTestPostFetcherOverride(async () => []);
 
@@ -383,7 +529,7 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(dataMismatch.error).toBe('shortcode_mismatch');
   });
 
-  test('10. Múltiples publicaciones devueltas por el proveedor son rechazadas por seguridad (422)', async () => {
+  test('13. Múltiples publicaciones devueltas por el proveedor son rechazadas por seguridad (422)', async () => {
     setTestPostFetcherOverride(async () => [
       { id: 'CODE_1', shortCode: 'CODE_1', displayUrl: 'https://cdn.instagram.com/1.jpg' },
       { id: 'CODE_2', shortCode: 'CODE_2', displayUrl: 'https://cdn.instagram.com/2.jpg' },
@@ -405,14 +551,76 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(data.error).toBe('unexpected_multiple_results');
   });
 
-  test('11. Protección anti-SSRF en URL de imagen: rechaza IPs privadas o localhost (502)', async () => {
+  test('14. Timeout de Apify controlado: devuelve 504 con apify_timeout y libera el lock global', async () => {
+    setTestPostFetcherOverride(async () => {
+      const err = new Error('The operation was aborted due to timeout');
+      err.name = 'TimeoutError';
+      throw err;
+    });
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://www.instagram.com/p/TEST_TIMEOUT/',
+      }),
+    });
+
+    expect(res.status).toBe(504);
+    const data = await res.json();
+    expect(data.error).toBe('apify_timeout');
+    expect(data.message).toContain('Tiempo de espera agotado');
+
+    // Confirmar que el lock quedó liberado en finally
+    const lockStatus = await getPersistentLockStatus(DEFAULT_LOCK_KEY);
+    expect(lockStatus.locked).toBe(false);
+  });
+
+  test('15. Protección anti-SSRF y validación de IPs privadas en imágenes (isPrivateOrReservedIp / isSafeImageUrl)', () => {
+    // IPv4 privadas y loopback
+    expect(isPrivateOrReservedIp('127.0.0.1')).toBe(true);
+    expect(isPrivateOrReservedIp('10.0.0.1')).toBe(true);
+    expect(isPrivateOrReservedIp('169.254.169.254')).toBe(true);
+    expect(isPrivateOrReservedIp('192.168.1.1')).toBe(true);
+    expect(isPrivateOrReservedIp('172.20.0.1')).toBe(true);
+
+    // IPv6 privadas y especiales
+    expect(isPrivateOrReservedIp('::1')).toBe(true);
+    expect(isPrivateOrReservedIp('fe80::1')).toBe(true);
+    expect(isPrivateOrReservedIp('fc00::1')).toBe(true);
+
+    // IPv4 mapeada en IPv6
+    expect(isPrivateOrReservedIp('::ffff:127.0.0.1')).toBe(true);
+    expect(isPrivateOrReservedIp('::ffff:10.0.0.1')).toBe(true);
+    expect(isPrivateOrReservedIp('::ffff:169.254.169.254')).toBe(true);
+
+    // IPs públicas válidas
+    expect(isPrivateOrReservedIp('8.8.8.8')).toBe(false);
+    expect(isPrivateOrReservedIp('104.20.23.154')).toBe(false);
+    expect(isPrivateOrReservedIp('::ffff:8.8.8.8')).toBe(false);
+
+    // URLs seguras vs inseguras
+    expect(isSafeImageUrl('https://cdn.instagram.com/pic.jpg')).toBe(true);
+    expect(isSafeImageUrl('http://127.0.0.1/pic.jpg')).toBe(false);
+    expect(isSafeImageUrl('http://169.254.169.254/latest/meta-data/')).toBe(false);
+    expect(isSafeImageUrl('http://user:pass@example.com/pic.jpg')).toBe(false);
+    expect(isSafeImageUrl('https://example.com:8080/pic.jpg')).toBe(false);
+    expect(isSafeImageUrl('ftp://example.com/pic.jpg')).toBe(false);
+  });
+
+  test('16. Descarga de imagen: rechaza formatos no permitidos (p. ej. SVG) con 502', async () => {
+    // Simular que el scraper devolvió un buffer SVG (no admitido para cartel)
+    setTestImageFetcherOverride(async () => Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100"/></svg>'));
+
     setTestPostFetcherOverride(async (url) => [
       {
-        id: 'TEST_SSRF',
-        shortCode: 'TEST_SSRF',
+        id: 'TEST_SVG',
+        shortCode: 'TEST_SVG',
         url,
-        displayUrl: 'http://169.254.169.254/latest/meta-data/', // AWS metadata SSRF attempt
-        caption: 'Post malicioso',
+        displayUrl: 'https://cdn.instagram.com/pic.svg',
       },
     ]);
 
@@ -423,16 +631,82 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: 'https://www.instagram.com/p/TEST_SSRF/',
+        url: 'https://www.instagram.com/p/TEST_SVG/',
       }),
     });
 
     expect(res.status).toBe(502);
     const data = await res.json();
     expect(data.error).toBe('image_upload_failed');
+    expect(data.message).toContain('Formato de imagen no permitido');
   });
 
-  test('12. Soporte de Reels (/reel/): extrae caption y miniatura sin procesar audio', async () => {
+  test('17. Descarga de imagen: rechaza archivos corruptos con 502', async () => {
+    // Buffer binario corrupto que no es imagen
+    setTestImageFetcherOverride(async () => Buffer.from('ESTO_NO_ES_UNA_IMAGEN_VALIDA_CORRUPTO_TOTAL'));
+
+    setTestPostFetcherOverride(async (url) => [
+      {
+        id: 'TEST_CORRUPT',
+        shortCode: 'TEST_CORRUPT',
+        url,
+        displayUrl: 'https://cdn.instagram.com/pic.jpg',
+      },
+    ]);
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://www.instagram.com/p/TEST_CORRUPT/',
+      }),
+    });
+
+    expect(res.status).toBe(502);
+    const data = await res.json();
+    expect(data.error).toBe('image_upload_failed');
+    expect(data.message).toContain('Archivo de imagen corrupto o inválido');
+  });
+
+  test('18. Normalización con Sharp: transcodifica a JPEG progresivo, aplana canal alfa y escala dentro de 1440x1440', async () => {
+    // Crear imagen PNG con transparencia
+    const pngWithAlpha = await sharp({
+      create: {
+        width: 1800,
+        height: 1200,
+        channels: 4,
+        background: { r: 50, g: 100, b: 200, alpha: 0.5 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const mockPost = {
+      id: 'TEST_NORM_01',
+      shortCode: 'TEST_NORM_01',
+      displayUrl: 'https://cdn.instagram.com/transparent.png',
+      caption: 'Test normalización',
+    };
+
+    const result = await downloadAndUploadPostImageToR2(
+      mockPost as any,
+      'test-venue',
+      async () => pngWithAlpha
+    );
+
+    expect(result.contentType).toBe('image/jpeg');
+    expect(result.width).toBeLessThanOrEqual(1440);
+    expect(result.height).toBeLessThanOrEqual(1440);
+    expect(result.r2Key).toBe('bars/test-venue/TEST_NORM_01.jpg');
+
+    expect(result.sizeBytes).toBeGreaterThan(0);
+    expect(result.finalUrl).toContain('bars/test-venue/TEST_NORM_01.jpg');
+  });
+
+  test('19. Soporte de Reels (/reel/): extrae caption y miniatura sin procesar audio', async () => {
     const shortcode = 'TEST_REEL_01';
 
     setTestPostFetcherOverride(async (url) => [

@@ -1200,11 +1200,22 @@ adminProposalsRoutes.post('/proposals/import-instagram-post', async (c) => {
     venueId = parsedVId;
   }
 
-  const result = await importSingleInstagramPost({
-    url: body.url,
-    venueId,
-    userEmail: user.email,
-  });
+  let result: any;
+  try {
+    result = await importSingleInstagramPost({
+      url: body.url,
+      venueId,
+      userEmail: user.email,
+    });
+  } catch (err: any) {
+    return c.json(
+      {
+        error: 'import_unexpected_error',
+        message: `Error interno al procesar la importación: ${err.message || 'Error desconocido'}`,
+      },
+      500
+    );
+  }
 
   if (!result.success) {
     return c.json({ error: result.code || 'import_failed', message: result.error }, result.status as any);
