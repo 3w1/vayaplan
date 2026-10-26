@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
-import { query } from '@vayaplan/db';
+import { query, getClient } from '@vayaplan/db';
 import sharp from 'sharp';
 import { putR2Object, getPublicUrlForKey } from '../r2-client';
 import { validateInstagramPostUrl } from './url-validator';
@@ -20,11 +20,27 @@ export const ALLOWED_IMAGE_FORMATS = new Set(['jpeg', 'jpg', 'png', 'webp']);
 let testPostFetcherOverride: ((canonicalUrl: string, chargeLimit: number) => Promise<any[]>) | null = null;
 let testImageFetcherOverride: ((url: string) => Promise<Buffer>) | null = null;
 
+/**
+ * Registra un fetcher de posts alternativo para uso exclusivo en pruebas aisladas.
+ * Fuera de entornos de test lanza un error para evitar inyección de dependencias en producción.
+ */
 export function setTestPostFetcherOverride(fn: typeof testPostFetcherOverride) {
+  const isTest = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
+  if (!isTest) {
+    throw new Error('[SAFETY] setTestPostFetcherOverride solo puede invocarse en entornos de prueba (NODE_ENV=test).');
+  }
   testPostFetcherOverride = fn;
 }
 
+/**
+ * Registra un fetcher de imagen alternativo para uso exclusivo en pruebas aisladas.
+ * Fuera de entornos de test lanza un error para evitar inyección de dependencias en producción.
+ */
 export function setTestImageFetcherOverride(fn: typeof testImageFetcherOverride) {
+  const isTest = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
+  if (!isTest) {
+    throw new Error('[SAFETY] setTestImageFetcherOverride solo puede invocarse en entornos de prueba (NODE_ENV=test).');
+  }
   testImageFetcherOverride = fn;
 }
 
@@ -171,15 +187,24 @@ export function isSafeImageUrl(rawUrl: string): boolean {
  * 1. Prohíbe explícitamente redirecciones HTTP (redirect: 'error').
  * 2. Valida la resolución DNS en tiempo de conexión denegando IPs privadas o reservadas.
  * 3. Aplica límite de tamaño (15 MB) mediante lectura por chunks (streaming) abortable.
- * 4. Aplica timeout global de socket.
+ * 4. Aplica un timeout ABSOLUTO desde antes de iniciar la petición, cubriendo resolución
+ *    DNS, establecimiento de conexión TCP/TLS y lectura completa de la respuesta.
+ *    Adicionalmente, mantiene un timeout de inactividad de socket como segunda capa.
  */
 export async function fetchSafeImageBuffer(
   rawUrl: string,
   maxBytes: number = MAX_SINGLE_POST_IMAGE_SIZE_BYTES,
-  timeoutMs: number = 15000
+  timeoutMs: number = 15000,
+  /** @internal Omitir la validación SSRF estática. Solo para pruebas unitarias — nunca exponer en rutas HTTP. */
+  _bypassSsrfForTest: boolean = false
 ): Promise<Buffer> {
-  if (!isSafeImageUrl(rawUrl)) {
-    throw new Error('SSRF guard: URL de imagen no segura o destino no permitido.');
+  const isTestEnv = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
+  if (!_bypassSsrfForTest || !isTestEnv) {
+    // En producción (o si no se activa el bypass) siempre se valida.
+    // En tests el bypass solo se acepta si se invoca explícitamente desde código de prueba.
+    if (!isSafeImageUrl(rawUrl)) {
+      throw new Error('SSRF guard: URL de imagen no segura o destino no permitido.');
+    }
   }
 
   const parsedUrl = new URL(rawUrl);
@@ -188,15 +213,43 @@ export async function fetchSafeImageBuffer(
 
   return new Promise<Buffer>((resolve, reject) => {
     let finished = false;
+    let absoluteTimer: ReturnType<typeof setTimeout> | null = null;
 
     const cleanupAndReject = (err: Error) => {
       if (finished) return;
       finished = true;
+      // Cancelar temporizador absoluto en TODAS las salidas (éxito, error, tamaño, redirección, aborto)
+      if (absoluteTimer !== null) {
+        clearTimeout(absoluteTimer);
+        absoluteTimer = null;
+      }
       try {
         req.destroy();
       } catch (_) {}
       reject(err);
     };
+
+    const cleanupAndResolve = (buf: Buffer) => {
+      if (finished) return;
+      finished = true;
+      // Cancelar temporizador absoluto al concluir con éxito
+      if (absoluteTimer !== null) {
+        clearTimeout(absoluteTimer);
+        absoluteTimer = null;
+      }
+      resolve(buf);
+    };
+
+    // Temporizador absoluto: inicia ANTES de crear la petición y cubre resolución DNS,
+    // establecimiento de conexión y lectura completa. Protege contra servidores lentos
+    // tipo Slowloris que envían bytes esporádicos para evadir el timeout de inactividad.
+    absoluteTimer = setTimeout(() => {
+      cleanupAndReject(
+        new Error(
+          `image_total_timeout: Tiempo total de descarga agotado (${timeoutMs} ms). La operación fue cancelada antes de completar la recepción de la imagen.`
+        )
+      );
+    }, timeoutMs);
 
     const req = clientModule.request(
       parsedUrl,
@@ -208,6 +261,13 @@ export async function fetchSafeImageBuffer(
           Accept: 'image/jpeg,image/png,image/webp,*/*',
         },
         lookup: (hostname, options, callback) => {
+          if (_bypassSsrfForTest && isTestEnv) {
+            if (net.isIP(hostname)) {
+              return callback(null, hostname as any, (net.isIPv6(hostname) ? 6 : 4) as any);
+            }
+            return dns.lookup(hostname, options, callback as any);
+          }
+
           if (net.isIP(hostname)) {
             if (isPrivateOrReservedIp(hostname)) {
               return callback(
@@ -241,7 +301,7 @@ export async function fetchSafeImageBuffer(
         },
       },
       (res) => {
-        // 1. Redirecciones: prohibidas expresamente (redirect: 'error')
+        // 1. Redirecciones: prohibidas expresamente
         if (res.statusCode && [301, 302, 303, 307, 308].includes(res.statusCode)) {
           return cleanupAndReject(
             new Error(
@@ -256,7 +316,7 @@ export async function fetchSafeImageBuffer(
           );
         }
 
-        // 2. Comprobación preliminar de Content-Length
+        // 2. Comprobación preliminar de Content-Length (puede estar ausente o ser falsa)
         const clHeader = res.headers['content-length'];
         if (clHeader) {
           const declaredLen = parseInt(clHeader, 10);
@@ -269,7 +329,7 @@ export async function fetchSafeImageBuffer(
           }
         }
 
-        // 3. Lectura por chunks (streaming) abortable
+        // 3. Lectura por chunks (streaming) abortable — válida aunque Content-Length falte o mienta
         const chunks: Buffer[] = [];
         let downloadedBytes = 0;
 
@@ -286,9 +346,7 @@ export async function fetchSafeImageBuffer(
         });
 
         res.on('end', () => {
-          if (finished) return;
-          finished = true;
-          resolve(Buffer.concat(chunks, downloadedBytes));
+          cleanupAndResolve(Buffer.concat(chunks, downloadedBytes));
         });
 
         res.on('error', (streamErr) => {
@@ -297,9 +355,10 @@ export async function fetchSafeImageBuffer(
       }
     );
 
+    // Timeout de inactividad de socket: segunda capa de protección para pérdida de conectividad
     req.setTimeout(timeoutMs, () => {
       cleanupAndReject(
-        new Error(`image_timeout: Tiempo de espera agotado al descargar la imagen (${timeoutMs} ms)`)
+        new Error(`image_timeout: Inactividad de socket agotada al descargar la imagen (${timeoutMs} ms)`)
       );
     });
 
@@ -402,11 +461,18 @@ export async function downloadAndUploadPostImageToR2(
   const contentType = 'image/jpeg';
 
   // 3. Subir buffer normalizado a Cloudflare R2
+  // Nota: la clave es determinista (bars/${venueSlug}/${shortCode}.jpg) y coincide con el
+  // esquema del pipeline periódico. Si ya existe un objeto con esa clave, se sobrescribirá
+  // con el JPEG re-normalizado de esta importación. Cache-Control: no se declara 'immutable'
+  // porque el contenido puede cambiar en una reimportación del mismo shortcode.
+  // Si R2 tiene éxito y el INSERT posterior falla, el objeto queda huérfano en R2;
+  // NO debe borrarse automáticamente, ya que puede ser referenciado por otra propuesta o
+  // ingesta periódica. La clave determinista garantiza que una reimportación lo sobrescriba.
   await putR2Object({
     key: r2Key,
     body: normalizedBuffer,
     contentType,
-    cacheControl: 'public, max-age=31536000, immutable',
+    cacheControl: 'public, max-age=31536000',
   });
 
   const finalUrl = getPublicUrlForKey(r2Key);
@@ -517,7 +583,11 @@ export async function importSingleInstagramPost(
   const lockRes = await acquirePersistentLock({
     lockKey: DEFAULT_LOCK_KEY,
     lockedBy: executionId,
-    ttlMinutes: 2, // 2 minutos de TTL acotado para importación puntual
+    // TTL de 3 minutos (180 s): cubre el peor caso demostrable de cada etapa secuencial:
+    // Apify sync call (60 s) + descarga imagen (15 s) + Sharp/R2/BD (~15 s holgura máxima).
+    // Aún con este TTL, la verificación de titularidad antes del INSERT protege la escritura
+    // si el lock expirase en una situación de latencia excepcional no anticipada.
+    ttlMinutes: 3,
     executionDetails: {
       action: 'import_single_post',
       url: canonicalUrl,
@@ -794,7 +864,16 @@ export async function importSingleInstagramPost(
       effectiveTime || 'sin-hora'
     }#${normTitle}#${shortcode}`;
 
-    // 11. Inserción atómica en curation_proposals
+    // 11. Inserción atómica en curation_proposals precedida de verificación de titularidad del lock.
+    // Propósito: garantizar que el lock no expiró y fue reemplazado por otra sesión entre
+    // la subida a R2 y la escritura en BD. Si el lock ya no nos pertenece, abortamos la
+    // inserción para evitar una escritura no autorizada (aún dentro del bloque finally,
+    // releasePersistentLock verificará titularidad antes de liberar, sin riesgo).
+    //
+    // La verificación y el INSERT se ejecutan dentro de una misma transacción de cliente:
+    // - Si el lock expiró y fue tomado por otra sesión → rollback, error 409.
+    // - Si el lock sigue siendo nuestro → el INSERT se confirma en la misma transacción.
+    // No se mantiene ninguna transacción abierta durante llamadas externas (Apify, imagen, R2).
     const insertSql = `
       INSERT INTO curation_proposals (
         title,
@@ -873,8 +952,51 @@ export async function importSingleInstagramPost(
       'instagram_single_import',
     ];
 
-    const insertRes = await query(insertSql, insertParams);
-    const createdProposal = insertRes.rows[0];
+    // Verificar titularidad del lock + persistir en una única transacción de cliente.
+    // Si el lock expiró y fue tomado por otra sesión entre la llamada externa y este punto,
+    // la operación se aborta antes de insertar, evitando escrituras no autorizadas.
+    const client = await getClient();
+    let createdProposal: any;
+    try {
+      await client.query('BEGIN');
+
+      // Comprobar que el lock sigue perteneciendo a esta ejecución
+      const lockCheck = await client.query(
+        `SELECT locked_by, released_at, expires_at
+         FROM instagram_ingestion_locks
+         WHERE lock_key = $1
+         FOR SHARE;`,
+        [DEFAULT_LOCK_KEY]
+      );
+
+      const lockRow = lockCheck.rows[0];
+      const lockStillOurs =
+        lockRow &&
+        lockRow.locked_by === executionId &&
+        lockRow.released_at === null &&
+        new Date(lockRow.expires_at).getTime() > Date.now();
+
+      if (!lockStillOurs) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          status: 409,
+          code: 'lock_expired_before_insert',
+          error:
+            'El lock global expiró o fue reemplazado por otra sesión antes de poder persistir la propuesta. No se realizó ninguna escritura. Inténtelo de nuevo.',
+        };
+      }
+
+      const insertRes = await client.query(insertSql, insertParams);
+      createdProposal = insertRes.rows[0];
+
+      await client.query('COMMIT');
+    } catch (dbErr: any) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw dbErr;
+    } finally {
+      client.release();
+    }
 
     return {
       success: true,

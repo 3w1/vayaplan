@@ -1,4 +1,5 @@
 import { describe, expect, test, beforeAll } from 'bun:test';
+import http from 'node:http';
 import sharp from 'sharp';
 
 process.env.MOCK_R2 = 'true';
@@ -200,5 +201,53 @@ describe('Descarga Segura y Normalización de Imágenes (single-post-importer)',
     expect(smallRes.width).toBe(400); // withoutEnlargement: no ampliado
     expect(smallRes.height).toBe(300);
     expect(smallRes.r2Key).toBe('bars/standalone/TEST_SMALL.jpg');
+  });
+
+  test('8. fetchSafeImageBuffer aborta por timeout absoluto ante servidores lentos tipo Slowloris que gotean datos', async () => {
+    // Servidor que envía headers 200 y luego gotea 1 byte cada 25 ms.
+    // Timeout absoluto: 100 ms.
+    // Inactividad: 100 ms (el socket recibe datos cada 25 ms, por lo que nunca alcanza inactividad).
+    // Debe fallar con 'image_total_timeout' al vencer los 100 ms totales.
+    let serverClosed = false;
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, {
+        'Content-Type': 'image/jpeg',
+      });
+      const interval = setInterval(() => {
+        if (serverClosed) {
+          clearInterval(interval);
+          return;
+        }
+        try {
+          res.write(Buffer.from([0xff]));
+        } catch (_) {
+          clearInterval(interval);
+        }
+      }, 25);
+
+      req.on('close', () => {
+        clearInterval(interval);
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+    const port = (server.address() as any).port;
+
+    try {
+      const slowUrl = `http://127.0.0.1:${port}/slowloris.jpg`;
+      let thrownError: any = null;
+      try {
+        await fetchSafeImageBuffer(slowUrl, MAX_SINGLE_POST_IMAGE_SIZE_BYTES, 100, true);
+      } catch (err) {
+        thrownError = err;
+      }
+
+      expect(thrownError).toBeDefined();
+      expect(thrownError.message).toContain('image_total_timeout');
+      expect(thrownError.message).toContain('Tiempo total de descarga agotado');
+    } finally {
+      serverClosed = true;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

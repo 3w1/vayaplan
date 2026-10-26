@@ -744,4 +744,72 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
 
     createdProposalIds.push(data.proposal.id);
   });
+
+  test('20. Lock expirado antes del INSERT: la operación aborta con 409 sin insertar propuesta', async () => {
+    const shortcode = 'TEST_LOCK_EXPIRED_01';
+    let lockManipulated = false;
+
+    setTestPostFetcherOverride(async (canonicalUrl) => {
+      // Simular que el lock expiró antes de alcanzar el INSERT
+      await testPool.query(
+        `UPDATE instagram_ingestion_locks
+         SET expires_at = NOW() - INTERVAL '5 seconds'
+         WHERE lock_key = $1;`,
+        [DEFAULT_LOCK_KEY]
+      );
+      lockManipulated = true;
+      return [
+        {
+          id: shortcode,
+          shortCode: shortcode,
+          url: canonicalUrl,
+          displayUrl: 'https://cdn.instagram.com/v/test_lock_expired.jpg',
+          caption: 'Concierto especial de prueba de expiración de lock a las 22:00h.',
+          timestamp: '2026-10-25T18:00:00.000Z',
+          ownerUsername: 'bar_lock_test',
+        },
+      ];
+    });
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: `https://www.instagram.com/p/${shortcode}/`,
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(lockManipulated).toBe(true);
+    expect(res.status).toBe(409);
+    const data = await res.json();
+    expect(data.error).toBe('lock_expired_before_insert');
+    expect(data.message).toContain('El lock global expiró o fue reemplazado');
+
+    // Verificar que ninguna propuesta fue persistida en la base de datos
+    const countRes = await testPool.query(
+      `SELECT count(*) as count FROM curation_proposals WHERE instagram_post_shortcode = $1;`,
+      [shortcode]
+    );
+    expect(Number(countRes.rows[0].count)).toBe(0);
+  });
+
+  test('21. setTestPostFetcherOverride y setTestImageFetcherOverride lanzan error fuera de entorno de test', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalDescribe = (globalThis as any).describe;
+
+    try {
+      process.env.NODE_ENV = 'production';
+      (globalThis as any).describe = undefined;
+
+      expect(() => setTestPostFetcherOverride(null)).toThrow('[SAFETY]');
+      expect(() => setTestImageFetcherOverride(null)).toThrow('[SAFETY]');
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      (globalThis as any).describe = originalDescribe;
+    }
+  });
 });
