@@ -13,6 +13,7 @@ import {
   fetchSalaInfinityTaquillaEvents,
   type TaquillaEventMetadata,
 } from '../../services/bar-instagram-import/taquilla-contrast';
+import { importSingleInstagramPost } from '../../services/bar-instagram-import/single-post-importer';
 
 let cachedTaquillaEvents: TaquillaEventMetadata[] | null = null;
 let lastTaquillaFetch = 0;
@@ -1160,4 +1161,92 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
     message: 'Propuesta editada con éxito.',
     proposal: result.rows[0],
   });
+});
+
+/**
+ * POST /api/v1/admin/proposals/import-instagram-post
+ *
+ * Importa puntualmente una publicación concreta de Instagram (/p/ o /reel/)
+ * generando una propuesta pendiente editable, reutilizando el pipeline de
+ * clasificación, deduplicación y almacenamiento de imágenes en Cloudflare R2.
+ */
+adminProposalsRoutes.post('/proposals/import-instagram-post', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid_json', message: 'Cuerpo JSON inválido' }, 400);
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ error: 'invalid_body', message: 'Cuerpo JSON inválido. Debe ser un objeto.' }, 400);
+  }
+
+  if (!body.url || typeof body.url !== 'string') {
+    return c.json({ error: 'missing_url', message: 'El campo "url" de Instagram es obligatorio y debe ser una cadena.' }, 400);
+  }
+
+  let venueId: number | null = null;
+  if (body.venue_id !== undefined && body.venue_id !== null && body.venue_id !== '') {
+    const parsedVId = parseInt(String(body.venue_id), 10);
+    if (isNaN(parsedVId)) {
+      return c.json({ error: 'invalid_venue_id', message: 'El identificador de venue debe ser un número entero o null.' }, 400);
+    }
+    venueId = parsedVId;
+  }
+
+  const result = await importSingleInstagramPost({
+    url: body.url,
+    venueId,
+    userEmail: user.email,
+  });
+
+  if (!result.success) {
+    return c.json({ error: result.code || 'import_failed', message: result.error }, result.status as any);
+  }
+
+  if (result.alreadyExisted) {
+    return c.json(
+      {
+        success: true,
+        alreadyExisted: true,
+        recordType: result.recordType,
+        proposal: result.proposal,
+        event: result.event,
+        message:
+          result.recordType === 'proposal'
+            ? `Esta publicación ya fue importada previamente (Propuesta #${result.proposal.id}, estado: ${result.proposal.review_status}).`
+            : `Esta publicación ya tiene un evento creado en catálogo (Evento #${result.event.id}).`,
+      },
+      200
+    );
+  }
+
+  console.log(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'admin_proposals',
+      action: 'import_instagram_post',
+      proposalId: result.proposal.id,
+      shortcode: result.proposal.instagram_post_shortcode,
+      venueId: result.proposal.venue_id,
+      user: user.email,
+    })
+  );
+
+  return c.json(
+    {
+      success: true,
+      alreadyExisted: false,
+      message: 'Publicación importada exitosamente como propuesta pendiente.',
+      proposal: result.proposal,
+    },
+    201
+  );
 });

@@ -98,7 +98,7 @@ const TODAY_EDITORIAL = '2026-10-24';
  * Filtra horas que correspondan a límites de venta o de cierre ("hasta las HH:MM", "entradas hasta...")
  * Si solo se detectó una hora de cierre, debe retornarse null y clasificarse como REQUIERE_REVISION.
  */
-function sanitizeProposedTime(caption: string, detectedTime: string | null): { time: string | null; requiresRevision: boolean } {
+export function sanitizeProposedTime(caption: string, detectedTime: string | null): { time: string | null; requiresRevision: boolean } {
   if (!detectedTime) return { time: null, requiresRevision: false };
 
   const lower = (caption || '').toLowerCase();

@@ -2743,6 +2743,11 @@ export function renderAdminHtml(): string {
         </div>
 
         <div class="toolbar" style="flex-wrap:wrap; gap:0.75rem; margin-bottom:1.25rem;">
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <button type="button" id="btn-open-import-ig" class="btn-primary" onclick="openImportInstagramModal()" style="display:inline-flex; align-items:center; gap:0.35rem; background:#7c3aed; border-color:#7c3aed; font-weight:700; padding:0.5rem 0.85rem; font-size:0.875rem;">
+              📥 Importar Post de Instagram
+            </button>
+          </div>
           <div class="filter-group" style="flex-wrap:wrap; gap:0.5rem; align-items:center;">
             <select id="proposal-filter-status" onchange="onProposalFilterChange()" aria-label="Filtrar por estado">
               <option value="pending" selected>Pendientes de revisión</option>
@@ -4330,6 +4335,53 @@ export function renderAdminHtml(): string {
       <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
         <button type="button" class="btn-secondary" onclick="closeModal('modal-edit-proposal')">Cancelar</button>
         <button type="button" id="btn-submit-edit-prop" class="btn-primary" onclick="submitEditProposal()" style="background:#2563eb; border-color:#2563eb; font-weight:700;">💾 Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPORTAR POST PUNTUAL DE INSTAGRAM -->
+  <div id="modal-import-instagram-post" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-import-instagram-post')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-import-ig-title" style="max-width:560px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-import-ig-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main); display:flex; align-items:center; gap:0.5rem;">
+          <span>📥</span> Importar Publicación de Instagram
+        </h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-import-instagram-post')" aria-label="Cerrar modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
+        <div>
+          <label for="import-ig-url-input" style="display:block; font-size:0.875rem; font-weight:700; color:var(--text-main); margin-bottom:0.35rem;">
+            Enlace de la publicación (Post o Reel) <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="url" id="import-ig-url-input" placeholder="https://www.instagram.com/p/... o /reel/..." style="width:100%; padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:6px; font-size:0.875rem; box-sizing:border-box;">
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">
+            Admite enlaces individuales <code>/p/SHORTCODE/</code> y <code>/reel/SHORTCODE/</code>. No admite perfiles ni Stories efímeras.
+          </div>
+        </div>
+
+        <div>
+          <label for="import-ig-venue-select" style="display:block; font-size:0.875rem; font-weight:700; color:var(--text-main); margin-bottom:0.35rem;">
+            Local asignado (opcional)
+          </label>
+          <select id="import-ig-venue-select" style="width:100%; padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:6px; font-size:0.875rem; box-sizing:border-box; background:#fff;">
+            <option value="">⚠️ Dejar sin asignar (resolver al editar)</option>
+          </select>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">
+            Si el local no existe en el catálogo, puedes dejarlo sin asignar y registrarlo o seleccionarlo más tarde desde el editor.
+          </div>
+        </div>
+
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:0.75rem; font-size:0.75rem; color:#475569; line-height:1.4;">
+          <strong>ℹ️ Presupuesto y alcance:</strong> Esta acción ejecuta una consulta puntual en Apify con un presupuesto acotado (máx. 0.005 USD). No programa descargas periódicas ni altera el cron. Se extraerán el texto (caption) y la imagen de portada; cualquier dato que aparezca únicamente en vídeo o audio requerirá revisión manual.
+        </div>
+
+        <div id="import-ig-feedback" style="display:none; padding:0.75rem; border-radius:6px; font-size:0.8125rem;"></div>
+      </div>
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-import-instagram-post')">Cancelar</button>
+        <button type="button" id="btn-submit-import-ig" class="btn-primary" onclick="submitImportInstagramPost()" style="background:#7c3aed; border-color:#7c3aed; font-weight:700;">
+          🔍 Extraer y Crear Propuesta
+        </button>
       </div>
     </div>
   </div>
@@ -10263,7 +10315,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
                 '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35;">' + escapeHtml(p.title) + '</div>' +
               '</div>' +
               '<div style="font-size:0.8rem; color:var(--text-dim); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">' +
-                '<span>📍 <strong>' + escapeHtml(p.venue_name || ('Local #' + (p.venue_id || '—'))) + '</strong></span>' +
+                '<span>📍 <strong>' + escapeHtml(p.venue_name || (p.venue_id ? 'Local #' + p.venue_id : '⚠️ Local sin asignar')) + '</strong></span>' +
                 (p.instagram_username ? '<span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>' : '') +
               '</div>' +
               matchAlertHtml +
@@ -10380,7 +10432,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
                 '<h4 style="margin:0 0 0.25rem 0; font-size:0.95rem; font-weight:800; color:var(--text-main); line-height:1.3;">' +
                   '<span style="font-size:0.75rem; color:var(--text-muted); margin-right:0.35rem;">#' + p.id + '</span>' + escapeHtml(p.title) +
                 '</h4>' +
-                '<div style="font-size:0.8rem; color:var(--text-dim);">📍 <strong>' + escapeHtml(p.venue_name || ('Local #' + (p.venue_id || '—'))) + '</strong>' +
+                '<div style="font-size:0.8rem; color:var(--text-dim);">📍 <strong>' + escapeHtml(p.venue_name || (p.venue_id ? 'Local #' + p.venue_id : '⚠️ Local sin asignar')) + '</strong>' +
                   (p.instagram_username ? ' <span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>' : '') +
                 '</div>' +
               '</div>' +
@@ -10918,7 +10970,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             getProposalClassificationBadge(prop.classification) +
           '</div>' +
           '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem; background:#f8fafc; padding:0.75rem; border-radius:6px;">' +
-            '<div><strong>📍 Venue:</strong> ' + escapeHtml(prop.venue_name || ('Local #' + prop.venue_id)) + '</div>' +
+            '<div><strong>📍 Venue:</strong> ' + escapeHtml(prop.venue_name || (prop.venue_id ? 'Local #' + prop.venue_id : '⚠️ Local sin asignar')) + '</div>' +
             '<div><strong>📅 Fecha:</strong> ' + (prop.proposed_date || 'Sin fecha') + '</div>' +
             '<div><strong>⏰ Hora:</strong> ' + (prop.proposed_time ? escapeHtml(prop.proposed_time) + ' h' : 'Sin hora') + '</div>' +
             '<div><strong>💶 Precio:</strong> ' + priceFormatted + '</div>' +
@@ -11242,6 +11294,136 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (btn) {
           btn.disabled = false;
           btn.innerText = '💾 Guardar Cambios';
+        }
+      }
+    };
+
+    // ==============================================================================
+    // IMPORTACIÓN PUNTUAL DE INSTAGRAM POR URL
+    // ==============================================================================
+    let isImportingPost = false;
+
+    window.openImportInstagramModal = function() {
+      const urlInput = document.getElementById('import-ig-url-input');
+      if (urlInput) urlInput.value = '';
+
+      const feedback = document.getElementById('import-ig-feedback');
+      if (feedback) {
+        feedback.style.display = 'none';
+        feedback.innerText = '';
+      }
+
+      const venueSelect = document.getElementById('import-ig-venue-select');
+      if (venueSelect) {
+        venueSelect.innerHTML = '<option value="">⚠️ Dejar sin asignar (resolver al editar)</option>';
+        const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+        if (Array.isArray(venuesList) && venuesList.length > 0) {
+          const sorted = [...venuesList].sort(function(a, b) {
+            return (a.name || '').localeCompare(b.name || '', 'es');
+          });
+          sorted.forEach(function(v) {
+            const opt = document.createElement('option');
+            opt.value = String(v.id);
+            opt.text = v.name + (v.address ? ' — ' + v.address : '');
+            venueSelect.appendChild(opt);
+          });
+        }
+      }
+
+      openModal('modal-import-instagram-post');
+    };
+
+    window.submitImportInstagramPost = async function() {
+      if (isImportingPost) return;
+
+      const urlInput = document.getElementById('import-ig-url-input');
+      const venueSelect = document.getElementById('import-ig-venue-select');
+      const feedback = document.getElementById('import-ig-feedback');
+      const submitBtn = document.getElementById('btn-submit-import-ig');
+
+      const rawUrl = urlInput ? urlInput.value.trim() : '';
+      if (!rawUrl) {
+        if (feedback) {
+          feedback.style.display = 'block';
+          feedback.style.background = '#fef2f2';
+          feedback.style.color = '#991b1b';
+          feedback.style.border = '1px solid #fecaca';
+          feedback.innerText = 'Por favor pegue la URL de la publicación de Instagram.';
+        }
+        return;
+      }
+
+      const venueId = venueSelect && venueSelect.value ? parseInt(venueSelect.value, 10) : null;
+
+      isImportingPost = true;
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = '⏳ Extrayendo publicación...';
+      }
+      if (feedback) {
+        feedback.style.display = 'none';
+        feedback.innerText = '';
+      }
+
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('adminToken') || '';
+        const res = await fetch('/api/v1/admin/proposals/import-instagram-post', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+          },
+          body: JSON.stringify({ url: rawUrl, venue_id: venueId }),
+        });
+
+        const data = await res.json().catch(function() { return {}; });
+
+        if (!res.ok) {
+          if (feedback) {
+            feedback.style.display = 'block';
+            feedback.style.background = '#fef2f2';
+            feedback.style.color = '#991b1b';
+            feedback.style.border = '1px solid #fecaca';
+            feedback.innerText = '❌ ' + (data.message || 'Error al importar la publicación.');
+          }
+          return;
+        }
+
+        if (data.alreadyExisted) {
+          alert('ℹ️ ' + (data.message || 'Esta publicación ya fue importada previamente.'));
+          closeModal('modal-import-instagram-post');
+          if (data.recordType === 'proposal' && data.proposal) {
+            await loadAdminProposals();
+            if (data.proposal.review_status === 'pending') {
+              openEditProposalModal(data.proposal.id);
+            }
+          }
+          return;
+        }
+
+        // Éxito: nueva propuesta creada
+        closeModal('modal-import-instagram-post');
+        await loadAdminProposals();
+
+        if (data.proposal && data.proposal.id) {
+          openEditProposalModal(data.proposal.id);
+          alert('✅ Publicación importada exitosamente. Revise los datos, asigne o confirme el local y guarde los cambios.');
+        } else {
+          alert('✅ Publicación importada exitosamente como propuesta pendiente.');
+        }
+      } catch (err) {
+        if (feedback) {
+          feedback.style.display = 'block';
+          feedback.style.background = '#fef2f2';
+          feedback.style.color = '#991b1b';
+          feedback.style.border = '1px solid #fecaca';
+          feedback.innerText = '❌ Error de conexión al servidor: ' + (err.message || 'Inténtelo de nuevo.');
+        }
+      } finally {
+        isImportingPost = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerText = '🔍 Extraer y Crear Propuesta';
         }
       }
     };
