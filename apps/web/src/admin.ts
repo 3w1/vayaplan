@@ -4210,6 +4210,8 @@ export function renderAdminHtml(): string {
                 <option value="DUPLICADO_POSIBLE">⚠️ DUPLICADO_POSIBLE (Posible duplicado de evento existente)</option>
                 <option value="PROMOCION">📢 PROMOCION (Oferta o promoción comercial)</option>
                 <option value="CONTENIDO_GENERAL">📰 CONTENIDO_GENERAL (Noticias o contenido general)</option>
+                <option value="SIN_MATCH">🔍 SIN_MATCH (Sin coincidencias / Venue no vinculado)</option>
+                <option value="PAST_EVENT">⌛ PAST_EVENT (Evento ya pasado)</option>
                 <option value="REQUIERE_REVISION">❓ REQUIERE_REVISION (Requiere análisis detallado)</option>
                 <option value="NO_RELEVANTE">🚫 NO_RELEVANTE (Descartable / No relevante)</option>
               </select>
@@ -10993,10 +10995,21 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       const classSelect = document.getElementById('edit-prop-classification-select');
       if (classSelect) {
-        classSelect.value = prop.classification || 'EVENTO_POSIBLE';
-        if (!classSelect.value) {
-          classSelect.value = 'REQUIERE_REVISION';
+        const targetCls = prop.classification || 'EVENTO_POSIBLE';
+        let foundCls = false;
+        for (let i = 0; i < classSelect.options.length; i++) {
+          if (classSelect.options[i].value === targetCls) {
+            foundCls = true;
+            break;
+          }
         }
+        if (!foundCls && targetCls) {
+          const opt = document.createElement('option');
+          opt.value = targetCls;
+          opt.text = targetCls + ' (Actual)';
+          classSelect.appendChild(opt);
+        }
+        classSelect.value = targetCls;
       }
 
       const dateInput = document.getElementById('edit-prop-date-input');
@@ -11015,7 +11028,23 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (venueSelect) venueSelect.value = prop.venue_id ? String(prop.venue_id) : '';
 
       const catSelect = document.getElementById('edit-prop-category-select');
-      if (catSelect) catSelect.value = prop.category || 'dj_tardeo';
+      if (catSelect) {
+        const targetCat = prop.category || 'dj_tardeo';
+        let foundCat = false;
+        for (let i = 0; i < catSelect.options.length; i++) {
+          if (catSelect.options[i].value === targetCat) {
+            foundCat = true;
+            break;
+          }
+        }
+        if (!foundCat && targetCat) {
+          const catOpt = document.createElement('option');
+          catOpt.value = targetCat;
+          catOpt.text = targetCat + ' (Actual)';
+          catSelect.appendChild(catOpt);
+        }
+        catSelect.value = targetCat;
+      }
 
       const priceStatus = prop.price_status || (prop.price !== null && prop.price !== undefined ? (Number(prop.price) === 0 ? 'FREE' : 'CONFIRMED') : 'NOT_INFORMED');
       const priceStatusSelect = document.getElementById('edit-prop-price-status-select');
@@ -11070,11 +11099,20 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       const metaLink = document.getElementById('edit-prop-meta-link');
       if (metaLink) {
-        if (prop.source_url) {
-          metaLink.href = prop.source_url;
-          metaLink.style.display = 'inline-block';
-        } else {
-          metaLink.style.display = 'none';
+        metaLink.href = '#';
+        metaLink.style.display = 'none';
+        if (prop.source_url && typeof prop.source_url === 'string') {
+          try {
+            const parsedUrl = new URL(prop.source_url);
+            if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+              metaLink.href = parsedUrl.href;
+              metaLink.target = '_blank';
+              metaLink.rel = 'noopener noreferrer';
+              metaLink.style.display = 'inline-block';
+            }
+          } catch {
+            // URL malformada: permanece oculto con href '#' limpio
+          }
         }
       }
 

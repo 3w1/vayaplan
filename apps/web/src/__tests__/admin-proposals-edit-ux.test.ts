@@ -1,7 +1,31 @@
 import { describe, expect, test } from 'bun:test';
 import vm from 'node:vm';
 import { renderAdminHtml } from '../admin';
-import { extractExecutableInlineScripts } from './admin-script-syntax.test';
+
+interface InlineScript {
+  attrs: string;
+  type: string;
+  isModule: boolean;
+  content: string;
+}
+
+function extractExecutableInlineScripts(html: string): InlineScript[] {
+  const scripts: InlineScript[] = [];
+  const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = scriptRegex.exec(html)) !== null) {
+    const attrs = match[1] || '';
+    const content = match[2] || '';
+    if (attrs.includes('type="application/ld+json"')) continue;
+    scripts.push({
+      attrs,
+      type: 'text/javascript',
+      isModule: attrs.includes('type="module"'),
+      content,
+    });
+  }
+  return scripts;
+}
 
 describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
   function setupTestContext(mockProposals: any[], apiResponses: Record<string, any> = {}) {
@@ -29,13 +53,46 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
       'edit-prop-id': { value: '' },
       'edit-prop-error': { style: { display: 'none' }, innerText: '' },
       'edit-prop-title-input': { value: '' },
-      'edit-prop-classification-select': { value: '' },
+      'edit-prop-classification-select': {
+        value: '',
+        options: [
+          { value: 'CONTENIDO_VENUE', text: 'CONTENIDO_VENUE' },
+          { value: 'EVENTO_POSIBLE', text: 'EVENTO_POSIBLE' },
+          { value: 'EVENTO_POSIBLE_SIN_HORA', text: 'EVENTO_POSIBLE_SIN_HORA' },
+          { value: 'EVENTO_CONTINUO', text: 'EVENTO_CONTINUO' },
+          { value: 'DUPLICADO_POSIBLE', text: 'DUPLICADO_POSIBLE' },
+          { value: 'SIN_MATCH', text: 'SIN_MATCH' },
+          { value: 'PAST_EVENT', text: 'PAST_EVENT' },
+          { value: 'PROMOCION', text: 'PROMOCION' },
+          { value: 'CONTENIDO_GENERAL', text: 'CONTENIDO_GENERAL' },
+          { value: 'REQUIERE_REVISION', text: 'REQUIERE_REVISION' },
+          { value: 'NO_RELEVANTE', text: 'NO_RELEVANTE' },
+        ],
+        appendChild: function(opt: any) { this.options.push(opt); }
+      },
       'edit-prop-date-input': { value: '' },
       'edit-prop-end-date-input': { value: '' },
       'edit-prop-time-input': { value: '' },
       'edit-prop-end-time-input': { value: '' },
-      'edit-prop-venue-select': { value: '' },
-      'edit-prop-category-select': { value: '' },
+      'edit-prop-venue-select': {
+        value: '',
+        options: [{ value: '', text: '—' }, { value: '10161', text: 'Local 10161' }],
+        appendChild: function(opt: any) { this.options.push(opt); }
+      },
+      'edit-prop-category-select': {
+        value: '',
+        options: [
+          { value: 'dj_tardeo', text: 'dj_tardeo' },
+          { value: 'musica_directo', text: 'musica_directo' },
+          { value: 'monologo', text: 'monologo' },
+          { value: 'cine', text: 'cine' },
+          { value: 'teatro', text: 'teatro' },
+          { value: 'exposicion', text: 'exposicion' },
+          { value: 'cultura', text: 'cultura' },
+          { value: 'otros', text: 'otros' },
+        ],
+        appendChild: function(opt: any) { this.options.push(opt); }
+      },
       'edit-prop-price-status-select': { value: '' },
       'edit-prop-price-amount-container': { style: { display: 'none' } },
       'edit-prop-price-input': { value: '' },
@@ -46,7 +103,7 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
       'edit-prop-meta-user': { innerText: '' },
       'edit-prop-meta-conf': { innerText: '', className: '' },
       'edit-prop-meta-reasons': { innerText: '' },
-      'edit-prop-meta-link': { href: '', style: {} },
+      'edit-prop-meta-link': { href: '#', style: { display: 'none' }, target: '', rel: '' },
       'edit-prop-original-caption': { innerText: '' },
       'btn-submit-edit-prop': { disabled: false, innerText: '' },
 
@@ -63,8 +120,10 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
 
     const sandbox: any = {
       window: {},
+      URL,
       URLSearchParams,
       document: {
+        createElement: (tag: string) => ({ value: '', text: '', tagName: tag.toUpperCase() }),
         getElementById: (id: string) => {
           if (!domElements[id]) {
             domElements[id] = {};
@@ -235,7 +294,88 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     expect(domElements['edit-prop-original-caption'].innerText).toBe('Texto íntegro del post de normas...');
   });
 
-  test('3. submitEditProposal valida título y hora en cliente antes de enviar', async () => {
+  test('3. H-04: Preserva clasificación y categoría existentes que no estén en selectores estáticos al abrir y guardar sin cambios', async () => {
+    const mockProposals = [
+      {
+        id: 70,
+        venue_id: 10161,
+        title: 'Propuesta con Valores Especiales',
+        classification: 'SIN_MATCH',
+        category: 'categoria_personalizada_test',
+        proposed_date: '2026-11-20',
+        proposed_time: '21:00',
+        review_status: 'pending',
+      },
+    ];
+
+    let patchPayload: any = null;
+    const apiResponses = {
+      '/api/v1/admin/proposals/70': (options: any) => {
+        patchPayload = JSON.parse(options.body);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, message: 'Propuesta editada con éxito.' }),
+        };
+      },
+    };
+
+    const { ctx, domElements } = setupTestContext(mockProposals, apiResponses);
+    await ctx.window.loadAdminProposals();
+
+    // Abrir modal
+    ctx.window.openEditProposalModal(70);
+
+    // Debe haber preservado SIN_MATCH y la categoría personalizada
+    expect(domElements['edit-prop-classification-select'].value).toBe('SIN_MATCH');
+    expect(domElements['edit-prop-category-select'].value).toBe('categoria_personalizada_test');
+
+    // Guardar sin hacer modificaciones manuales
+    await ctx.window.submitEditProposal();
+
+    expect(patchPayload).not.toBeNull();
+    expect(patchPayload.classification).toBe('SIN_MATCH');
+    expect(patchPayload.category).toBe('categoria_personalizada_test');
+    expect(patchPayload.proposed_date).toBe('2026-11-20');
+    expect(patchPayload.proposed_time).toBe('21:00');
+  });
+
+  test('4. H-04: Validación de protocolo seguro en enlace externo, limpiando y ocultando ante javascript: o URLs malformadas', async () => {
+    const mockProposals = [
+      {
+        id: 81,
+        venue_id: 10161,
+        title: 'Propuesta con URL Maliciosa',
+        source_url: 'javascript:alert(1)',
+        review_status: 'pending',
+      },
+      {
+        id: 82,
+        venue_id: 10161,
+        title: 'Propuesta con URL Válida',
+        source_url: 'https://www.instagram.com/p/valida123/',
+        review_status: 'pending',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    // 1. Abrir primero propuesta con URL válida
+    ctx.window.openEditProposalModal(82);
+    expect(domElements['edit-prop-meta-link'].style.display).toBe('inline-block');
+    expect(domElements['edit-prop-meta-link'].href).toBe('https://www.instagram.com/p/valida123/');
+    expect(domElements['edit-prop-meta-link'].target).toBe('_blank');
+    expect(domElements['edit-prop-meta-link'].rel).toBe('noopener noreferrer');
+
+    // 2. Abrir después propuesta con URL maliciosa: debe limpiarse el href a '#' y ocultarse
+    ctx.window.openEditProposalModal(81);
+    expect(domElements['edit-prop-meta-link'].style.display).toBe('none');
+    expect(domElements['edit-prop-meta-link'].href).toBe('#');
+    expect(mockProposals[0].source_url).toBe('javascript:alert(1)'); // source_url original inalterado
+  });
+
+  test('5. submitEditProposal valida título y hora en cliente antes de enviar', async () => {
     const mockProposals = [
       {
         id: 63,
@@ -267,7 +407,7 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     expect(apiCalls.filter(c => c.options?.method === 'PATCH').length).toBe(0);
   });
 
-  test('4. submitEditProposal envía PATCH con datos limpios, cierra modal y recarga lista', async () => {
+  test('6. submitEditProposal envía PATCH con datos limpios, cierra modal y recarga lista', async () => {
     const mockProposals = [
       {
         id: 63,
@@ -295,7 +435,6 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
 
     ctx.window.openEditProposalModal(63);
 
-    // Modificar datos: reclasificar a EVENTO_POSIBLE y fijar fecha y hora
     domElements['edit-prop-title-input'].value = 'Pase Especial de Terror';
     domElements['edit-prop-classification-select'].value = 'EVENTO_POSIBLE';
     domElements['edit-prop-date-input'].value = '2026-10-31';
@@ -322,7 +461,105 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     expect(alerts.some(a => a.includes('Propuesta editada con éxito'))).toBe(true);
   });
 
-  test('5. openProposalCaptionModal incluye botón "✏️ Editar Propuesta" en su pie si la propuesta está pendiente', async () => {
+  test('7. Error HTTP y de red: conserva íntegros todos los datos ingresados y restaura botón en finally', async () => {
+    const mockProposals = [
+      {
+        id: 90,
+        venue_id: 10161,
+        title: 'Título Original',
+        review_status: 'pending',
+      },
+    ];
+
+    let attempts = 0;
+    const apiResponses = {
+      '/api/v1/admin/proposals/90': () => {
+        attempts++;
+        if (attempts === 1) {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ message: 'Error interno simulado de base de datos' }),
+          };
+        }
+        throw new Error('Fallo de conexión simulado');
+      },
+    };
+
+    const { ctx, domElements, closedModals } = setupTestContext(mockProposals, apiResponses);
+    await ctx.window.loadAdminProposals();
+
+    ctx.window.openEditProposalModal(90);
+
+    // Escribir datos en el formulario
+    domElements['edit-prop-title-input'].value = 'Título Modificado por Editor';
+    domElements['edit-prop-date-input'].value = '2026-11-25';
+    domElements['edit-prop-time-input'].value = '20:15';
+
+    // 1. Intento 1: Error HTTP 500
+    await ctx.window.submitEditProposal();
+
+    // El modal NO debe haberse cerrado
+    expect(closedModals).not.toContain('modal-edit-proposal');
+    // El mensaje de error debe mostrarse
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('Error interno simulado');
+    // Los datos del formulario deben conservarse intactos
+    expect(domElements['edit-prop-title-input'].value).toBe('Título Modificado por Editor');
+    expect(domElements['edit-prop-date-input'].value).toBe('2026-11-25');
+    expect(domElements['edit-prop-time-input'].value).toBe('20:15');
+    // El botón debe restaurarse en finally
+    expect(domElements['btn-submit-edit-prop'].disabled).toBe(false);
+
+    // 2. Intento 2: Error de red (throw)
+    await ctx.window.submitEditProposal();
+    expect(closedModals).not.toContain('modal-edit-proposal');
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('Error de conexión');
+    // Siguen intactos
+    expect(domElements['edit-prop-title-input'].value).toBe('Título Modificado por Editor');
+    expect(domElements['btn-submit-edit-prop'].disabled).toBe(false);
+  });
+
+  test('8. Prevención de doble envío: bloquea segundas peticiones mientras una está en curso', async () => {
+    const mockProposals = [
+      {
+        id: 95,
+        venue_id: 10161,
+        title: 'Propuesta Doble Submit',
+        review_status: 'pending',
+      },
+    ];
+
+    let patchCallsCount = 0;
+    const apiResponses = {
+      '/api/v1/admin/proposals/95': async () => {
+        patchCallsCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, message: 'Guardado OK' }),
+        };
+      },
+    };
+
+    const { ctx, domElements } = setupTestContext(mockProposals, apiResponses);
+    await ctx.window.loadAdminProposals();
+
+    ctx.window.openEditProposalModal(95);
+    domElements['edit-prop-title-input'].value = 'Título Único';
+
+    // Disparar dos llamadas concurrentes
+    const p1 = ctx.window.submitEditProposal();
+    const p2 = ctx.window.submitEditProposal();
+    await Promise.all([p1, p2]);
+
+    // Solo debe haberse despachado 1 petición
+    expect(patchCallsCount).toBe(1);
+    expect(domElements['btn-submit-edit-prop'].disabled).toBe(false);
+  });
+
+  test('9. openProposalCaptionModal incluye botón "✏️ Editar Propuesta" en su pie si la propuesta está pendiente', async () => {
     const mockProposals = [
       {
         id: 63,
