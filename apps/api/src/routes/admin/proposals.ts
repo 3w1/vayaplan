@@ -31,6 +31,39 @@ export async function getCachedTaquillaEvents(): Promise<TaquillaEventMetadata[]
   return events;
 }
 
+export const VALID_PROPOSAL_CLASSIFICATIONS = [
+  'EVENTO_POSIBLE',
+  'EVENTO_POSIBLE_SIN_HORA',
+  'CONTENIDO_VENUE',
+  'DUPLICADO_POSIBLE',
+  'SIN_MATCH',
+  'PAST_EVENT',
+  'PROMOCION',
+  'CONTENIDO_GENERAL',
+  'NO_RELEVANTE',
+  'REQUIERE_REVISION',
+  'EVENTO_CONTINUO',
+] as const;
+
+export const STRICT_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function isValidStrictCalendarDate(dateStr: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return false;
+  }
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (y < 1000 || y > 9999 || m < 1 || m > 12 || d < 1 || d > 31) {
+    return false;
+  }
+  const parsed = new Date(Date.UTC(y, m - 1, d));
+  return (
+    !isNaN(parsed.getTime()) &&
+    parsed.getUTCFullYear() === y &&
+    parsed.getUTCMonth() === m - 1 &&
+    parsed.getUTCDate() === d
+  );
+}
+
 export const adminProposalsRoutes = new Hono<{
   Variables: {
     user?: AdminUser;
@@ -939,11 +972,26 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
     return c.json({ error: 'invalid_id', message: 'ID de propuesta no válido' }, 400);
   }
 
+  const check = await query(`SELECT id, review_status FROM curation_proposals WHERE id = $1;`, [id]);
+  if (check.rows.length === 0) {
+    return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
+  }
+  if (check.rows[0].review_status !== 'pending') {
+    return c.json({
+      error: 'proposal_not_pending',
+      message: `Solo se pueden editar propuestas en estado pendiente (estado actual: ${check.rows[0].review_status}).`,
+    }, 400);
+  }
+
   let body: any = {};
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: 'invalid_json', message: 'Cuerpo JSON inválido' }, 400);
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ error: 'invalid_body', message: 'Cuerpo JSON inválido. Debe ser un objeto.' }, 400);
   }
 
   const fields: string[] = [];
@@ -958,8 +1006,8 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
 
   if (body.proposed_date !== undefined) {
     const d = body.proposed_date ? String(body.proposed_date).trim() : null;
-    if (d && !isValidDateString(d)) {
-      return c.json({ error: 'invalid_date', message: 'Formato de fecha inválido (YYYY-MM-DD).' }, 400);
+    if (d && !isValidStrictCalendarDate(d)) {
+      return c.json({ error: 'invalid_date', message: 'Formato o valor de fecha de inicio inválido (YYYY-MM-DD).' }, 400);
     }
     params.push(d);
     fields.push(`proposed_date = $${params.length}`);
@@ -967,8 +1015,8 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
 
   if (body.proposed_time !== undefined) {
     const tm = body.proposed_time ? String(body.proposed_time).trim() : null;
-    if (tm && !/^([012]?\d):([0-5]\d)$/.test(tm)) {
-      return c.json({ error: 'invalid_time', message: 'Formato de hora inválido (HH:mm).' }, 400);
+    if (tm && !STRICT_TIME_REGEX.test(tm)) {
+      return c.json({ error: 'invalid_time', message: 'Formato de hora de inicio inválido (HH:mm de 00:00 a 23:59).' }, 400);
     }
     params.push(tm);
     fields.push(`proposed_time = $${params.length}`);
@@ -976,8 +1024,8 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
 
   if (body.proposed_end_date !== undefined) {
     const ed = body.proposed_end_date ? String(body.proposed_end_date).trim() : null;
-    if (ed && !isValidDateString(ed)) {
-      return c.json({ error: 'invalid_end_date', message: 'Formato de fecha de fin inválido (YYYY-MM-DD).' }, 400);
+    if (ed && !isValidStrictCalendarDate(ed)) {
+      return c.json({ error: 'invalid_end_date', message: 'Formato o valor de fecha de fin inválido (YYYY-MM-DD).' }, 400);
     }
     params.push(ed);
     fields.push(`proposed_end_date = $${params.length}`);
@@ -985,8 +1033,8 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
 
   if (body.proposed_end_time !== undefined) {
     const etm = body.proposed_end_time ? String(body.proposed_end_time).trim() : null;
-    if (etm && !/^([012]?\d):([0-5]\d)$/.test(etm)) {
-      return c.json({ error: 'invalid_end_time', message: 'Formato de hora de fin inválido (HH:mm).' }, 400);
+    if (etm && !STRICT_TIME_REGEX.test(etm)) {
+      return c.json({ error: 'invalid_end_time', message: 'Formato de hora de fin inválido (HH:mm de 00:00 a 23:59).' }, 400);
     }
     params.push(etm);
     fields.push(`proposed_end_time = $${params.length}`);
@@ -1010,6 +1058,12 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
 
   if (body.classification !== undefined) {
     const cls = String(body.classification).trim();
+    if (!VALID_PROPOSAL_CLASSIFICATIONS.includes(cls as any)) {
+      return c.json({
+        error: 'invalid_classification',
+        message: `Clasificación no válida: ${cls}. Valores admitidos: ${VALID_PROPOSAL_CLASSIFICATIONS.join(', ')}`,
+      }, 400);
+    }
     params.push(cls);
     fields.push(`classification = $${params.length}`);
   }
@@ -1073,14 +1127,33 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
   const sql = `
     UPDATE curation_proposals
     SET ${fields.join(', ')}
-    WHERE id = $${params.length}
+    WHERE id = $${params.length} AND review_status = 'pending'
     RETURNING *;
   `;
 
   const result = await query(sql, params);
   if (result.rows.length === 0) {
-    return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
+    const existsCheck = await query(`SELECT id, review_status FROM curation_proposals WHERE id = $1;`, [id]);
+    if (existsCheck.rows.length === 0) {
+      return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
+    }
+    return c.json({
+      error: 'proposal_not_pending',
+      message: `La propuesta ya no está en estado pendiente (estado actual: ${existsCheck.rows[0].review_status}) y no puede ser modificada.`,
+    }, 409);
   }
+
+  console.log(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'admin_proposals',
+      action: 'patch_proposal',
+      proposalId: id,
+      user: c.get('user')?.email || 'admin',
+      updatedFields: fields,
+    })
+  );
 
   return c.json({
     success: true,
