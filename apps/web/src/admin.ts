@@ -4165,8 +4165,169 @@ export function renderAdminHtml(): string {
       <div class="modal-body" id="modal-caption-prop-body" style="flex:1; overflow-y:auto; padding:1.25rem;">
         <!-- Se inyecta dinámicamente -->
       </div>
-      <div class="modal-footer" style="flex-shrink:0;">
+      <div class="modal-footer" id="modal-caption-prop-footer" style="flex-shrink:0; display:flex; justify-content:flex-end; gap:0.5rem;">
         <button type="button" class="btn-secondary" onclick="closeModal('modal-proposal-caption')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR METADATOS Y CLASIFICACIÓN DE PROPUESTA -->
+  <div id="modal-edit-proposal" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-edit-proposal')">
+    <div class="modal-card modal-card-large" role="dialog" aria-modal="true" aria-labelledby="modal-edit-prop-title" style="max-width:760px; width:95%; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="flex-shrink:0; background:linear-gradient(135deg, #1e40af, #3b82f6); color:#ffffff;">
+        <div>
+          <span style="font-size:0.75rem; font-weight:800; letter-spacing:1px; opacity:0.85; text-transform:uppercase;">Curación Editorial</span>
+          <h3 id="modal-edit-prop-title" style="margin:0.25rem 0 0 0; font-size:1.25rem; font-weight:800; color:#ffffff;">Editar Propuesta</h3>
+        </div>
+        <button type="button" class="modal-close" onclick="closeModal('modal-edit-proposal')" aria-label="Cerrar modal" style="color:#ffffff;">✕</button>
+      </div>
+
+      <div class="modal-body" style="flex:1; overflow-y:auto; padding:1.5rem; background:#f8fafc;">
+        <input type="hidden" id="edit-prop-id" value="">
+        <div id="edit-prop-error" class="editor-alert-error" style="display:none; margin-bottom:1rem;"></div>
+
+        <!-- Banner de advertencia: Esta acción NO crea eventos ni publica -->
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.25rem; font-size:0.85rem; color:#1e40af; display:flex; align-items:center; gap:0.5rem;">
+          <span>ℹ️</span>
+          <span><strong>Edición previa:</strong> Modificar esta propuesta guarda los cambios en el buzón editorial (estado <strong>PENDIENTE</strong>). <strong>No crea eventos en la agenda ni los aprueba ni publica</strong>.</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 220px; gap:1.25rem;">
+          <!-- Columna Izquierda: Formulario de Edición -->
+          <div style="display:flex; flex-direction:column; gap:1rem;">
+            <div>
+              <label for="edit-prop-title-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Título de la Propuesta *</label>
+              <input type="text" id="edit-prop-title-input" required style="width:100%; font-size:0.95rem; font-weight:600;" placeholder="Título descriptivo de la actividad...">
+            </div>
+
+            <div>
+              <label for="edit-prop-classification-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Clasificación Editorial *</label>
+              <select id="edit-prop-classification-select" style="width:100%; font-weight:700;">
+                <option value="CONTENIDO_VENUE">🍸 CONTENIDO_VENUE (Material de local - no evento)</option>
+                <option value="EVENTO_POSIBLE">🎯 EVENTO_POSIBLE (Evento puntual con fecha y hora)</option>
+                <option value="EVENTO_POSIBLE_SIN_HORA">⏰ EVENTO_POSIBLE_SIN_HORA (Evento con fecha pero sin hora)</option>
+                <option value="EVENTO_CONTINUO">🏛️ EVENTO_CONTINUO (Exposición o evento continuo de varios días)</option>
+                <option value="DUPLICADO_POSIBLE">⚠️ DUPLICADO_POSIBLE (Posible duplicado de evento existente)</option>
+                <option value="PROMOCION">📢 PROMOCION (Oferta o promoción comercial)</option>
+                <option value="CONTENIDO_GENERAL">📰 CONTENIDO_GENERAL (Noticias o contenido general)</option>
+                <option value="REQUIERE_REVISION">❓ REQUIERE_REVISION (Requiere análisis detallado)</option>
+                <option value="NO_RELEVANTE">🚫 NO_RELEVANTE (Descartable / No relevante)</option>
+              </select>
+              <span style="font-size:0.7rem; color:var(--text-muted); display:block; margin-top:0.25rem;">Reclasificar permite habilitar los flujos de aprobación o archivo según la naturaleza real del contenido.</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+                  <label for="edit-prop-date-input" style="font-size:0.8125rem; font-weight:700; color:var(--text-main); margin:0;">Fecha inicio</label>
+                  <button type="button" onclick="document.getElementById('edit-prop-date-input').value=''; document.getElementById('edit-prop-end-date-input').value='';" style="background:none; border:none; padding:0; font-size:0.7rem; color:#dc2626; cursor:pointer; text-decoration:underline;">Quitar fecha</button>
+                </div>
+                <input type="date" id="edit-prop-date-input" style="width:100%;">
+              </div>
+              <div>
+                <label for="edit-prop-end-date-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Fecha fin (continuo)</label>
+                <input type="date" id="edit-prop-end-date-input" style="width:100%;">
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
+                  <label for="edit-prop-time-input" style="font-size:0.8125rem; font-weight:700; color:var(--text-main); margin:0;">Hora inicio (HH:mm)</label>
+                  <button type="button" onclick="document.getElementById('edit-prop-time-input').value=''; document.getElementById('edit-prop-end-time-input').value='';" style="background:none; border:none; padding:0; font-size:0.7rem; color:#dc2626; cursor:pointer; text-decoration:underline;">Quitar hora</button>
+                </div>
+                <input type="text" id="edit-prop-time-input" style="width:100%;" placeholder="ej: 18:00">
+              </div>
+              <div>
+                <label for="edit-prop-end-time-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Hora fin (HH:mm)</label>
+                <input type="text" id="edit-prop-end-time-input" style="width:100%;" placeholder="ej: 21:00">
+              </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem;">
+              <div>
+                <label for="edit-prop-venue-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Local (Venue)</label>
+                <select id="edit-prop-venue-select" style="width:100%;">
+                  <option value="">— Sin local asignado —</option>
+                </select>
+              </div>
+              <div>
+                <label for="edit-prop-category-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Categoría</label>
+                <select id="edit-prop-category-select" style="width:100%;">
+                  <option value="dj_tardeo">dj_tardeo (DJ / Tardeo)</option>
+                  <option value="musica_directo">musica_directo (Música en directo)</option>
+                  <option value="monologo">monologo (Monólogo / Comedia)</option>
+                  <option value="cine">cine (Cine)</option>
+                  <option value="teatro">teatro (Teatro)</option>
+                  <option value="exposicion">exposicion (Exposición)</option>
+                  <option value="cultura">cultura (Cultura)</option>
+                  <option value="baloncesto">baloncesto (Baloncesto)</option>
+                  <option value="futbol">futbol (Fútbol)</option>
+                  <option value="rugby">rugby (Rugby)</option>
+                  <option value="conferencia">conferencia (Conferencia)</option>
+                  <option value="ocio">ocio (Ocio nocturno)</option>
+                  <option value="gastronomia">gastronomia (Gastronomía)</option>
+                  <option value="otros">otros (Otros)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Panel de Precio -->
+            <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:0.875rem;">
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.75rem; align-items:start;">
+                <div>
+                  <label for="edit-prop-price-status-select" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Estado de Precio</label>
+                  <select id="edit-prop-price-status-select" onchange="onEditPriceStatusChange()" style="width:100%; font-weight:700;">
+                    <option value="NOT_INFORMED">No informado</option>
+                    <option value="FREE">Gratis</option>
+                    <option value="CHECK_BOX_OFFICE">Consultar en taquilla</option>
+                    <option value="CONFIRMED">Precio confirmado</option>
+                  </select>
+                </div>
+                <div id="edit-prop-price-amount-container" style="display:none;">
+                  <label for="edit-prop-price-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Precio en euros (€)</label>
+                  <input type="text" id="edit-prop-price-input" value="0,00" style="width:100%; font-weight:700;" placeholder="0,00">
+                </div>
+              </div>
+              <div style="margin-top:0.6rem;">
+                <label for="edit-prop-price-note-input" style="display:block; font-size:0.8125rem; font-weight:700; margin-bottom:0.25rem; color:var(--text-main);">Nota de precio (opcional)</label>
+                <input type="text" id="edit-prop-price-note-input" style="width:100%; font-size:0.85rem;" placeholder="Ej: En taquilla antes de medianoche">
+              </div>
+            </div>
+          </div>
+
+          <!-- Columna Derecha: Vista previa de imagen y contraste con post original -->
+          <div style="background:#ffffff; border:1px solid var(--border); border-radius:8px; padding:0.875rem; display:flex; flex-direction:column; gap:0.75rem;">
+            <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Imagen R2</div>
+            <div style="width:100%; height:160px; background:#f1f5f9; border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; border:1px solid var(--border);">
+              <img id="edit-prop-img-preview" src="" alt="Previsualización" style="width:100%; height:100%; object-fit:cover; display:none;">
+              <span id="edit-prop-img-placeholder" style="color:var(--text-muted); font-size:0.8rem;">Sin imagen</span>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.75rem; color:var(--text-dim); display:flex; flex-direction:column; gap:0.25rem;">
+              <div><strong>Origen:</strong> <span id="edit-prop-meta-source">Instagram</span></div>
+              <div><strong>Perfil:</strong> <span id="edit-prop-meta-user">@...</span></div>
+              <div><strong>Confianza original:</strong> <span id="edit-prop-meta-conf" class="badge-tag">BAJA</span></div>
+              <div id="edit-prop-meta-reasons-box" style="margin-top:0.25rem; color:var(--text-muted); font-size:0.7rem; line-height:1.3;">
+                <strong>Motivo inicial:</strong> <span id="edit-prop-meta-reasons">—</span>
+              </div>
+              <div style="margin-top:0.35rem;">
+                <a id="edit-prop-meta-link" href="#" target="_blank" rel="noopener noreferrer" style="color:var(--primary); font-weight:700; text-decoration:none;">Ver post original ↗</a>
+              </div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding-top:0.5rem; flex:1; display:flex; flex-direction:column;">
+              <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.25rem;">Texto del Post (Caption)</div>
+              <div id="edit-prop-original-caption" style="white-space:pre-wrap; font-size:0.75rem; color:var(--text-main); line-height:1.4; max-height:140px; overflow-y:auto; background:#f8fafc; padding:0.5rem; border-radius:4px; border:1px solid var(--border);">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-edit-proposal')">Cancelar</button>
+        <button type="button" id="btn-submit-edit-prop" class="btn-primary" onclick="submitEditProposal()" style="background:#2563eb; border-color:#2563eb; font-weight:700;">💾 Guardar Cambios</button>
       </div>
     </div>
   </div>
@@ -4771,6 +4932,14 @@ export function renderAdminHtml(): string {
           appVenueSelect.innerHTML = '<option value="">— Seleccionar local —</option>' +
             cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
           if (curVal) appVenueSelect.value = curVal;
+        }
+
+        const editVenueSelect = document.getElementById('edit-prop-venue-select');
+        if (editVenueSelect) {
+          const curVal = editVenueSelect.value;
+          editVenueSelect.innerHTML = '<option value="">— Sin local asignado —</option>' +
+            cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
+          if (curVal) editVenueSelect.value = curVal;
         }
 
         // Rellenar selector de local para nueva fuente de ingesta
@@ -10032,9 +10201,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           let actionsHtml = '';
           if (p.review_status === 'pending') {
             if (p.classification === 'CONTENIDO_VENUE') {
-              // CONTENIDO_VENUE: No se puede aprobar como evento
+              // CONTENIDO_VENUE: No se puede aprobar directamente como evento, pero sí editar/reclasificar o archivar
               actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
                 '<span style="font-size:0.75rem; color:#64748b; align-self:center; margin-right:0.25rem;">(Material local - no evento)</span>' +
+                '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta y reclasificar" style="background:#2563eb; border-color:#2563eb; font-weight:700;">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')" title="Archivar contenido">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')" title="Marcar como promoción comercial">Promoción</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" title="Ver texto original">Ver Post</button>' +
@@ -10043,6 +10213,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
               // EVENTO_CONTINUO: Aprobación directa como borrador sin exigir hora puntual
               actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
                 '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Revisar y aprobar borrador continuo" style="background:#059669; border-color:#059669; font-weight:700;">✓ Aprobar Borrador</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
@@ -10051,6 +10222,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
               // EVENTO_POSIBLE_SIN_HORA: Requiere asignar hora para aprobar
               actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
                 '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Asignar hora y aprobar borrador" style="background:#d97706; border-color:#d97706; font-weight:700;">⏰ Asignar Hora</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
@@ -10059,6 +10231,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
               // EVENTO_POSIBLE o DUPLICADO_POSIBLE con hora
               actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
                 '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Aprobar y crear borrador" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" title="Rechazar con motivo" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
@@ -10154,6 +10327,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             if (p.classification === 'CONTENIDO_VENUE') {
               mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
                 '<span style="font-size:0.75rem; color:#64748b; align-self:center;">(Material local - no evento)</span>' +
+                '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta y reclasificar" style="background:#2563eb; border-color:#2563eb; font-weight:700;">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
@@ -10161,6 +10335,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             } else if (isContinuous) {
               mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
                 '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Revisar y aprobar borrador continuo" style="background:#059669; border-color:#059669; font-weight:700;">✓ Aprobar Borrador</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
@@ -10168,6 +10343,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             } else if (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) {
               mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
                 '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" style="background:#d97706; border-color:#d97706; font-weight:700;">⏰ Asignar Hora</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626;">Rechazar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
@@ -10175,6 +10351,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             } else {
               mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
                 '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
+                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')">✏️ Editar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626;">Rechazar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
                 '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
@@ -10769,7 +10946,266 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         '</div>' +
       '</div>';
 
+      const footerEl = document.getElementById('modal-caption-prop-footer');
+      if (footerEl) {
+        if (prop.review_status === 'pending') {
+          footerEl.innerHTML = '<button type="button" class="btn-secondary" onclick="closeModal(&quot;modal-proposal-caption&quot;)">Cerrar</button>' +
+            '<button type="button" class="btn-primary" onclick="closeModal(&quot;modal-proposal-caption&quot;); openEditProposalModal(' + prop.id + ');" style="background:#2563eb; border-color:#2563eb; font-weight:700;">✏️ Editar Propuesta</button>';
+        } else {
+          footerEl.innerHTML = '<button type="button" class="btn-secondary" onclick="closeModal(&quot;modal-proposal-caption&quot;)">Cerrar</button>';
+        }
+      }
+
       openModal('modal-proposal-caption');
+    };
+
+    // ==============================================================================
+    // EDICIÓN MANUAL DE METADATOS Y CLASIFICACIÓN DE PROPUESTAS
+    // ==============================================================================
+    let isSavingProposal = false;
+
+    window.onEditPriceStatusChange = function() {
+      const statusSelect = document.getElementById('edit-prop-price-status-select');
+      const container = document.getElementById('edit-prop-price-amount-container');
+      if (statusSelect && container) {
+        container.style.display = statusSelect.value === 'CONFIRMED' ? 'block' : 'none';
+      }
+    };
+
+    window.openEditProposalModal = function(id) {
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!prop) {
+        alert('Propuesta no encontrada.');
+        return;
+      }
+
+      const errBox = document.getElementById('edit-prop-error');
+      if (errBox) {
+        errBox.style.display = 'none';
+        errBox.innerText = '';
+      }
+
+      const idInput = document.getElementById('edit-prop-id');
+      if (idInput) idInput.value = String(prop.id);
+
+      const titleInput = document.getElementById('edit-prop-title-input');
+      if (titleInput) titleInput.value = prop.title || '';
+
+      const classSelect = document.getElementById('edit-prop-classification-select');
+      if (classSelect) {
+        classSelect.value = prop.classification || 'EVENTO_POSIBLE';
+        if (!classSelect.value) {
+          classSelect.value = 'REQUIERE_REVISION';
+        }
+      }
+
+      const dateInput = document.getElementById('edit-prop-date-input');
+      if (dateInput) dateInput.value = prop.proposed_date ? prop.proposed_date.slice(0, 10) : '';
+
+      const endDateInput = document.getElementById('edit-prop-end-date-input');
+      if (endDateInput) endDateInput.value = prop.proposed_end_date ? prop.proposed_end_date.slice(0, 10) : '';
+
+      const timeInput = document.getElementById('edit-prop-time-input');
+      if (timeInput) timeInput.value = prop.proposed_time || '';
+
+      const endTimeInput = document.getElementById('edit-prop-end-time-input');
+      if (endTimeInput) endTimeInput.value = prop.proposed_end_time || '';
+
+      const venueSelect = document.getElementById('edit-prop-venue-select');
+      if (venueSelect) venueSelect.value = prop.venue_id ? String(prop.venue_id) : '';
+
+      const catSelect = document.getElementById('edit-prop-category-select');
+      if (catSelect) catSelect.value = prop.category || 'dj_tardeo';
+
+      const priceStatus = prop.price_status || (prop.price !== null && prop.price !== undefined ? (Number(prop.price) === 0 ? 'FREE' : 'CONFIRMED') : 'NOT_INFORMED');
+      const priceStatusSelect = document.getElementById('edit-prop-price-status-select');
+      if (priceStatusSelect) priceStatusSelect.value = priceStatus;
+
+      const priceInput = document.getElementById('edit-prop-price-input');
+      if (priceInput) {
+        priceInput.value = (prop.price !== null && prop.price !== undefined) ? String(prop.price).replace('.', ',') : '0,00';
+      }
+
+      const priceNoteInput = document.getElementById('edit-prop-price-note-input');
+      if (priceNoteInput) priceNoteInput.value = prop.price_note || '';
+
+      onEditPriceStatusChange();
+
+      // Previsualización de imagen
+      const img = document.getElementById('edit-prop-img-preview');
+      const placeholder = document.getElementById('edit-prop-img-placeholder');
+      if (prop.image_url) {
+        if (img) {
+          img.src = prop.image_url;
+          img.style.display = 'block';
+          img.onerror = function() {
+            img.style.display = 'none';
+            if (placeholder) { placeholder.style.display = 'block'; placeholder.innerText = 'Error cargando imagen R2'; }
+          };
+          img.onload = function() {
+            if (placeholder) placeholder.style.display = 'none';
+          };
+        }
+      } else {
+        if (img) img.style.display = 'none';
+        if (placeholder) { placeholder.style.display = 'block'; placeholder.innerText = 'Sin imagen'; }
+      }
+
+      // Metadatos de auditoría y caption original
+      const metaUser = document.getElementById('edit-prop-meta-user');
+      if (metaUser) metaUser.innerText = prop.instagram_username ? '@' + prop.instagram_username : '—';
+
+      const metaConf = document.getElementById('edit-prop-meta-conf');
+      if (metaConf) {
+        metaConf.innerText = prop.confidence || 'MEDIA';
+        metaConf.className = 'badge-tag ' + (prop.confidence === 'ALTA' ? 'badge-confirmed' : (prop.confidence === 'MEDIA' ? 'badge-amber' : 'badge-danger'));
+      }
+
+      const metaReasons = document.getElementById('edit-prop-meta-reasons');
+      if (metaReasons) {
+        metaReasons.innerText = (prop.match_reasons && Array.isArray(prop.match_reasons) && prop.match_reasons.length > 0)
+          ? prop.match_reasons.join(', ')
+          : (prop.classification === 'CONTENIDO_VENUE' ? 'Post sin fecha ni hora detectables (contenido/ambiente de local)' : 'Extracción automática');
+      }
+
+      const metaLink = document.getElementById('edit-prop-meta-link');
+      if (metaLink) {
+        if (prop.source_url) {
+          metaLink.href = prop.source_url;
+          metaLink.style.display = 'inline-block';
+        } else {
+          metaLink.style.display = 'none';
+        }
+      }
+
+      const captionEl = document.getElementById('edit-prop-original-caption');
+      if (captionEl) {
+        captionEl.innerText = prop.caption || '(Sin texto disponible en el post original)';
+      }
+
+      openModal('modal-edit-proposal');
+    };
+
+    window.submitEditProposal = async function() {
+      if (isSavingProposal) return;
+
+      const id = parseInt(document.getElementById('edit-prop-id')?.value, 10);
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!id || !prop) {
+        alert('Propuesta no encontrada.');
+        return;
+      }
+
+      const title = (document.getElementById('edit-prop-title-input')?.value || '').trim();
+      const classification = document.getElementById('edit-prop-classification-select')?.value;
+      const dateVal = (document.getElementById('edit-prop-date-input')?.value || '').trim();
+      const endDateVal = (document.getElementById('edit-prop-end-date-input')?.value || '').trim();
+      const timeVal = (document.getElementById('edit-prop-time-input')?.value || '').trim();
+      const endTimeVal = (document.getElementById('edit-prop-end-time-input')?.value || '').trim();
+      const venueVal = document.getElementById('edit-prop-venue-select')?.value;
+      const category = document.getElementById('edit-prop-category-select')?.value;
+      const priceStatus = document.getElementById('edit-prop-price-status-select')?.value || 'NOT_INFORMED';
+      const priceNote = (document.getElementById('edit-prop-price-note-input')?.value || '').trim();
+      const priceRaw = (document.getElementById('edit-prop-price-input')?.value || '').trim();
+
+      const errBox = document.getElementById('edit-prop-error');
+      if (errBox) {
+        errBox.style.display = 'none';
+        errBox.innerText = '';
+      }
+
+      if (!title) {
+        if (errBox) {
+          errBox.innerText = 'El título de la propuesta es obligatorio.';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      const timeRegex = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+      if (timeVal && !timeRegex.test(timeVal)) {
+        if (errBox) {
+          errBox.innerText = 'El formato de hora de inicio debe ser HH:mm (ej: 20:30).';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      if (endTimeVal && !timeRegex.test(endTimeVal)) {
+        if (errBox) {
+          errBox.innerText = 'El formato de hora de fin debe ser HH:mm (ej: 23:00).';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      let priceToSend = null;
+      if (priceStatus === 'FREE') {
+        priceToSend = 0;
+      } else if (priceStatus === 'CONFIRMED') {
+        const cleanedPrice = priceRaw.replace(',', '.');
+        const num = parseFloat(cleanedPrice);
+        if (isNaN(num) || num < 0) {
+          if (errBox) {
+            errBox.innerText = 'Introduce un importe válido para el precio confirmado.';
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+        priceToSend = num;
+      }
+
+      const payload = {
+        title: title,
+        classification: classification,
+        proposed_date: dateVal ? dateVal : null,
+        proposed_end_date: endDateVal ? endDateVal : null,
+        proposed_time: timeVal ? timeVal : null,
+        proposed_end_time: endTimeVal ? endTimeVal : null,
+        venue_id: venueVal ? parseInt(venueVal, 10) : null,
+        category: category,
+        price_status: priceStatus,
+        price_note: priceNote ? priceNote : null,
+        price: priceToSend
+      };
+
+      isSavingProposal = true;
+      const btn = document.getElementById('btn-submit-edit-prop');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Guardando...';
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          if (errBox) {
+            errBox.innerText = data.message || 'Error al guardar los cambios en la propuesta.';
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+
+        closeModal('modal-edit-proposal');
+        alert('✓ ' + (data.message || 'Propuesta editada con éxito.'));
+        loadAdminProposals();
+      } catch (err) {
+        if (errBox) {
+          errBox.innerText = 'Error de conexión: ' + err.message;
+          errBox.style.display = 'block';
+        }
+      } finally {
+        isSavingProposal = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '💾 Guardar Cambios';
+        }
+      }
     };
 
     // ==============================================================================

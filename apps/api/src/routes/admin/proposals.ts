@@ -31,6 +31,20 @@ export async function getCachedTaquillaEvents(): Promise<TaquillaEventMetadata[]
   return events;
 }
 
+export const VALID_PROPOSAL_CLASSIFICATIONS = [
+  'EVENTO_POSIBLE',
+  'EVENTO_POSIBLE_SIN_HORA',
+  'CONTENIDO_VENUE',
+  'DUPLICADO_POSIBLE',
+  'SIN_MATCH',
+  'PAST_EVENT',
+  'PROMOCION',
+  'CONTENIDO_GENERAL',
+  'NO_RELEVANTE',
+  'REQUIERE_REVISION',
+  'EVENTO_CONTINUO',
+] as const;
+
 export const adminProposalsRoutes = new Hono<{
   Variables: {
     user?: AdminUser;
@@ -939,6 +953,17 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
     return c.json({ error: 'invalid_id', message: 'ID de propuesta no válido' }, 400);
   }
 
+  const check = await query(`SELECT id, review_status FROM curation_proposals WHERE id = $1;`, [id]);
+  if (check.rows.length === 0) {
+    return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
+  }
+  if (check.rows[0].review_status !== 'pending') {
+    return c.json({
+      error: 'proposal_not_pending',
+      message: `Solo se pueden editar propuestas en estado pendiente (estado actual: ${check.rows[0].review_status}).`,
+    }, 400);
+  }
+
   let body: any = {};
   try {
     body = await c.req.json();
@@ -1010,6 +1035,12 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
 
   if (body.classification !== undefined) {
     const cls = String(body.classification).trim();
+    if (!VALID_PROPOSAL_CLASSIFICATIONS.includes(cls as any)) {
+      return c.json({
+        error: 'invalid_classification',
+        message: `Clasificación no válida: ${cls}. Valores admitidos: ${VALID_PROPOSAL_CLASSIFICATIONS.join(', ')}`,
+      }, 400);
+    }
     params.push(cls);
     fields.push(`classification = $${params.length}`);
   }
@@ -1081,6 +1112,18 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
   if (result.rows.length === 0) {
     return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
   }
+
+  console.log(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'admin_proposals',
+      action: 'patch_proposal',
+      proposalId: id,
+      user: c.get('user')?.email || 'admin',
+      updatedFields: fields,
+    })
+  );
 
   return c.json({
     success: true,
