@@ -217,7 +217,8 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(data.proposal.proposed_date).toBe('2026-10-31');
     expect(data.proposal.proposed_time).toBe('22:30');
     expect(data.proposal.classification).toBe('EVENTO_POSIBLE');
-    expect(data.proposal.image_url).toContain(`bars/bar-prueba-importacion/${shortcode}.jpg`);
+    expect(data.proposal.image_url).toContain(`instagram-imports/${shortcode}/`);
+    expect(data.proposal.image_url).not.toContain('bars/');
 
     createdProposalIds.push(data.proposal.id);
 
@@ -267,7 +268,8 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(data.success).toBe(true);
     expect(data.proposal.venue_id).toBeNull();
     expect(data.proposal.review_status).toBe('pending');
-    expect(data.proposal.image_url).toContain(`bars/standalone/${shortcode}.jpg`);
+    expect(data.proposal.image_url).toContain(`instagram-imports/${shortcode}/`);
+    expect(data.proposal.image_url).not.toContain('bars/');
 
     createdProposalIds.push(data.proposal.id);
 
@@ -700,10 +702,11 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(result.contentType).toBe('image/jpeg');
     expect(result.width).toBeLessThanOrEqual(1440);
     expect(result.height).toBeLessThanOrEqual(1440);
-    expect(result.r2Key).toBe('bars/test-venue/TEST_NORM_01.jpg');
+    expect(result.r2Key).toMatch(/^instagram-imports\/TEST_NORM_01\/[a-f0-9]{16}\.jpg$/);
+    expect(result.r2Key).not.toContain('bars/');
 
     expect(result.sizeBytes).toBeGreaterThan(0);
-    expect(result.finalUrl).toContain('bars/test-venue/TEST_NORM_01.jpg');
+    expect(result.finalUrl).toContain('instagram-imports/TEST_NORM_01/');
   });
 
   test('19. Soporte de Reels (/reel/): extrae caption y miniatura sin procesar audio', async () => {
@@ -797,19 +800,84 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(Number(countRes.rows[0].count)).toBe(0);
   });
 
-  test('21. setTestPostFetcherOverride y setTestImageFetcherOverride lanzan error fuera de entorno de test', () => {
+  test('21. Guarda de test explícita: presencia de globalThis.describe NO permite activar overrides en producción', () => {
     const originalNodeEnv = process.env.NODE_ENV;
+    const originalBunEnv = process.env.BUN_ENV;
     const originalDescribe = (globalThis as any).describe;
 
     try {
+      // Simular NODE_ENV=production y AÑADIR expresamente globalThis.describe
       process.env.NODE_ENV = 'production';
-      (globalThis as any).describe = undefined;
+      delete process.env.BUN_ENV;
+      (globalThis as any).describe = () => {};
 
-      expect(() => setTestPostFetcherOverride(null)).toThrow('[SAFETY]');
-      expect(() => setTestImageFetcherOverride(null)).toThrow('[SAFETY]');
+      expect(typeof (globalThis as any).describe).toBe('function');
+
+      // Intentar inyectar override debe fallar categóricamente con [SAFETY] a pesar de existir describe
+      expect(() => setTestPostFetcherOverride(async () => [])).toThrow('[SAFETY]');
+      expect(() => setTestImageFetcherOverride(async () => Buffer.alloc(0))).toThrow('[SAFETY]');
     } finally {
+      // Restauración garantizada de variables de entorno y overrides
       process.env.NODE_ENV = originalNodeEnv;
+      if (originalBunEnv !== undefined) {
+        process.env.BUN_ENV = originalBunEnv;
+      }
       (globalThis as any).describe = originalDescribe;
+      setTestPostFetcherOverride(null);
+      setTestImageFetcherOverride(async () => validImageBuffer);
     }
+  });
+
+  test('22. Fallo de la operación tras subida a R2 no borra objetos preexistentes en almacenamiento', async () => {
+    // 1. Crear un objeto preexistente simulado en R2
+    const preExistingKey = 'instagram-imports/PRE_EXISTING_POST/abcdef0123456789.jpg';
+    const { putR2Object, headR2Object } = await import('../../../services/r2-client');
+    await putR2Object({
+      key: preExistingKey,
+      body: validImageBuffer,
+      contentType: 'image/jpeg',
+    });
+
+    // 2. Ejecutar importación puntual que falle antes del INSERT (lock expirado)
+    const shortcode = 'TEST_R2_NO_DELETE_ON_FAIL';
+    setTestPostFetcherOverride(async (canonicalUrl) => {
+      // Simular expiración de lock
+      await testPool.query(
+        `UPDATE instagram_ingestion_locks
+         SET expires_at = NOW() - INTERVAL '5 seconds'
+         WHERE lock_key = $1;`,
+        [DEFAULT_LOCK_KEY]
+      );
+      return [
+        {
+          id: shortcode,
+          shortCode: shortcode,
+          url: canonicalUrl,
+          displayUrl: 'https://cdn.instagram.com/v/test_fail_r2.jpg',
+          caption: 'Concierto que fallará antes de insertar en base de datos a las 23:00h.',
+          timestamp: '2026-10-25T18:00:00.000Z',
+          ownerUsername: 'bar_r2_test',
+        },
+      ];
+    });
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: `https://www.instagram.com/p/${shortcode}/`,
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(res.status).toBe(409);
+
+    // 3. Verificar que el objeto preexistente no fue borrado ni alterado
+    const preExistingHead = await headR2Object(preExistingKey);
+    expect(preExistingHead).not.toBeNull();
+    expect(preExistingHead!.size).toBe(validImageBuffer.length);
   });
 });

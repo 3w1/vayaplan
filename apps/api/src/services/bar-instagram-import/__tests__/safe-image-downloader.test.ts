@@ -175,7 +175,8 @@ describe('Descarga Segura y Normalización de Imágenes (single-post-importer)',
 
     // Verificaciones de normalización:
     expect(res.contentType).toBe('image/jpeg');
-    expect(res.r2Key).toBe('bars/bar-palencia/TEST_NORM_SUCCESS.jpg');
+    expect(res.r2Key).toMatch(/^instagram-imports\/TEST_NORM_SUCCESS\/[a-f0-9]{16}\.jpg$/);
+    expect(res.r2Key).not.toContain('bars/');
     expect(res.width).toBeLessThanOrEqual(1440);
     expect(res.height).toBeLessThanOrEqual(1440);
     expect(res.sizeBytes).toBeGreaterThan(0);
@@ -200,7 +201,8 @@ describe('Descarga Segura y Normalización de Imágenes (single-post-importer)',
 
     expect(smallRes.width).toBe(400); // withoutEnlargement: no ampliado
     expect(smallRes.height).toBe(300);
-    expect(smallRes.r2Key).toBe('bars/standalone/TEST_SMALL.jpg');
+    expect(smallRes.r2Key).toMatch(/^instagram-imports\/TEST_SMALL\/[a-f0-9]{16}\.jpg$/);
+    expect(smallRes.r2Key).not.toContain('bars/');
   });
 
   test('8. fetchSafeImageBuffer aborta por timeout absoluto ante servidores lentos tipo Slowloris que gotean datos', async () => {
@@ -249,5 +251,35 @@ describe('Descarga Segura y Normalización de Imágenes (single-post-importer)',
       serverClosed = true;
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
+  });
+
+  test('9. Clave R2 versionada por contenido: mismos bytes generan misma clave, bytes diferentes generan URL distinta y nunca escribe en bars/', async () => {
+    const imgBufferA = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: { r: 10, g: 20, b: 30 } },
+    }).jpeg().toBuffer();
+
+    const imgBufferB = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: { r: 99, g: 88, b: 77 } },
+    }).jpeg().toBuffer();
+
+    const postA = { id: 'TEST_HASH_A', shortCode: 'TEST_HASH_A', displayUrl: 'https://cdn.instagram.com/a.jpg' };
+    const postB = { id: 'TEST_HASH_A', shortCode: 'TEST_HASH_A', displayUrl: 'https://cdn.instagram.com/b.jpg' };
+
+    // Mismos bytes generan la misma clave determinista
+    const resA1 = await downloadAndUploadPostImageToR2(postA as any, 'venue-1', async () => imgBufferA);
+    const resA2 = await downloadAndUploadPostImageToR2(postA as any, 'venue-2', async () => imgBufferA);
+
+    expect(resA1.r2Key).toBe(resA2.r2Key);
+    expect(resA1.finalUrl).toBe(resA2.finalUrl);
+    expect(resA1.r2Key).not.toContain('bars/');
+    expect(resA1.r2Key).not.toContain('venue-1');
+    expect(resA1.r2Key).not.toContain('venue-2');
+    expect(resA1.r2Key).toMatch(/^instagram-imports\/TEST_HASH_A\/[a-f0-9]{16}\.jpg$/);
+
+    // Bytes diferentes generan una URL y clave diferentes para el mismo shortcode
+    const resB = await downloadAndUploadPostImageToR2(postB as any, 'venue-1', async () => imgBufferB);
+    expect(resB.r2Key).not.toBe(resA1.r2Key);
+    expect(resB.finalUrl).not.toBe(resA1.finalUrl);
+    expect(resB.r2Key).toMatch(/^instagram-imports\/TEST_HASH_A\/[a-f0-9]{16}\.jpg$/);
   });
 });

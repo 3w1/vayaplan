@@ -2,6 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
+import crypto from 'node:crypto';
 import { query, getClient } from '@vayaplan/db';
 import sharp from 'sharp';
 import { putR2Object, getPublicUrlForKey } from '../r2-client';
@@ -21,13 +22,34 @@ let testPostFetcherOverride: ((canonicalUrl: string, chargeLimit: number) => Pro
 let testImageFetcherOverride: ((url: string) => Promise<Buffer>) | null = null;
 
 /**
+ * Determina si el entorno actual autoriza explícitamente overrides de prueba.
+ * 
+ * Reglas estrictas:
+ * 1. Rechaza categóricamente si NODE_ENV === 'production' o BUN_ENV === 'production'.
+ *    La presencia de globalThis.describe NUNCA habilita overrides en producción.
+ * 2. Exige expresamente que NODE_ENV === 'test' o BUN_ENV === 'test'.
+ */
+export function isTestOverrideAllowed(): boolean {
+  const nodeEnv = (process.env.NODE_ENV || '').trim().toLowerCase();
+  const bunEnv = (process.env.BUN_ENV || '').trim().toLowerCase();
+
+  // En producción se rechaza siempre y bajo cualquier circunstancia
+  if (nodeEnv === 'production' || bunEnv === 'production') {
+    return false;
+  }
+
+  return nodeEnv === 'test' || bunEnv === 'test';
+}
+
+/**
  * Registra un fetcher de posts alternativo para uso exclusivo en pruebas aisladas.
  * Fuera de entornos de test lanza un error para evitar inyección de dependencias en producción.
  */
 export function setTestPostFetcherOverride(fn: typeof testPostFetcherOverride) {
-  const isTest = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
-  if (!isTest) {
-    throw new Error('[SAFETY] setTestPostFetcherOverride solo puede invocarse en entornos de prueba (NODE_ENV=test).');
+  if (fn !== null && !isTestOverrideAllowed()) {
+    throw new Error(
+      '[SAFETY] setTestPostFetcherOverride solo puede invocarse en entornos de prueba expresamente configurados (NODE_ENV=test). En producción queda terminantemente bloqueado, independientemente de test runners.'
+    );
   }
   testPostFetcherOverride = fn;
 }
@@ -37,9 +59,10 @@ export function setTestPostFetcherOverride(fn: typeof testPostFetcherOverride) {
  * Fuera de entornos de test lanza un error para evitar inyección de dependencias en producción.
  */
 export function setTestImageFetcherOverride(fn: typeof testImageFetcherOverride) {
-  const isTest = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
-  if (!isTest) {
-    throw new Error('[SAFETY] setTestImageFetcherOverride solo puede invocarse en entornos de prueba (NODE_ENV=test).');
+  if (fn !== null && !isTestOverrideAllowed()) {
+    throw new Error(
+      '[SAFETY] setTestImageFetcherOverride solo puede invocarse en entornos de prueba expresamente configurados (NODE_ENV=test). En producción queda terminantemente bloqueado, independientemente de test runners.'
+    );
   }
   testImageFetcherOverride = fn;
 }
@@ -198,7 +221,7 @@ export async function fetchSafeImageBuffer(
   /** @internal Omitir la validación SSRF estática. Solo para pruebas unitarias — nunca exponer en rutas HTTP. */
   _bypassSsrfForTest: boolean = false
 ): Promise<Buffer> {
-  const isTestEnv = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
+  const isTestEnv = isTestOverrideAllowed();
   if (!_bypassSsrfForTest || !isTestEnv) {
     // En producción (o si no se activa el bypass) siempre se valida.
     // En tests el bypass solo se acepta si se invoca explícitamente desde código de prueba.
@@ -375,11 +398,12 @@ export async function fetchSafeImageBuffer(
  * 1. Descarga con control de tamaño, SSRF y sin redirecciones.
  * 2. Valida formatos permitidos (JPEG, PNG, WebP) y límite de píxeles (40 MPx).
  * 3. Decodifica y re-codifica con Sharp (auto-orientación, aplanado de alfa, resize 1440x1440 y JPEG progresivo).
- * 4. Almacena en Cloudflare R2 bajo la clave determinista `bars/${venueSlug}/${shortCode}.jpg`.
+ * 4. Almacena en Cloudflare R2 bajo una clave independiente y versionada por contenido:
+ *    `instagram-imports/<shortcode>/<hash-16-del-jpeg>.jpg`.
  */
 export async function downloadAndUploadPostImageToR2(
   post: ApifyInstagramRawPost,
-  venueSlug: string,
+  _venueSlug?: string,
   mockImageFetcher?: (url: string) => Promise<Buffer>
 ): Promise<{
   r2Key: string;
@@ -388,9 +412,9 @@ export async function downloadAndUploadPostImageToR2(
   width: number;
   height: number;
   contentType: string;
+  contentHash: string;
 }> {
   const shortCode = post.shortCode || post.id || 'unknown';
-  const r2Key = `bars/${venueSlug}/${shortCode}.jpg`;
 
   if (!post.displayUrl || typeof post.displayUrl !== 'string') {
     throw new Error('La publicación no contiene una URL de imagen (displayUrl).');
@@ -460,19 +484,24 @@ export async function downloadAndUploadPostImageToR2(
 
   const contentType = 'image/jpeg';
 
-  // 3. Subir buffer normalizado a Cloudflare R2
-  // Nota: la clave es determinista (bars/${venueSlug}/${shortCode}.jpg) y coincide con el
-  // esquema del pipeline periódico. Si ya existe un objeto con esa clave, se sobrescribirá
-  // con el JPEG re-normalizado de esta importación. Cache-Control: no se declara 'immutable'
-  // porque el contenido puede cambiar en una reimportación del mismo shortcode.
-  // Si R2 tiene éxito y el INSERT posterior falla, el objeto queda huérfano en R2;
-  // NO debe borrarse automáticamente, ya que puede ser referenciado por otra propuesta o
-  // ingesta periódica. La clave determinista garantiza que una reimportación lo sobrescriba.
+  // 3. Clave independiente y versionada por contenido para Cloudflare R2:
+  // - Prefijo aislado: instagram-imports/ (evita cualquier colisión con bars/ de la ingesta periódica).
+  // - No incluye el venue en la identidad del contenido: el hash sobre el JPEG normalizado
+  //   identifica de forma unívoca la imagen con independencia del local asignado.
+  // - Clave: instagram-imports/<shortcode>/<hash-16-del-jpeg>.jpg
+  const contentHash = crypto.createHash('sha256').update(normalizedBuffer).digest('hex').slice(0, 16);
+  const r2Key = `instagram-imports/${shortCode}/${contentHash}.jpg`;
+
+  // 4. Subir buffer normalizado a Cloudflare R2:
+  // Al ser una URL unívoca e inmutable por contenido, se habilita caché larga con 'immutable'.
+  // Si la subida a R2 tiene éxito y el INSERT posterior en PostgreSQL falla, el objeto quedará
+  // huérfano en R2; NO debe borrarse automáticamente para no introducir carreras ni borrar
+  // objetos compartidos.
   await putR2Object({
     key: r2Key,
     body: normalizedBuffer,
     contentType,
-    cacheControl: 'public, max-age=31536000',
+    cacheControl: 'public, max-age=31536000, immutable',
   });
 
   const finalUrl = getPublicUrlForKey(r2Key);
@@ -484,6 +513,7 @@ export async function downloadAndUploadPostImageToR2(
     width: finalWidth,
     height: finalHeight,
     contentType,
+    contentHash,
   };
 }
 
@@ -646,8 +676,7 @@ export async function importSingleInstagramPost(
         throw mockErr;
       }
     } else {
-      const isTest = process.env.NODE_ENV === 'test' || typeof (globalThis as any).describe === 'function';
-      if (isTest && process.env.ALLOW_REAL_APIFY_IN_TESTS !== 'true') {
+      if (isTestOverrideAllowed() && process.env.ALLOW_REAL_APIFY_IN_TESTS !== 'true') {
         throw new Error('[APIFY_SAFETY_GUARD] Real Apify scraping calls are strictly blocked in test environments.');
       }
 
@@ -960,9 +989,11 @@ export async function importSingleInstagramPost(
     try {
       await client.query('BEGIN');
 
-      // Comprobar que el lock sigue perteneciendo a esta ejecución
+      // Comprobar que el lock sigue perteneciendo a esta ejecución.
+      // Se utiliza clock_timestamp() para obtener la hora real efectiva tras cualquier espera por bloqueo,
+      // evitando referencias temporales obsoletas fijadas al inicio de la transacción (como NOW()).
       const lockCheck = await client.query(
-        `SELECT locked_by, released_at, expires_at
+        `SELECT locked_by, released_at, expires_at, clock_timestamp() AS current_wall_time
          FROM instagram_ingestion_locks
          WHERE lock_key = $1
          FOR SHARE;`,
@@ -970,11 +1001,14 @@ export async function importSingleInstagramPost(
       );
 
       const lockRow = lockCheck.rows[0];
+      const wallTimeMs = lockRow?.current_wall_time ? new Date(lockRow.current_wall_time).getTime() : Date.now();
+      const expiresAtMs = lockRow?.expires_at ? new Date(lockRow.expires_at).getTime() : 0;
       const lockStillOurs =
         lockRow &&
         lockRow.locked_by === executionId &&
         lockRow.released_at === null &&
-        new Date(lockRow.expires_at).getTime() > Date.now();
+        expiresAtMs > wallTimeMs &&
+        expiresAtMs > Date.now();
 
       if (!lockStillOurs) {
         await client.query('ROLLBACK');
