@@ -11025,6 +11025,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     // ==============================================================================
     let cachedSources = [];
     let selectedSourceIds = new Set();
+    let isIngesting = false;
 
     window.loadAdminSources = async function() {
       const tbody = document.getElementById('sources-tbody');
@@ -11908,6 +11909,9 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.runSingleSource = async function(id) {
+      if (isIngesting) {
+        return;
+      }
       const source = cachedSources.find(s => s.id === id);
       const name = source ? (source.venue_name || '@' + source.instagram_username) : ('fuente #' + id);
 
@@ -11915,6 +11919,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         return;
       }
 
+      isIngesting = true;
       const alertBox = document.getElementById('sources-alert-box');
       if (alertBox) {
         alertBox.style.display = 'block';
@@ -11926,24 +11931,31 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       try {
         const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/' + id + '/run', {
-          method: 'POST'
+          method: 'POST',
+          body: JSON.stringify({})
         });
         const data = await res.json();
         if (!res.ok) {
-          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
           if (alertBox) alertBox.style.display = 'none';
+          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
           return;
         }
 
         loadAdminSources();
         showIngestionReport(data.report);
       } catch (err) {
+        if (alertBox) alertBox.style.display = 'none';
         alert('Error de conexión: ' + err.message);
+      } finally {
+        isIngesting = false;
         if (alertBox) alertBox.style.display = 'none';
       }
     };
 
     window.runSelectedSources = async function() {
+      if (isIngesting) {
+        return;
+      }
       const ids = Array.from(selectedSourceIds);
       if (ids.length === 0) {
         alert('Selecciona al menos una fuente para ejecutar.');
@@ -11954,6 +11966,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         return;
       }
 
+      isIngesting = true;
       const alertBox = document.getElementById('sources-alert-box');
       if (alertBox) {
         alertBox.style.display = 'block';
@@ -11970,24 +11983,31 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         });
         const data = await res.json();
         if (!res.ok) {
-          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
           if (alertBox) alertBox.style.display = 'none';
+          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
           return;
         }
 
         loadAdminSources();
         showIngestionReport(data.report);
       } catch (err) {
+        if (alertBox) alertBox.style.display = 'none';
         alert('Error de conexión: ' + err.message);
+      } finally {
+        isIngesting = false;
         if (alertBox) alertBox.style.display = 'none';
       }
     };
 
     window.runAllActiveSources = async function() {
+      if (isIngesting) {
+        return;
+      }
       if (!confirm('¿Lanzar ingesta manual sobre TODAS las fuentes activas?')) {
         return;
       }
 
+      isIngesting = true;
       const alertBox = document.getElementById('sources-alert-box');
       if (alertBox) {
         alertBox.style.display = 'block';
@@ -11999,19 +12019,23 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       try {
         const res = await apiFetch('/api/v1/admin/instagram-ingestion-sources/run-all-active', {
-          method: 'POST'
+          method: 'POST',
+          body: JSON.stringify({})
         });
         const data = await res.json();
         if (!res.ok) {
-          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
           if (alertBox) alertBox.style.display = 'none';
+          alert('Error: ' + (data.message || 'Fallo en la ejecución de ingesta.'));
           return;
         }
 
         loadAdminSources();
         showIngestionReport(data.report);
       } catch (err) {
+        if (alertBox) alertBox.style.display = 'none';
         alert('Error de conexión: ' + err.message);
+      } finally {
+        isIngesting = false;
         if (alertBox) alertBox.style.display = 'none';
       }
     };

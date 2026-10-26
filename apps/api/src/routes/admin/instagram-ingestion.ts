@@ -290,25 +290,27 @@ adminInstagramIngestionRoutes.post('/instagram-ingestion-sources/:id/run', async
     return c.json({ error: 'not_found', message: 'Fuente de ingesta no encontrada.' }, 404);
   }
 
-  let body: any = {};
-  const contentType = c.req.header('content-type') || '';
-  if (contentType.includes('application/json')) {
+  let body: Record<string, any> = {};
+  const rawBody = await c.req.text();
+  const trimmed = rawBody.trim();
+
+  if (trimmed.length > 0) {
+    let parsed: unknown;
     try {
-      body = await c.req.json();
+      parsed = JSON.parse(trimmed);
     } catch {
       return c.json({ error: 'invalid_json', message: 'Cuerpo de petición JSON no válido.' }, 400);
     }
-  } else {
-    // Si no tiene header JSON pero envió cuerpo, intentar parsear defensivamente
-    try {
-      body = await c.req.json();
-    } catch {
-      body = {};
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return c.json({ error: 'invalid_json', message: 'El cuerpo de la petición debe ser un objeto JSON.' }, 400);
     }
+
+    body = parsed as Record<string, any>;
   }
 
   let overridePostsLimit: number | undefined;
-  if (body?.override_posts_limit !== undefined) {
+  if (body.override_posts_limit !== undefined) {
     if (
       typeof body.override_posts_limit !== 'number' ||
       !Number.isInteger(body.override_posts_limit) ||

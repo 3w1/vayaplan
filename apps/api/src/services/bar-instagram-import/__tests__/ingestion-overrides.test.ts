@@ -490,4 +490,153 @@ describe('Ingestion Overrides & Safety Hardening (Entorno Aislado: vayaplan_test
       console.log = origLog;
     }
   });
+
+  it('12. Compatibilidad del endpoint :id/run con cuerpo ausente, {}, overrides válidos y rechazo estricto de JSON inválido', async () => {
+    const origFetch = globalThis.fetch;
+    let callCount = 0;
+    let capturedUrl = '';
+    let capturedBody: any = null;
+
+    process.env.ALLOW_REAL_APIFY_IN_TESTS = 'true';
+    process.env.APIFY_TOKEN = 'test_mock_token_empty_body_suite';
+
+    globalThis.fetch = (async (url: any, init: any) => {
+      callCount++;
+      capturedUrl = String(url);
+      if (init?.body) {
+        capturedBody = JSON.parse(init.body);
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as any;
+
+    try {
+      // 1. POST sin cuerpo y con Content-Type: application/json
+      callCount = 0;
+      capturedBody = null;
+      const resEmptyWithJsonHeader = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+      });
+      expect(resEmptyWithJsonHeader.status).toBe(200);
+      expect(callCount).toBe(1);
+      expect(capturedBody.resultsLimit).toBe(5); // Configuración por defecto de la fuente
+
+      // 2. POST sin cuerpo y sin Content-Type
+      callCount = 0;
+      capturedBody = null;
+      const resEmptyNoHeader = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      });
+      expect(resEmptyNoHeader.status).toBe(200);
+      expect(callCount).toBe(1);
+      expect(capturedBody.resultsLimit).toBe(5);
+
+      // 3. POST con {}
+      callCount = 0;
+      capturedBody = null;
+      const resEmptyObj = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+      expect(resEmptyObj.status).toBe(200);
+      expect(callCount).toBe(1);
+      expect(capturedBody.resultsLimit).toBe(5);
+
+      // 4. POST con overrides válidos y override_include_reels=false preservado
+      callCount = 0;
+      capturedBody = null;
+      const resValidOverrides = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ override_posts_limit: 3, override_include_reels: false }),
+      });
+      expect(resValidOverrides.status).toBe(200);
+      expect(callCount).toBe(1);
+      expect(capturedBody.resultsLimit).toBe(3);
+      expect(capturedUrl).toContain('maxTotalChargeUsd=0.009');
+
+      // 5. JSON malformado no vacío -> 400 y cero llamadas al servicio
+      callCount = 0;
+      const resMalformed = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: '{"override_posts_limit": ',
+      });
+      expect(resMalformed.status).toBe(400);
+      const malformedBody = await resMalformed.json();
+      expect(malformedBody.error).toBe('invalid_json');
+      expect(callCount).toBe(0);
+
+      // 6. Cuerpos no objeto (null, array, primitivos) -> 400 y cero llamadas al servicio
+      const nonObjectBodies = [
+        'null',
+        '[1, 2, 3]',
+        '12345',
+        '"esto es una cadena"',
+        'true',
+        'false',
+      ];
+      for (const nonObj of nonObjectBodies) {
+        callCount = 0;
+        const resNonObj = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${adminToken}`,
+          },
+          body: nonObj,
+        });
+        expect(resNonObj.status).toBe(400);
+        const resJson = await resNonObj.json();
+        expect(resJson.error).toBe('invalid_json');
+        expect(callCount).toBe(0);
+      }
+
+      // 7. Overrides inválidos -> 400 y cero llamadas al servicio
+      const invalidOverrideBodies = [
+        { override_posts_limit: 0 },
+        { override_posts_limit: 21 },
+        { override_posts_limit: '3' },
+        { override_posts_limit: 3.5 },
+        { override_include_reels: 'no' },
+        { override_include_reels: 1 },
+      ];
+      for (const invalidBody of invalidOverrideBodies) {
+        callCount = 0;
+        const resInvalid = await app.request(`/api/v1/admin/instagram-ingestion-sources/${TEST_SOURCE_ID}/run`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${adminToken}`,
+          },
+          body: JSON.stringify(invalidBody),
+        });
+        expect(resInvalid.status).toBe(400);
+        expect(callCount).toBe(0);
+      }
+    } finally {
+      globalThis.fetch = origFetch;
+      delete process.env.ALLOW_REAL_APIFY_IN_TESTS;
+      delete process.env.APIFY_TOKEN;
+    }
+  });
 });
