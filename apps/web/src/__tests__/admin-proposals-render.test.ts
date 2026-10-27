@@ -226,5 +226,39 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
     expect(domElements['approve-prop-title-input'].value).toBe('Concierto Acústico');
     expect(domElements['approve-prop-date-input'].value).toBe('2026-10-25');
     expect(domElements['approve-prop-time-input'].value).toBe('20:30');
+
+    // 7. Rediseño editorial: lista compacta, acción principal ✏️ Revisar y menú secundario •••
+    expect(cardsHtmlAll).toContain('prop-item-21');
+    expect(cardsHtmlAll).toContain('openEditProposalModal(21)');
+    expect(cardsHtmlAll).toContain('✏️ Revisar');
+    expect(cardsHtmlAll).toContain('btn-menu-trigger');
+    expect(cardsHtmlAll).toContain('toggleProposalActionsMenu(21, event)');
+
+    // 8. Visor de imagen para propuestas
+    expect(typeof ctx.openProposalImageModal).toBe('function');
+    let openedModalId = '';
+    ctx.openModal = (id: string) => { openedModalId = id; };
+    ctx.openProposalImageModal(21);
+    expect(openedModalId).toBe('modal-proposal-image');
+    expect(domElements['modal-prop-img-element'].src).toBe('https://media.vayaplan.com/ateneo/capel.jpg');
+    expect(domElements['modal-prop-img-title'].textContent).toBe('Cartel: Exposición de Antonio Capel');
+
+    // 9. Alternancia del menú secundario de acciones
+    expect(typeof ctx.toggleProposalActionsMenu).toBe('function');
+    expect(typeof ctx.closeAllProposalActionMenus).toBe('function');
+    const mockEvent = { stopPropagation: () => {} };
+    ctx.toggleProposalActionsMenu(21, mockEvent);
+    expect(ctx.activeProposalOpenMenuId).toBe(21);
+    expect(domElements['prop-menu-dropdown-21'].style.display).toBe('flex');
+    ctx.closeAllProposalActionMenus();
+    expect(ctx.activeProposalOpenMenuId).toBeNull();
+    expect(domElements['prop-menu-dropdown-21'].style.display).toBe('none');
+
+    // 10. Navegación por pestañas de estado (Pendientes, Resueltas, Todas)
+    expect(typeof ctx.switchProposalStateTab).toBe('function');
+    ctx.switchProposalStateTab('resolved');
+    expect(ctx.currentProposalStateTab).toBe('resolved');
+    ctx.switchProposalStateTab('pending');
+    expect(ctx.currentProposalStateTab).toBe('pending');
   });
 });
