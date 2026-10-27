@@ -266,6 +266,27 @@ export function resetVariantsColumnCache(): void {
   _hasVariantsColumnCached = null;
 }
 
+// Caché de detección de columnas de atribución de imagen en la tabla events
+let _hasAttributionColumnCached: boolean | null = null;
+
+export async function hasEventAttributionColumns(dbQuery: (sql: string, params?: any[]) => Promise<any> = query): Promise<boolean> {
+  if (_hasAttributionColumnCached !== null) return _hasAttributionColumnCached;
+  try {
+    const res = await dbQuery(
+      "SELECT 1 FROM information_schema.columns WHERE table_name = 'events' AND column_name = 'image_source_url' LIMIT 1"
+    );
+    _hasAttributionColumnCached = (res.rows.length > 0);
+  } catch {
+    _hasAttributionColumnCached = false;
+  }
+  return _hasAttributionColumnCached;
+}
+
+export function resetAttributionColumnCache(): void {
+  _hasAttributionColumnCached = null;
+}
+
+
 /**
  * Guarda una imagen en Cloudflare R2 generando automáticamente sus variantes responsivas:
  * 1. Original preservado (formato recibido, sin transcodificar).

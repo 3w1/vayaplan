@@ -62,6 +62,17 @@ export function renderSafeCreditLink(url: string | null | undefined, text: strin
   return '<a href="' + safeHref + '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">' + escapedText + '</a>';
 }
 
+export function renderEventCreditHtml(attribution: any): string {
+  if (!attribution) return '';
+  if (attribution.author && attribution.license) {
+    return 'Foto: ' + renderSafeCreditLink(attribution.source_url, attribution.author) + ' &middot; ' + renderSafeCreditLink(attribution.license_url, attribution.license) + (attribution.modifications ? ' (' + escapeHtml(attribution.modifications) + ')' : '');
+  }
+  if (attribution.author) {
+    return 'Foto: ' + escapeHtml(attribution.author) + '. Fuente: ' + renderSafeCreditLink(attribution.source_url, attribution.source_title || 'Teatro Principal de Palencia');
+  }
+  return 'Imagen: ' + renderSafeCreditLink(attribution.source_url, attribution.source_title || 'web del Teatro Principal de Palencia');
+}
+
 function escapeJsonForScript(data: any): string {
   return JSON.stringify(data)
     .replace(/</g, '\\u003c')
@@ -1514,7 +1525,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     .poster-lightbox-credit a:hover {
       color: #FFFFFF;
     }
-    .place-image-credit {
+    .place-image-credit,
+    .event-image-credit {
       font-size: 0.75rem;
       color: var(--color-text-muted);
       padding: 0.5rem 1rem 0;
@@ -1524,12 +1536,14 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       gap: 0.35rem;
       flex-wrap: wrap;
     }
-    .place-image-credit a {
+    .place-image-credit a,
+    .event-image-credit a {
       color: var(--color-primary);
       text-decoration: underline;
       text-underline-offset: 2px;
     }
-    .place-image-credit a:hover {
+    .place-image-credit a:hover,
+    .event-image-credit a:hover {
       color: var(--color-night);
     }
     .card-credit-badge {
@@ -2296,6 +2310,17 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         return escapedText;
       }
       return '<a href="' + safeHref + '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">' + escapedText + '</a>';
+    }
+
+    function renderEventCreditHtml(attribution) {
+      if (!attribution) return '';
+      if (attribution.author && attribution.license) {
+        return 'Foto: ' + renderSafeCreditLink(attribution.source_url, attribution.author) + ' &middot; ' + renderSafeCreditLink(attribution.license_url, attribution.license) + (attribution.modifications ? ' (' + escapeHtml(attribution.modifications) + ')' : '');
+      }
+      if (attribution.author) {
+        return 'Foto: ' + escapeHtml(attribution.author) + '. Fuente: ' + renderSafeCreditLink(attribution.source_url, attribution.source_title || 'Teatro Principal de Palencia');
+      }
+      return 'Imagen: ' + renderSafeCreditLink(attribution.source_url, attribution.source_title || 'web del Teatro Principal de Palencia');
     }
 
     function getCategoryLabel(category) {
@@ -3585,7 +3610,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           \`}
         </div>
 
-        <div class="modal-hero-cover" \${ev.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}" style="cursor:zoom-in;"\` : ''}>
+        <div class="modal-hero-cover" \${ev.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(ev.image_url)}" data-poster-title="\${escapeHtml(ev.title)}" data-poster-attribution="\${escapeHtml(JSON.stringify(ev.image_attribution || null))}" aria-label="Ver cartel completo de \${escapeHtml(ev.title)}" style="cursor:zoom-in;"\` : ''}>
           \${ev.image_url ? \`
             <img class="modal-hero-backdrop" src="\${escapeHtml(ev.image_thumb_url || ev.image_url)}" alt="" aria-hidden="true">
             <img class="modal-hero-img" src="\${escapeHtml(ev.image_url)}" alt="\${escapeHtml(ev.title)}" onerror="this.onerror=null;this.closest('.modal-hero-cover').replaceWith(createSvgFallbackNode(true));">
@@ -3599,6 +3624,12 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             </div>
           \`}
         </div>
+        \${ev.image_attribution ? \`
+          <div class="event-image-credit">
+            <span aria-hidden="true">📷</span>
+            <span>\${renderEventCreditHtml(ev.image_attribution)}</span>
+          </div>
+        \` : ''}
 
         <div class="modal-body">
           <div class="modal-header-section">
@@ -4087,8 +4118,14 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             attribution = JSON.parse(triggerEl.dataset.posterAttribution);
           } catch (_) {}
         }
-        if (attribution && attribution.author && attribution.license) {
-          creditEl.innerHTML = 'Foto: ' + renderSafeCreditLink(attribution.source_url, attribution.author) + ' &middot; ' + renderSafeCreditLink(attribution.license_url, attribution.license) + (attribution.modifications ? ' (' + escapeHtml(attribution.modifications) + ')' : '');
+        if (attribution && (attribution.source_url || (attribution.author && attribution.license))) {
+          if (attribution.author && attribution.license) {
+            creditEl.innerHTML = 'Foto: ' + renderSafeCreditLink(attribution.source_url, attribution.author) + ' &middot; ' + renderSafeCreditLink(attribution.license_url, attribution.license) + (attribution.modifications ? ' (' + escapeHtml(attribution.modifications) + ')' : '');
+          } else if (attribution.author) {
+            creditEl.innerHTML = 'Foto: ' + escapeHtml(attribution.author) + '. Fuente: ' + renderSafeCreditLink(attribution.source_url, attribution.source_title || 'Teatro Principal de Palencia');
+          } else {
+            creditEl.innerHTML = 'Imagen: ' + renderSafeCreditLink(attribution.source_url, attribution.source_title || 'web del Teatro Principal de Palencia');
+          }
           creditEl.style.display = 'block';
         } else {
           creditEl.innerHTML = '';
