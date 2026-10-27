@@ -238,6 +238,26 @@ bibliotecaImagesRoutes.post('/biblioteca-images/decision', async (c) => {
     );
   }
 
+  // Validar longitudes antes del INSERT para devolver un error controlado en lugar de exponer el mensaje SQL
+  if (idempotencyKey && idempotencyKey.length > 100) {
+    return c.json(
+      {
+        error: 'idempotency_key_too_long',
+        message: 'La clave de idempotencia supera el límite permitido (100 caracteres).',
+      },
+      400
+    );
+  }
+  if (operatorEmail.length > 100) {
+    return c.json(
+      {
+        error: 'operator_email_too_long',
+        message: 'El email del operador autenticado supera el límite permitido (100 caracteres).',
+      },
+      400
+    );
+  }
+
   try {
     const decisionRecord: BibliotecaDecisionRecord = {
       eventId: numericEventId,

@@ -811,4 +811,38 @@ describe('Endpoint Real Hono: GET y POST /api/v1/admin/biblioteca-images', () =>
     expect(dbCheckSpoof.rows[0].operator_email).toBe(genuineOperatorEmail);
     expect(dbCheckSpoof.rows[0].operator_email).not.toBe('suplantador@atacante.com');
   });
+
+  test('17. idempotencyKey superior a 100 chars: rechazado con HTTP 400 y error controlado antes de tocar la BD', async () => {
+    // Simula la clave que el frontend antiguo generaba para el evento #35 (r2Key = 69 chars)
+    const longKey = 'bib-35-biblioteca-publica/escucha-jazz-biblioteca-sesion-1/927980595fc0.webp-adopt-1793125066309-17en33';
+    expect(longKey.length).toBeGreaterThan(100); // pre-condición: ≥ 103 chars
+
+    const countBefore = (
+      await testPool.query(`SELECT COUNT(*)::int AS n FROM event_image_decisions WHERE event_id = 35;`)
+    ).rows[0].n;
+
+    const res = await app.request('/api/v1/admin/biblioteca-images/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: JSON.stringify({
+        eventId: 35,
+        action: 'adopt',
+        candidateKey: R2_PROPOSALS_MAP[35].r2Key,
+        candidateUrl: R2_PROPOSALS_MAP[35].finalUrl,
+        idempotencyKey: longKey,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('idempotency_key_too_long');
+    // Sin escrituras en la BD
+    const countAfter = (
+      await testPool.query(`SELECT COUNT(*)::int AS n FROM event_image_decisions WHERE event_id = 35;`)
+    ).rows[0].n;
+    expect(countAfter).toBe(countBefore);
+  });
 });
