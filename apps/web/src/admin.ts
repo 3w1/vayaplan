@@ -3135,11 +3135,11 @@ export function renderAdminHtml(): string {
         <!-- Cabecera de la sección -->
         <div class="proposals-header">
           <div class="proposals-header-text">
-            <h2>Propuestas</h2>
-            <p>Revisa contenido externo antes de crear un evento.</p>
+            <h2 id="proposals-header-title">Propuestas</h2>
+            <p id="proposals-header-desc">Revisa contenido externo antes de crear un evento.</p>
           </div>
           <div class="proposals-header-actions">
-            <button type="button" id="btn-refresh-proposals" class="btn-secondary" onclick="loadAdminProposals()" title="Volver a consultar el listado sin ejecutar ingesta" style="display:inline-flex; align-items:center; gap:0.35rem; font-weight:700;">
+            <button type="button" id="btn-refresh-proposals" class="btn-secondary" onclick="refreshCurrentProposalsView()" title="Volver a consultar el listado sin ejecutar ingesta" style="display:inline-flex; align-items:center; gap:0.35rem; font-weight:700;">
               🔄 Actualizar
             </button>
             <button type="button" id="btn-open-import-ig" class="btn-primary" onclick="openImportInstagramModal()" style="display:inline-flex; align-items:center; gap:0.35rem; background:#7c3aed; border-color:#7c3aed; font-weight:700;">
@@ -4922,6 +4922,8 @@ export function renderAdminHtml(): string {
         <input type="hidden" id="bib-decision-image-url" value="">
         <input type="hidden" id="bib-decision-r2-key" value="">
         <input type="hidden" id="bib-decision-credit" value="">
+        <input type="hidden" id="bib-decision-idempotency-key" value="">
+        <input type="hidden" id="bib-decision-expected-previous-id" value="">
         <p id="bib-decision-description-text" style="font-weight:600; font-size:0.925rem; margin:0 0 1rem 0; color:var(--text-main);"></p>
         <div id="bib-decision-preview-box" style="margin-bottom:1rem; border:1px solid var(--border); border-radius:8px; padding:0.75rem; background:var(--bg-subtle);"></div>
         <div id="bib-decision-alert" class="alert-box" style="display:none; margin-bottom:1rem; background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; padding:0.6rem; border-radius:6px; font-size:0.875rem;"></div>
@@ -10560,9 +10562,21 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     let proposalSearchQuery = '';
     let currentProposalTab = 'all'; // compatibilidad retroactiva
     let currentProposalStateTab = 'pending'; // 'pending' | 'resolved' | 'all'
+    let currentCuratedView = 'proposals'; // 'proposals' | 'biblioteca'
+    let activeBibliotecaTab = 'pending'; // 'pending' | 'resolved' | 'all'
     Object.defineProperty(window, 'currentProposalStateTab', {
       get: () => currentProposalStateTab,
       set: (val) => { currentProposalStateTab = val; },
+      configurable: true
+    });
+    Object.defineProperty(window, 'currentCuratedView', {
+      get: () => currentCuratedView,
+      set: (val) => { currentCuratedView = val; },
+      configurable: true
+    });
+    Object.defineProperty(window, 'activeBibliotecaTab', {
+      get: () => activeBibliotecaTab,
+      set: (val) => { activeBibliotecaTab = val; },
       configurable: true
     });
     let isMoreFiltersOpen = false;
@@ -10611,7 +10625,85 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       return text;
     }
 
+    function updateCuratedViewMode(mode) {
+      const titleEl = document.getElementById('proposals-header-title');
+      const descEl = document.getElementById('proposals-header-desc');
+      const bibTabBtn = document.getElementById('prop-tab-biblioteca');
+      const importIgBtn = document.getElementById('btn-open-import-ig');
+      const ateneoBtn = document.getElementById('prop-tab-ateneo');
+      const sourceSelect = document.getElementById('proposal-filter-source');
+      const venueSelect = document.getElementById('proposal-filter-venue');
+      const toggleMoreFiltersBtn = document.getElementById('btn-toggle-more-filters');
+      const moreFiltersPanel = document.getElementById('proposals-more-filters-panel');
+      const searchInput = document.getElementById('proposal-filter-search');
+
+      if (mode === 'biblioteca') {
+        if (titleEl) titleEl.innerText = '📚 Imágenes Biblioteca Pública';
+        if (descEl) descEl.innerText = 'Revisión y adopción de imágenes oficiales de la Biblioteca Pública de Palencia.';
+        if (bibTabBtn) {
+          bibTabBtn.innerText = '← Volver a Propuestas';
+          bibTabBtn.title = 'Volver al listado principal de propuestas';
+          if (bibTabBtn.style) {
+            bibTabBtn.style.background = '#0B0F3B';
+            bibTabBtn.style.color = '#ffffff';
+            bibTabBtn.style.borderColor = '#0B0F3B';
+          }
+        }
+        if (importIgBtn && importIgBtn.style) importIgBtn.style.display = 'none';
+        if (ateneoBtn && ateneoBtn.style) ateneoBtn.style.display = 'none';
+        if (sourceSelect && sourceSelect.style) sourceSelect.style.display = 'none';
+        if (venueSelect && venueSelect.style) venueSelect.style.display = 'none';
+        if (toggleMoreFiltersBtn && toggleMoreFiltersBtn.style) toggleMoreFiltersBtn.style.display = 'none';
+        if (moreFiltersPanel && moreFiltersPanel.style) moreFiltersPanel.style.display = 'none';
+        if (searchInput) {
+          searchInput.placeholder = 'Buscar por título o #id de evento...';
+          searchInput.title = 'Filtra las imágenes de biblioteca por título o ID';
+        }
+      } else {
+        if (titleEl) titleEl.innerText = 'Propuestas';
+        if (descEl) descEl.innerText = 'Revisa contenido externo antes de crear un evento.';
+        if (bibTabBtn) {
+          bibTabBtn.innerText = '📚 Imágenes Biblioteca Pública';
+          bibTabBtn.title = 'Ir a la revisión de imágenes de Biblioteca Pública';
+          if (bibTabBtn.style) {
+            bibTabBtn.style.background = '';
+            bibTabBtn.style.color = '';
+            bibTabBtn.style.borderColor = '';
+          }
+        }
+        if (importIgBtn && importIgBtn.style) importIgBtn.style.display = 'inline-flex';
+        if (ateneoBtn && ateneoBtn.style) ateneoBtn.style.display = 'inline-flex';
+        if (sourceSelect && sourceSelect.style) sourceSelect.style.display = '';
+        if (venueSelect && venueSelect.style) venueSelect.style.display = '';
+        if (toggleMoreFiltersBtn && toggleMoreFiltersBtn.style) toggleMoreFiltersBtn.style.display = 'inline-flex';
+        if (searchInput) {
+          searchInput.placeholder = 'Buscar en propuestas cargadas...';
+          searchInput.title = 'Filtra sobre las propuestas cargadas en la página actual';
+        }
+      }
+    }
+    window.updateCuratedViewMode = updateCuratedViewMode;
+
+    window.refreshCurrentProposalsView = function() {
+      if (currentCuratedView === 'biblioteca') {
+        if (typeof loadBibliotecaImageProposals === 'function') {
+          loadBibliotecaImageProposals(activeBibliotecaTab);
+        }
+      } else {
+        loadAdminProposals();
+      }
+    };
+
     window.switchProposalStateTab = function(tab) {
+      if (currentCuratedView === 'biblioteca') {
+        activeBibliotecaTab = tab;
+        syncStateTabButtons();
+        if (typeof loadBibliotecaImageProposals === 'function') {
+          loadBibliotecaImageProposals(tab);
+        }
+        return;
+      }
+
       currentProposalStateTab = tab;
       syncStateTabButtons();
 
@@ -10632,35 +10724,37 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     function syncStateTabButtons() {
+      const activeTab = currentCuratedView === 'biblioteca' ? activeBibliotecaTab : currentProposalStateTab;
       const tabPending = document.getElementById('prop-tab-pending');
       const tabResolved = document.getElementById('prop-tab-resolved');
       const tabAll = document.getElementById('prop-tab-all');
 
       if (tabPending && tabPending.classList) {
-        if (currentProposalStateTab === 'pending') {
+        if (activeTab === 'pending') {
           if (typeof tabPending.classList.add === 'function') tabPending.classList.add('active');
         } else {
           if (typeof tabPending.classList.remove === 'function') tabPending.classList.remove('active');
         }
-        if (typeof tabPending.setAttribute === 'function') tabPending.setAttribute('aria-selected', currentProposalStateTab === 'pending' ? 'true' : 'false');
+        if (typeof tabPending.setAttribute === 'function') tabPending.setAttribute('aria-selected', activeTab === 'pending' ? 'true' : 'false');
       }
       if (tabResolved && tabResolved.classList) {
-        if (currentProposalStateTab === 'resolved') {
+        if (activeTab === 'resolved') {
           if (typeof tabResolved.classList.add === 'function') tabResolved.classList.add('active');
         } else {
           if (typeof tabResolved.classList.remove === 'function') tabResolved.classList.remove('active');
         }
-        if (typeof tabResolved.setAttribute === 'function') tabResolved.setAttribute('aria-selected', currentProposalStateTab === 'resolved' ? 'true' : 'false');
+        if (typeof tabResolved.setAttribute === 'function') tabResolved.setAttribute('aria-selected', activeTab === 'resolved' ? 'true' : 'false');
       }
       if (tabAll && tabAll.classList) {
-        if (currentProposalStateTab === 'all') {
+        if (activeTab === 'all') {
           if (typeof tabAll.classList.add === 'function') tabAll.classList.add('active');
         } else {
           if (typeof tabAll.classList.remove === 'function') tabAll.classList.remove('active');
         }
-        if (typeof tabAll.setAttribute === 'function') tabAll.setAttribute('aria-selected', currentProposalStateTab === 'all' ? 'true' : 'false');
+        if (typeof tabAll.setAttribute === 'function') tabAll.setAttribute('aria-selected', activeTab === 'all' ? 'true' : 'false');
       }
     }
+    window.syncStateTabButtons = syncStateTabButtons;
 
     window.onProposalDetailedStatusChange = function() {
       const statusEl = document.getElementById('proposal-filter-status');
@@ -10687,6 +10781,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.filterAteneoProposals = function() {
+      currentCuratedView = 'proposals';
+      updateCuratedViewMode('proposals');
       const venueEl = document.getElementById('proposal-filter-venue');
       if (venueEl) venueEl.value = '';
       const dateEl = document.getElementById('proposal-filter-date');
@@ -10699,6 +10795,23 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.switchProposalTab = function(tab) {
+      if (tab === 'biblioteca') {
+        if (currentCuratedView === 'biblioteca') {
+          // Si ya está en Biblioteca, pulsar el botón conmuta de vuelta a Propuestas
+          return switchProposalTab('all');
+        }
+        currentCuratedView = 'biblioteca';
+        activeBibliotecaTab = 'pending';
+        updateCuratedViewMode('biblioteca');
+        syncStateTabButtons();
+        if (typeof loadBibliotecaImageProposals === 'function') {
+          return loadBibliotecaImageProposals('pending');
+        }
+        return;
+      }
+
+      currentCuratedView = 'proposals';
+      updateCuratedViewMode('proposals');
       currentProposalTab = tab;
       const classEl = document.getElementById('proposal-filter-classification');
       const sourceEl = document.getElementById('proposal-filter-source');
@@ -10715,9 +10828,6 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         const statusEl = document.getElementById('proposal-filter-status');
         if (statusEl) statusEl.value = 'archived';
         return loadAdminProposals();
-      } else if (tab === 'biblioteca') {
-        if (typeof loadBibliotecaImageProposals === 'function') loadBibliotecaImageProposals();
-        return;
       } else if (tab === 'ateneo') {
         return filterAteneoProposals();
       } else {
@@ -10744,7 +10854,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       proposalSearchQuery = (val || '').trim().toLowerCase();
       const clearBtn = document.getElementById('proposal-filter-search-clear');
       if (clearBtn) clearBtn.style.display = proposalSearchQuery ? 'inline-block' : 'none';
-      renderProposalsList(cachedProposals);
+      if (currentCuratedView === 'biblioteca') {
+        renderBibliotecaImagesList(cachedBibliotecaProposals);
+      } else {
+        renderProposalsList(cachedProposals);
+      }
     };
 
     window.clearProposalSearch = function() {
@@ -10971,6 +11085,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.loadAdminProposals = async function() {
+      currentCuratedView = 'proposals';
+      updateCuratedViewMode('proposals');
       const currentReqId = ++adminProposalsRequestId;
       const cards = document.getElementById('proposals-cards-container');
       const countText = document.getElementById('proposals-count-text');
@@ -11018,13 +11134,13 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       try {
         const res = await apiFetch('/api/v1/admin/proposals?' + params.toString());
-        if (currentReqId !== adminProposalsRequestId) return;
+        if (currentReqId !== adminProposalsRequestId || currentCuratedView !== 'proposals') return;
         const data = await res.json();
-        if (currentReqId !== adminProposalsRequestId) return;
+        if (currentReqId !== adminProposalsRequestId || currentCuratedView !== 'proposals') return;
         cachedProposals = data.proposals || [];
         renderProposalsList(cachedProposals);
       } catch (err) {
-        if (currentReqId !== adminProposalsRequestId) return;
+        if (currentReqId !== adminProposalsRequestId || currentCuratedView !== 'proposals') return;
         const errMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);"><strong>Error al cargar propuestas:</strong> ' + escapeHtml(err.message) + '</div>';
         if (cards) cards.innerHTML = errMsg;
         if (countText) countText.innerText = 'Error al cargar';
@@ -12281,57 +12397,128 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     // GESTIÓN EDITORIAL DE IMÁGENES OFICIALES — BIBLIOTECA PÚBLICA
     // ==============================================================================
     let cachedBibliotecaProposals = [];
+    let adminBibliotecaRequestId = 0;
+    let isSubmittingBibDecision = false;
 
-    window.loadBibliotecaImageProposals = async function() {
+    window.loadBibliotecaImageProposals = async function(tab) {
+      currentCuratedView = 'biblioteca';
+      if (typeof updateCuratedViewMode === 'function') updateCuratedViewMode('biblioteca');
+      if (tab) activeBibliotecaTab = tab;
+      const currentReqId = ++adminBibliotecaRequestId;
       const cards = document.getElementById('proposals-cards-container');
+      const countText = document.getElementById('proposals-count-text');
       const badge = document.getElementById('proposals-count-badge');
 
       if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas de imágenes de Biblioteca Pública...</div>';
+      if (countText) countText.innerText = 'Consultando imágenes de biblioteca (' + activeBibliotecaTab + ')...';
 
       try {
-        const res = await apiFetch('/api/v1/admin/biblioteca-images/proposals');
+        const res = await apiFetch('/api/v1/admin/biblioteca-images/proposals?status=' + encodeURIComponent(activeBibliotecaTab));
+        if (currentReqId !== adminBibliotecaRequestId || currentCuratedView !== 'biblioteca') return;
         const data = await res.json();
+        if (currentReqId !== adminBibliotecaRequestId || currentCuratedView !== 'biblioteca') return;
         cachedBibliotecaProposals = data.proposals || [];
-        renderBibliotecaImagesList(cachedBibliotecaProposals);
+        renderBibliotecaImagesList(cachedBibliotecaProposals, data);
       } catch (err) {
+        if (currentReqId !== adminBibliotecaRequestId || currentCuratedView !== 'biblioteca') return;
         if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas de biblioteca: ' + escapeHtml(err.message) + '</div>';
+        if (countText) countText.innerText = 'Error al cargar';
       }
     };
 
-    window.renderBibliotecaImagesList = function(proposals) {
+    window.renderBibliotecaImagesList = function(proposals, summaryData) {
+      if (currentCuratedView !== 'biblioteca') return;
+
       const cards = document.getElementById('proposals-cards-container');
+      const countText = document.getElementById('proposals-count-text');
       const badge = document.getElementById('proposals-count-badge');
 
       let list = proposals || [];
       if (proposalSearchQuery) {
+        const q = proposalSearchQuery.toLowerCase().trim();
         list = list.filter(function(p) {
           const t = (p.eventTitle || '').toLowerCase();
           const idStr = String(p.eventId);
-          return t.includes(proposalSearchQuery) || idStr === proposalSearchQuery;
+          return t.includes(q) || idStr === q;
         });
       }
 
+      if (countText) {
+        if (activeBibliotecaTab === 'pending') {
+          countText.innerText = list.length + (list.length === 1 ? ' revisión de imagen pendiente' : ' revisiones de imagen pendientes') + ' (Biblioteca Pública)';
+        } else if (activeBibliotecaTab === 'resolved') {
+          countText.innerText = list.length + (list.length === 1 ? ' revisión resuelta' : ' revisiones resueltas') + ' (Biblioteca Pública)';
+        } else {
+          countText.innerText = list.length + (list.length === 1 ? ' evento en catálogo' : ' eventos en catálogo') + ' (Biblioteca Pública)';
+        }
+      }
+
       if (badge) {
-        badge.innerText = list.length + (list.length === 1 ? ' evento pendiente' : ' eventos pendientes');
+        const tabBadgeSuffix = activeBibliotecaTab === 'pending'
+          ? (list.length === 1 ? ' pendiente' : ' pendientes')
+          : (activeBibliotecaTab === 'resolved'
+            ? (list.length === 1 ? ' resuelta' : ' resueltas')
+            : (list.length === 1 ? ' evento' : ' eventos'));
+        badge.innerText = list.length + tabBadgeSuffix;
         badge.style.display = 'inline-block';
       }
 
       if (list.length === 0) {
-        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No se encontraron imágenes pendientes para la Biblioteca Pública.</div>';
+        if (cards) {
+          const emptyMsg = activeBibliotecaTab === 'pending'
+            ? 'No hay revisiones de imagen pendientes para la Biblioteca Pública. Todas las imágenes están confirmadas.'
+            : (activeBibliotecaTab === 'resolved'
+              ? 'No se encontraron revisiones resueltas de la Biblioteca Pública.'
+              : 'No se encontraron eventos para la Biblioteca Pública.');
+          cards.innerHTML = '<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border); font-size:0.95rem;">' + emptyMsg + '</div>';
+        }
         return;
       }
 
       if (cards) {
         cards.innerHTML = list.map(function(item) {
-          const recBadge = item.recommendedAction === 'ADOPTAR_IMAGEN_OFICIAL'
-            ? '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🟢 Adoptar imagen oficial</span>'
-            : (item.recommendedAction === 'PROPONER_ALTERNATIVA'
-              ? '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">🟡 Proponer alternativa</span>'
-              : '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">⚪ Mantener actual</span>');
+          const isResolved = item.isPending === false;
+          const hasIdenticalUrls = Boolean(item.currentImageUrl && item.proposedImageUrl && item.currentImageUrl === item.proposedImageUrl);
+
+          let recBadge = '';
+          if (item.activeDecision) {
+            const op = escapeHtml(item.activeDecision.operatorEmail || item.verifiedBy || 'admin');
+            const act = item.activeDecision.action;
+            let actLabel = 'Decisión aplicada';
+            if (act === 'adopt') actLabel = 'Imagen oficial adoptada';
+            else if (act === 'keep_current') actLabel = 'Mantener actual';
+            else if (act === 'discard') actLabel = 'Descartada';
+            else if (act === 'request_search') actLabel = 'Búsqueda pendiente';
+
+            if (act === 'discard') {
+              recBadge = '<span class="badge-tag" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-weight:700;">✕ Decisión aplicada (' + op + ')</span>';
+            } else if (act === 'request_search') {
+              recBadge = '<span class="badge-tag" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:700;">🔍 Búsqueda pendiente (' + op + ')</span>';
+            } else {
+              recBadge = '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">✓ Decisión aplicada (' + op + ')</span>';
+            }
+          } else if (isResolved) {
+            recBadge = '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">✓ Decisión aplicada (' + escapeHtml(item.verifiedBy || 'admin') + ')</span>';
+          } else if (hasIdenticalUrls) {
+            recBadge = '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">⚪ Misma imagen (pendiente de confirmación)</span>';
+          } else if (item.recommendedAction === 'ADOPTAR_IMAGEN_OFICIAL') {
+            recBadge = '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🟢 Adoptar imagen oficial</span>';
+          } else if (item.recommendedAction === 'PROPONER_ALTERNATIVA') {
+            recBadge = '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">🟡 Proponer alternativa</span>';
+          } else {
+            recBadge = '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">⚪ Mantener actual</span>';
+          }
 
           const datesText = item.endDate && item.endDate !== item.editorialDate
             ? 'Del ' + escapeHtml(item.editorialDate) + ' al ' + escapeHtml(item.endDate)
             : escapeHtml(item.editorialDate);
+
+          const actionsHtml = isResolved
+            ? '<span style="font-size:0.8125rem; color:#047857; font-weight:600; padding:0.35rem 0.65rem; background:#ecfdf5; border-radius:6px; border:1px solid #a7f3d0;">✓ Revisión resuelta</span>'
+            : '<button type="button" class="btn-sm btn-primary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;adopt&quot;)" style="background:#059669; border-color:#059669; font-weight:700;">✓ Adoptar Oficial</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;keep_current&quot;)">Mantener</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;discard&quot;)" style="color:#dc2626;">Descartar</button>' +
+              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;request_search&quot;)" style="color:#2563eb;">Buscar</button>';
 
           return '<div class="proposal-card" id="bib-card-' + item.eventId + '" style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:1rem; margin-bottom:1rem;">' +
             '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.75rem;">' +
@@ -12358,11 +12545,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
               '<div><strong>Fuente:</strong> ' + escapeHtml(item.sourceName) + '</div>' +
               '<div><strong>Crédito:</strong> ' + escapeHtml(item.credit) + '</div>' +
             '</div>' +
-            '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
-              '<button type="button" class="btn-sm btn-primary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;adopt&quot;)" style="background:#059669; border-color:#059669; font-weight:700;">✓ Adoptar Oficial</button>' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;keep_current&quot;)">Mantener</button>' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;discard&quot;)" style="color:#dc2626;">Descartar</button>' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;request_search&quot;)" style="color:#2563eb;">Buscar</button>' +
+            '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap; align-items:center;">' +
+              actionsHtml +
             '</div>' +
           '</div>';
         }).join('');
@@ -12382,6 +12566,14 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       document.getElementById('bib-decision-r2-key').value = item.r2Key || '';
       document.getElementById('bib-decision-credit').value = item.credit || '';
       document.getElementById('bib-decision-notes').value = '';
+
+      // Generar idempotencyKey UNA SOLA VEZ al abrir el modal para esta decisión intencional
+      const newIdemKey = 'bib-' + item.eventId + '-' + (item.r2Key || 'key') + '-' + action + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      document.getElementById('bib-decision-idempotency-key').value = newIdemKey;
+
+      // Registrar estado previo esperado de la decisión para prevenir sobrescritura silenciosa
+      const prevDecisionId = (item.activeDecision && item.activeDecision.id) ? String(item.activeDecision.id) : '';
+      document.getElementById('bib-decision-expected-previous-id').value = prevDecisionId;
 
       const alertEl = document.getElementById('bib-decision-alert');
       if (alertEl) alertEl.style.display = 'none';
@@ -12423,6 +12615,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.submitBibliotecaDecision = async function() {
+      if (isSubmittingBibDecision) return;
+
       const eventId = parseInt(document.getElementById('bib-decision-event-id').value, 10);
       const action = document.getElementById('bib-decision-action').value;
       const adoptedImageUrl = document.getElementById('bib-decision-image-url').value;
@@ -12431,19 +12625,29 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const notes = document.getElementById('bib-decision-notes').value.trim();
 
       const btn = document.getElementById('btn-submit-bib-decision');
-      if (btn) { btn.disabled = true; btn.innerText = 'Guardando...'; }
-
       const alertEl = document.getElementById('bib-decision-alert');
       if (alertEl) alertEl.style.display = 'none';
 
+      isSubmittingBibDecision = true;
+      if (btn) { btn.disabled = true; btn.innerText = 'Guardando...'; }
+
       try {
+        const idempotencyKey = document.getElementById('bib-decision-idempotency-key').value ||
+          ('bib-' + eventId + '-' + (adoptedR2Key || 'key') + '-' + action + '-' + Date.now());
+        const expectedPrevRaw = document.getElementById('bib-decision-expected-previous-id').value;
+        const expectedPreviousDecisionId = expectedPrevRaw !== '' ? parseInt(expectedPrevRaw, 10) : null;
+
         const payload = {
           eventId: eventId,
           action: action,
+          candidateKey: adoptedR2Key || ('event-' + eventId),
+          candidateUrl: adoptedImageUrl,
           adoptedImageUrl: adoptedImageUrl,
           adoptedR2Key: adoptedR2Key,
           adoptedCredit: adoptedCredit,
-          notes: notes
+          notes: notes,
+          idempotencyKey: idempotencyKey,
+          expectedPreviousDecisionId: expectedPreviousDecisionId
         };
 
         const res = await apiFetch('/api/v1/admin/biblioteca-images/decision', {
@@ -12458,13 +12662,14 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
         closeModal('modal-biblioteca-decision');
         alert('Decisión guardada con éxito para el evento #' + eventId + '.');
-        loadBibliotecaImageProposals();
+        await loadBibliotecaImageProposals(activeBibliotecaTab);
       } catch (err) {
         if (alertEl) {
           alertEl.innerText = err.message;
           alertEl.style.display = 'block';
         }
       } finally {
+        isSubmittingBibDecision = false;
         if (btn) { btn.disabled = false; btn.innerText = 'Confirmar Decisión'; }
       }
     };

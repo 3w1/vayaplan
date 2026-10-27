@@ -28,6 +28,36 @@ export interface BibliotecaEventInventoryItem {
   current_image_url: string | null;
   source_type: string;
   source_url: string;
+  verified_at?: string | null;
+  verified_by?: string | null;
+}
+
+export type BibliotecaDecisionAction =
+  | 'adopt'
+  | 'keep_current'
+  | 'discard'
+  | 'request_search';
+
+export interface EventImageDecisionEntity {
+  id: number;
+  eventId: number;
+  candidateKey: string;
+  candidateUrl: string;
+  action: BibliotecaDecisionAction;
+  operatorEmail: string;
+  notes: string | null;
+  idempotencyKey: string | null;
+  payloadHash: string | null;
+  createdAt: string;
+}
+
+export interface BibliotecaActiveDecision {
+  id: number;
+  action: BibliotecaDecisionAction;
+  candidateKey: string;
+  operatorEmail: string;
+  createdAt: string;
+  notes: string | null;
 }
 
 export interface BibliotecaProposedImage {
@@ -50,16 +80,24 @@ export interface BibliotecaProposedImage {
   sizeBytes: number;
   lastCheckedAt: string;
   recommendedAction: BibliotecaRecommendedAction;
+  verifiedAt?: string | null;
+  verifiedBy?: string | null;
+  isPending: boolean;
+  activeDecision: BibliotecaActiveDecision | null;
 }
 
 export interface BibliotecaDecisionRecord {
   eventId: number;
-  action: 'adopt' | 'keep_current' | 'discard' | 'request_search';
+  candidateKey: string;
+  candidateUrl: string;
+  action: BibliotecaDecisionAction;
   operatorEmail: string;
-  decisionTimestamp: string;
-  previousImageUrl: string | null;
+  decisionTimestamp?: string;
+  previousImageUrl?: string | null;
   adoptedImageUrl?: string | null;
   adoptedR2Key?: string | null;
   adoptedCredit?: string | null;
-  notes?: string;
+  notes?: string | null;
+  idempotencyKey?: string | null;
+  expectedPreviousDecisionId?: number | null;
 }
