@@ -12567,8 +12567,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       document.getElementById('bib-decision-credit').value = item.credit || '';
       document.getElementById('bib-decision-notes').value = '';
 
-      // Generar idempotencyKey UNA SOLA VEZ al abrir el modal para esta decisión intencional
-      const newIdemKey = 'bib-' + item.eventId + '-' + (item.r2Key || 'key') + '-' + action + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      // Generar idempotencyKey UNA SOLA VEZ al abrir el modal para esta decisión intencional.
+      // Usar UUID puro para garantizar unicidad y no superar VARCHAR(100):
+      // formato => 'bib-{eventId}-{action}-{uuid}' ≤ ~50 chars, independiente de la longitud del r2Key.
+      const newIdemKey = 'bib-' + item.eventId + '-' + action + '-' + crypto.randomUUID();
       document.getElementById('bib-decision-idempotency-key').value = newIdemKey;
 
       // Registrar estado previo esperado de la decisión para prevenir sobrescritura silenciosa
@@ -12633,7 +12635,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       try {
         const idempotencyKey = document.getElementById('bib-decision-idempotency-key').value ||
-          ('bib-' + eventId + '-' + (adoptedR2Key || 'key') + '-' + action + '-' + Date.now());
+          ('bib-' + eventId + '-' + action + '-' + crypto.randomUUID());
         const expectedPrevRaw = document.getElementById('bib-decision-expected-previous-id').value;
         const expectedPreviousDecisionId = expectedPrevRaw !== '' ? parseInt(expectedPrevRaw, 10) : null;
 
