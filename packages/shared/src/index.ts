@@ -1,5 +1,5 @@
-import type { EventCategory, EventStatus, EventSourceType, VenueCategory, GastronomicRouteCategory, PriceStatus, PlaceItem, PlaceImageAttribution } from '@vayaplan/types';
-export type { PriceStatus, PlaceItem, PlaceImageAttribution };
+import type { EventCategory, EventStatus, EventSourceType, VenueCategory, GastronomicRouteCategory, PriceStatus, PlaceItem, PlaceImageAttribution, EventImageAttribution } from '@vayaplan/types';
+export type { PriceStatus, PlaceItem, PlaceImageAttribution, EventImageAttribution };
 
 /**
  * Categorías válidas de venues en VayaPlan.
@@ -775,4 +775,33 @@ export function serializePlaceItem(row: any): PlaceItem {
     image_attribution: imageAttribution,
   };
 }
+
+/**
+ * Mapea y serializa la atribución y procedencia de imagen de un evento (events),
+ * devolviendo EventImageAttribution o null si no aplica.
+ */
+export function serializeEventImageAttribution(row: any): EventImageAttribution | null {
+  if (!row) return null;
+  const sourceUrl = row.image_source_url ? String(row.image_source_url).trim() : '';
+  const author = row.image_author ? String(row.image_author).trim() : '';
+
+  if (!sourceUrl && !author) {
+    return null;
+  }
+
+  return {
+    source_url: sourceUrl,
+    source_title: row.image_source_title && String(row.image_source_title).trim().length > 0
+      ? String(row.image_source_title).trim()
+      : null,
+    author: author.length > 0 ? author : null,
+    license: row.image_license && String(row.image_license).trim().length > 0
+      ? String(row.image_license).trim()
+      : null,
+    license_url: row.image_license_url && String(row.image_license_url).trim().length > 0
+      ? String(row.image_license_url).trim()
+      : null,
+  };
+}
+
 

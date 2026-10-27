@@ -350,6 +350,7 @@ export interface PublicEventItem {
   venue: VenueSummary;
   image_url: string | null;
   image_thumb_url?: string | null;
+  image_attribution?: EventImageAttribution | null;
   actions: EventActionInfo;
   verification: EventVerificationInfo;
   promotion: PromotionInfo | null;
@@ -390,6 +391,14 @@ export interface RecurrenceItem {
   venue_name: string;
   is_free: boolean;
   price_cents: number;
+}
+
+export interface EventImageAttribution {
+  source_url: string;
+  source_title?: string | null;
+  author?: string | null;
+  license?: string | null;
+  license_url?: string | null;
 }
 
 export interface PlaceImageAttribution {

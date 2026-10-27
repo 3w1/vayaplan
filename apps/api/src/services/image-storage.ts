@@ -250,21 +250,48 @@ export async function withTempFile<T>(
 let _hasVariantsColumnCached: boolean | null = null;
 
 export async function hasImageVariantsColumns(dbQuery: (sql: string, params?: any[]) => Promise<any> = query): Promise<boolean> {
-  if (_hasVariantsColumnCached !== null) return _hasVariantsColumnCached;
+  if (_hasVariantsColumnCached === true) return true;
   try {
     const res = await dbQuery(
       "SELECT 1 FROM information_schema.columns WHERE table_name = 'events' AND column_name = 'image_thumb_url' LIMIT 1"
     );
-    _hasVariantsColumnCached = (res.rows.length > 0);
+    if (res.rows.length > 0) {
+      _hasVariantsColumnCached = true;
+      return true;
+    }
   } catch {
-    _hasVariantsColumnCached = false;
+    // ignorar error puntual
   }
-  return _hasVariantsColumnCached;
+  return false;
 }
 
 export function resetVariantsColumnCache(): void {
   _hasVariantsColumnCached = null;
 }
+
+// Caché de detección de columnas de atribución de imagen en la tabla events
+let _hasAttributionColumnCached: boolean | null = null;
+
+export async function hasEventAttributionColumns(dbQuery: (sql: string, params?: any[]) => Promise<any> = query): Promise<boolean> {
+  if (_hasAttributionColumnCached === true) return true;
+  try {
+    const res = await dbQuery(
+      "SELECT 1 FROM information_schema.columns WHERE table_name = 'events' AND column_name = 'image_source_url' LIMIT 1"
+    );
+    if (res.rows.length > 0) {
+      _hasAttributionColumnCached = true;
+      return true;
+    }
+  } catch {
+    // ignorar error puntual
+  }
+  return false;
+}
+
+export function resetAttributionColumnCache(): void {
+  _hasAttributionColumnCached = null;
+}
+
 
 /**
  * Guarda una imagen en Cloudflare R2 generando automáticamente sus variantes responsivas:

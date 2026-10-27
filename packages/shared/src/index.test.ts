@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, normalizePrice, parseAndNormalizeInstagramInput, resolveGoogleMapsUrl, serializePlaceItem } from './index';
+import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, normalizePrice, parseAndNormalizeInstagramInput, resolveGoogleMapsUrl, serializePlaceItem, serializeEventImageAttribution } from './index';
 
 describe('computeEditorialDate', () => {
   describe('Horario de verano (CEST, UTC+2)', () => {
@@ -567,5 +567,73 @@ describe('parseAndNormalizeInstagramInput', () => {
 
       const result = serializePlaceItem(row);
       expect(result.image_attribution).toBeNull();
+    });
+  });
+
+  describe('serializeEventImageAttribution', () => {
+    test('devuelve null si la fila es nula o indefinida', () => {
+      expect(serializeEventImageAttribution(null)).toBeNull();
+      expect(serializeEventImageAttribution(undefined)).toBeNull();
+    });
+
+    test('devuelve null si no hay image_source_url ni image_author', () => {
+      const row = {
+        id: 96,
+        title: 'Evento sin procedencia',
+        image_source_url: null,
+        image_author: null,
+      };
+      expect(serializeEventImageAttribution(row)).toBeNull();
+    });
+
+    test('mapea correctamente procedencia web sin autor (caso Teatro Principal)', () => {
+      const row = {
+        id: 96,
+        title: 'EL PARAÍSO DE LOS NEGROS',
+        image_source_url: 'https://teatroprincipaldepalencia.es/es/productos/descripcion/el-paraiso-de-los-negros-29-10',
+        image_source_title: 'web del Teatro Principal de Palencia',
+        image_author: null,
+        image_license: null,
+        image_license_url: null,
+      };
+
+      const result = serializeEventImageAttribution(row);
+      expect(result).toEqual({
+        source_url: 'https://teatroprincipaldepalencia.es/es/productos/descripcion/el-paraiso-de-los-negros-29-10',
+        source_title: 'web del Teatro Principal de Palencia',
+        author: null,
+        license: null,
+        license_url: null,
+      });
+    });
+
+    test('mapea correctamente atribución completa con autor y fuente', () => {
+      const row = {
+        id: 97,
+        title: 'URBAN SIMPHONY',
+        image_source_url: 'https://teatroprincipaldepalencia.es/es/productos/descripcion/urban-simphony',
+        image_source_title: 'Teatro Principal de Palencia',
+        image_author: 'Carlos Fotografía',
+        image_license: 'CC BY-SA 4.0',
+        image_license_url: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      };
+
+      const result = serializeEventImageAttribution(row);
+      expect(result).toEqual({
+        source_url: 'https://teatroprincipaldepalencia.es/es/productos/descripcion/urban-simphony',
+        source_title: 'Teatro Principal de Palencia',
+        author: 'Carlos Fotografía',
+        license: 'CC BY-SA 4.0',
+        license_url: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      });
+    });
+
+    test('trata cadenas vacías o solo espacios como nulos', () => {
+      const row = {
+        id: 98,
+        image_source_url: '  ',
+        image_author: '   ',
+      };
+      expect(serializeEventImageAttribution(row)).toBeNull();
     });
   });
