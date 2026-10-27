@@ -195,7 +195,7 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
     expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Concierto Acústico');
 
     // 3. Cambiar a pestaña 'ateneo'
-    ctx.window.switchProposalTab('ateneo');
+    await ctx.window.switchProposalTab('ateneo');
     expect(domElements['proposals-cards-container'].innerHTML).toContain('Exposición de Antonio Capel');
     expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Concierto Acústico');
 

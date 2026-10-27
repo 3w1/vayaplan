@@ -404,7 +404,7 @@ describe('apps/web — Rediseño de Propuestas: Pruebas de Comportamiento e Inte
 
     // Clic en botón Ateneo
     expect(html).toContain('id="prop-tab-ateneo"');
-    ctx.window.filterAteneoProposals();
+    await ctx.window.filterAteneoProposals();
     expect(getEl('proposal-filter-source').value).toBe('WEB_PROGRAMACION');
     expect(getEl('proposals-cards-container').innerHTML).toContain('Conferencia Ateneo');
     expect(getEl('proposals-cards-container').innerHTML).not.toContain('Concierto Bar');
@@ -607,5 +607,136 @@ describe('apps/web — Rediseño de Propuestas: Pruebas de Comportamiento e Inte
     ctx.window.openProposalImageModal(502);
     expect(getEl('modal-proposal-image').classList.contains('active')).toBe(false);
     expect(ctx.document.body.classList.contains('modal-open')).toBe(false);
+  });
+
+  test('11. Aprobación de continuos sin hora vs eventos puntuales: texto de acción y flujo/modal que abre', async () => {
+    const mockProposals = [
+      {
+        id: 601,
+        title: 'Exposición Temporal sin hora',
+        classification: 'EVENTO_CONTINUO',
+        proposed_date: '2026-11-01',
+        proposed_end_date: '2026-11-30',
+        proposed_time: null,
+        review_status: 'pending',
+        venue_id: 10150,
+      },
+      {
+        id: 602,
+        title: 'Festival Multidía sin hora por rango de fechas',
+        classification: 'EVENTO_POSIBLE',
+        proposed_date: '2026-11-10',
+        proposed_end_date: '2026-11-12',
+        proposed_time: null,
+        review_status: 'pending',
+        venue_id: 10001,
+      },
+      {
+        id: 603,
+        title: 'Concierto Puntual sin hora',
+        classification: 'EVENTO_POSIBLE',
+        proposed_date: '2026-11-20',
+        proposed_end_date: null,
+        proposed_time: null,
+        review_status: 'pending',
+        venue_id: 10001,
+      },
+    ];
+
+    const { ctx, getEl } = createTestEnvironment(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    const cardsHtml = getEl('proposals-cards-container').innerHTML;
+
+    // 11.1 Los eventos continuos sin hora (#601 y #602) NO muestran "⏰ Asignar Hora y Aprobar"
+    // sino que muestran el botón estándar "✓ Aprobar Borrador" y horario de sala por defecto
+    expect(cardsHtml).toContain('De 08:00 a 18:00');
+    expect(cardsHtml).toContain('Exposición Temporal sin hora');
+    expect(cardsHtml).toContain('Festival Multidía sin hora');
+
+    // 11.2 El evento puntual sin hora (#603) SÍ muestra "⏰ Asignar Hora y Aprobar" y "⏰ Hora por completar"
+    expect(cardsHtml).toContain('⏰ Asignar Hora y Aprobar');
+    expect(cardsHtml).toContain('⏰ Hora por completar');
+
+    // 11.3 Apertura del modal de aprobación para continuo (#601):
+    // Debe mostrar badge de continuo y el hint opcional de horario de sala
+    ctx.window.openApproveProposalModal(601);
+    expect(getEl('approve-prop-continuous-badge').style.display).toBe('block');
+    expect(getEl('approve-prop-continuous-text').innerText).toBe('Del 2026-11-01 al 2026-11-30');
+    expect(getEl('approve-prop-time-hint').innerText).toBe('Opcional para eventos continuos (horario de sala)');
+    expect(getEl('modal-approve-proposal').classList.contains('active')).toBe(true);
+
+    // 11.4 Apertura del modal de aprobación para puntual (#603):
+    // Debe ocultar badge de continuo y el hint debe exigir hora obligatoria
+    ctx.window.openApproveProposalModal(603);
+    expect(getEl('approve-prop-continuous-badge').style.display).toBe('none');
+    expect(getEl('approve-prop-time-hint').innerText).toBe('Obligatorio para eventos puntuales');
+  });
+
+  test('12. Secuencia Ateneo tras filtro de otro local/fecha y descarte de respuestas demoradas (concurrencia)', async () => {
+    const fetchedUrls: string[] = [];
+    let resolveSlowFetch: ((val: any) => void) | null = null;
+
+    const mockAteneoProposals = [
+      { id: 701, title: 'Charla Ateneo', venue_id: 10149, source_type: 'WEB_PROGRAMACION', review_status: 'pending' },
+    ];
+    const mockOldVenueProposals = [
+      { id: 801, title: 'Cine Club Antiguo', venue_id: 10001, source_type: 'INSTAGRAM_POST', review_status: 'pending' },
+    ];
+
+    const { ctx, getEl } = createTestEnvironment([], async (url: string) => {
+      fetchedUrls.push(url);
+      if (url.includes('venue_id=10001')) {
+        // Simular petición demorada
+        return new Promise((resolve) => {
+          resolveSlowFetch = () => {
+            resolve({
+              ok: true,
+              status: 200,
+              json: async () => ({ proposals: mockOldVenueProposals }),
+            });
+          };
+        });
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ proposals: mockAteneoProposals }),
+      };
+    });
+
+    // 12.1 Simular filtros previos de otro local y fecha
+    getEl('proposal-filter-venue').value = '10001';
+    getEl('proposal-filter-date').value = '2026-11-15';
+    getEl('proposal-filter-classification').value = 'events';
+
+    // Lanzar la carga inicial con esos filtros (queda en vuelo porque es lenta)
+    const slowLoadPromise = ctx.window.loadAdminProposals();
+
+    // 12.2 Usuario pulsa el botón Ateneo mientras la petición anterior sigue en vuelo
+    const ateneoPromise = ctx.window.filterAteneoProposals();
+
+    // Comprobar que los filtros incompatibles se limpiaron y procedencia es Ateneo
+    expect(getEl('proposal-filter-venue').value).toBe('');
+    expect(getEl('proposal-filter-date').value).toBe('');
+    expect(getEl('proposal-filter-classification').value).toBe('');
+    expect(getEl('proposal-filter-source').value).toBe('WEB_PROGRAMACION');
+
+    // Esperar a que termine la petición de Ateneo
+    await ateneoPromise;
+
+    // La UI y los datos cargados corresponden a Ateneo
+    expect(getEl('proposals-cards-container').innerHTML).toContain('Charla Ateneo');
+
+    // 12.3 Ahora resuelve tardíamente la petición anterior demorada (#801)
+    if (resolveSlowFetch) {
+      (resolveSlowFetch as Function)();
+    }
+    await slowLoadPromise;
+
+    // La protección currentReqId !== adminProposalsRequestId descartó la respuesta obsoleta
+    // Los datos mostrados siguen siendo los de Ateneo y NO fueron sustituidos por mockOldVenueProposals
+    expect(getEl('proposals-cards-container').innerHTML).toContain('Charla Ateneo');
+    expect(getEl('proposals-cards-container').innerHTML).not.toContain('Cine Club Antiguo');
   });
 });

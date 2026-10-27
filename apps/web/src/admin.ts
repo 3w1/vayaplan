@@ -10568,6 +10568,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     let isMoreFiltersOpen = false;
     let activeProposalOpenMenuId = null;
     window.activeProposalOpenMenuId = null;
+    let adminProposalsRequestId = 0;
 
     function isContinuousProposal(proposal) {
       if (!proposal) return false;
@@ -10686,15 +10687,15 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.filterAteneoProposals = function() {
-      const sourceEl = document.getElementById('proposal-filter-source');
-      if (sourceEl) sourceEl.value = 'WEB_PROGRAMACION';
+      const venueEl = document.getElementById('proposal-filter-venue');
+      if (venueEl) venueEl.value = '';
+      const dateEl = document.getElementById('proposal-filter-date');
+      if (dateEl) dateEl.value = '';
       const classEl = document.getElementById('proposal-filter-classification');
       if (classEl) classEl.value = '';
-      if (!cachedProposals || cachedProposals.length === 0) {
-        loadAdminProposals();
-      } else {
-        renderProposalsList(cachedProposals);
-      }
+      const sourceEl = document.getElementById('proposal-filter-source');
+      if (sourceEl) sourceEl.value = 'WEB_PROGRAMACION';
+      return loadAdminProposals();
     };
 
     window.switchProposalTab = function(tab) {
@@ -10707,22 +10708,23 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         syncStateTabButtons();
         if (classEl) classEl.value = '';
         if (sourceEl) sourceEl.value = '';
+        return loadAdminProposals();
       } else if (tab === 'archived') {
         currentProposalStateTab = 'resolved';
         syncStateTabButtons();
         const statusEl = document.getElementById('proposal-filter-status');
         if (statusEl) statusEl.value = 'archived';
+        return loadAdminProposals();
       } else if (tab === 'biblioteca') {
         if (typeof loadBibliotecaImageProposals === 'function') loadBibliotecaImageProposals();
         return;
       } else if (tab === 'ateneo') {
-        if (sourceEl) sourceEl.value = 'WEB_PROGRAMACION';
-        if (classEl) classEl.value = '';
+        return filterAteneoProposals();
       } else {
         if (classEl) classEl.value = tab;
         if (sourceEl && sourceEl.value === 'WEB_PROGRAMACION') sourceEl.value = '';
+        renderProposalsList(cachedProposals);
       }
-      renderProposalsList(cachedProposals);
     };
 
     window.toggleMoreProposalFilters = function() {
@@ -10969,6 +10971,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     };
 
     window.loadAdminProposals = async function() {
+      const currentReqId = ++adminProposalsRequestId;
       const cards = document.getElementById('proposals-cards-container');
       const countText = document.getElementById('proposals-count-text');
       const badge = document.getElementById('proposals-count-badge');
@@ -11015,10 +11018,13 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       try {
         const res = await apiFetch('/api/v1/admin/proposals?' + params.toString());
+        if (currentReqId !== adminProposalsRequestId) return;
         const data = await res.json();
+        if (currentReqId !== adminProposalsRequestId) return;
         cachedProposals = data.proposals || [];
         renderProposalsList(cachedProposals);
       } catch (err) {
+        if (currentReqId !== adminProposalsRequestId) return;
         const errMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);"><strong>Error al cargar propuestas:</strong> ' + escapeHtml(err.message) + '</div>';
         if (cards) cards.innerHTML = errMsg;
         if (countText) countText.innerText = 'Error al cargar';
@@ -11127,7 +11133,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         primaryBtnHtml = '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="✏️ Editar" aria-label="Revisar y editar propuesta #' + p.id + '" style="font-weight:700; white-space:nowrap;">✏️ Revisar</button>';
 
         let approveBtnText = '✓ Aprobar Borrador';
-        if (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) {
+        if (!isContinuous && (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time)) {
           approveBtnText = '⏰ Asignar Hora y Aprobar';
         }
 
