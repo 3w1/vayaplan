@@ -11,6 +11,7 @@ process.env.MOCK_R2 = 'true';
 const { app } = await import('../../../index');
 const { JWT_SECRET } = await import('../../../middleware/auth');
 const { sign } = await import('hono/jwt');
+const { getLatestEventImageDecisions } = await import('../../../services/biblioteca-images/biblioteca-service');
 
 const testPool = new Pool({ connectionString: rawTestDbUrl.trim() });
 
@@ -639,7 +640,7 @@ describe('Endpoint Real Hono: GET y POST /api/v1/admin/biblioteca-images', () =>
     expect(bodyOp2Updated.decision.id).toBeGreaterThan(firstDecisionId);
   });
 
-  test('15. Serialización real y clock_timestamp(): el orden de inserción refleja el orden en que se obtuvo el bloqueo', async () => {
+  test('15. Determinismo de secuencia id bajo bloqueo FOR UPDATE: la última decisión se rige estrictamente por id DESC sin depender del reloj', async () => {
     const client1 = await testPool.connect();
     const client2 = await testPool.connect();
 
@@ -687,13 +688,18 @@ describe('Endpoint Real Hono: GET y POST /api/v1/admin/biblioteca-images', () =>
       const dec1 = res1.rows[0];
       const dec2 = res2;
 
-      // El ID autoincremental de la base de datos debe reflejar el orden de ejecución serializado
+      // La secuencia primaria autoincremental de PostgreSQL (id SERIAL) rige estrictamente
+      // el orden de inserción obtenido al liberarse el bloqueo de fila (dec2.id > dec1.id)
       expect(dec1.id).toBeLessThan(dec2.id);
 
-      // clock_timestamp() en dec1 debe ser anterior o igual a dec2
-      const time1 = new Date(dec1.created_at).getTime();
-      const time2 = new Date(dec2.created_at).getTime();
-      expect(time1).toBeLessThanOrEqual(time2);
+      // getLatestEventImageDecisions resuelve la última decisión activa mediante "ORDER BY event_id, candidate_key, id DESC"
+      // garantizando que dec2 sea la decisión seleccionada, con total independencia de variaciones del reloj
+      const latestMap = await getLatestEventImageDecisions([9]);
+      const activeDec = latestMap.get('9:test-order-key');
+      expect(activeDec).toBeDefined();
+      expect(activeDec?.id).toBe(dec2.id);
+      expect(activeDec?.action).toBe('keep_current');
+      expect(activeDec?.operatorEmail).toBe('client2@vayaplan.com');
     } finally {
       client1.release();
       client2.release();

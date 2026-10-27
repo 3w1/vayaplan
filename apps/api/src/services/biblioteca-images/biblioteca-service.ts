@@ -232,7 +232,7 @@ export async function processBibliotecaBatch(params?: {
 
 /**
  * Recupera la decisión editorial activa más reciente para cada par (evento, candidata).
- * Orden determinista: created_at DESC, id DESC.
+ * Orden determinista: id DESC (secuencia monótona autoincremental de PostgreSQL bajo bloqueo FOR UPDATE, sin suposiciones de reloj).
  */
 export async function getLatestEventImageDecisions(
   eventIds: number[],
