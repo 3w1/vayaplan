@@ -603,5 +603,43 @@ describe('Atribución Fotográfica en Lugares Permanentes (places)', () => {
       expect(itemWith.image_attribution).not.toBeNull();
       expect(itemWith.image_attribution.license).toBe('CC BY 4.0');
     });
+
+    test('desactivar temporalmente el lugar (is_active = false) lo excluye de los tres endpoints públicos conservando imagen y créditos en BD', async () => {
+      // 1. Desactivar el lugar con atribución en la base de datos
+      await testPool.query(`UPDATE places SET is_active = false WHERE id = $1;`, [placeWithAttrId]);
+
+      // 2. Comprobar que en la BD se conservan intactos la imagen y todos los créditos
+      const dbRes = await testPool.query(`
+        SELECT id, is_active, image_url, image_author, image_source_url, image_license, image_license_url, image_modifications
+        FROM places WHERE id = $1;
+      `, [placeWithAttrId]);
+      expect(dbRes.rows.length).toBe(1);
+      const dbRow = dbRes.rows[0];
+      expect(dbRow.is_active).toBe(false);
+      expect(dbRow.image_url).toBe('https://cdn.vayaplan.com/places/museo.webp');
+      expect(dbRow.image_author).toBe('José Luis Filpo Cabana');
+      expect(dbRow.image_source_url).toBe('https://commons.wikimedia.org/wiki/File:Museo.jpg');
+      expect(dbRow.image_license).toBe('CC BY 4.0');
+      expect(dbRow.image_license_url).toBe('https://creativecommons.org/licenses/by/4.0/');
+      expect(dbRow.image_modifications).toBe('WebP optimizado');
+
+      // 3. Endpoint 1: GET /api/v1/cities/palencia/places lo excluye estrictamente
+      const resPlaces = await app.request('/api/v1/cities/palencia/places');
+      expect(resPlaces.status).toBe(200);
+      const dataPlaces = await resPlaces.json();
+      expect(dataPlaces.places.some((p: any) => p.id === placeWithAttrId)).toBe(false);
+
+      // 4. Endpoint 2: GET /api/v1/cities/palencia/events lo excluye estrictamente
+      const resEvents = await app.request('/api/v1/cities/palencia/events?date=2026-11-20');
+      expect(resEvents.status).toBe(200);
+      const dataEvents = await resEvents.json();
+      expect(dataEvents.places.some((p: any) => p.id === placeWithAttrId)).toBe(false);
+
+      // 5. Endpoint 3: GET /api/v1/cities/palencia/weekend lo excluye estrictamente
+      const resWeekend = await app.request('/api/v1/cities/palencia/weekend');
+      expect(resWeekend.status).toBe(200);
+      const dataWeekend = await resWeekend.json();
+      expect(dataWeekend.places.some((p: any) => p.id === placeWithAttrId)).toBe(false);
+    });
   });
 });

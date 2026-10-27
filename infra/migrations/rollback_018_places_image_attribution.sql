@@ -18,10 +18,16 @@
 --   NUNCA revertir la aplicación dejando la imagen publicada sin mostrar sus créditos, ya que violaría
 --   los términos legales de la licencia (ej. CC BY 4.0).
 --   En su lugar:
---     1. Retirar inmediatamente la imagen del lugar mediante UPDATE places SET image_url = NULL WHERE id = <id>;
---        o desactivar temporalmente el lugar (is_active = false) de las superficies públicas.
---     2. Purgar las cachés CDN de la API y de las páginas públicas afectadas.
---     3. Los metadatos de atribución pueden conservarse para cuando se restablezca el servicio.
+--     1. Desactivar temporalmente el lugar mediante UPDATE places SET is_active = false WHERE id = <id>;
+--        Esto retira el lugar de los tres endpoints públicos (/places, /events y /weekend, que filtran p.is_active = true)
+--        preservando íntegros tanto image_url como los metadatos de atribución para su restablecimiento sin pérdida de datos.
+--        (NOTA: NO ejecutar UPDATE places SET image_url = NULL preservando atribución, pues violaría la restricción CHECK).
+--     2. Purgar las cachés específicas que exponen el lugar:
+--        - URLs de API en CDN: /api/v1/cities/palencia/places, /api/v1/cities/palencia/events*, /api/v1/cities/palencia/weekend.
+--        - HTML público: /.
+--        - Si se requiere retirar el acceso directo por URL al archivo gráfico: purga puntual de la URL en Cloudflare o retiro del objeto en R2.
+--        - NO prescribir purgas globales ("Purge Everything").
+--     3. Revertir el código de la aplicación de forma segura mientras el lugar permanece oculto.
 --
 -- Si tras análisis de emergencia se decide revertir el esquema DDL completamente (destructivo):
 --   - lock_timeout = 5s abortará si hay transacciones concurrentes sobre 'places'.
