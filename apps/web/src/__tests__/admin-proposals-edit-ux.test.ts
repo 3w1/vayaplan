@@ -35,7 +35,6 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     expect(mainScript).toBeDefined();
 
     const domElements: Record<string, any> = {
-      'proposals-tbody': { innerHTML: '' },
       'proposals-cards-container': { innerHTML: '' },
       'proposals-count-badge': { innerText: '', style: {} },
       'proposal-filter-status': { value: 'pending' },
@@ -232,19 +231,13 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     const { ctx, domElements } = setupTestContext(mockProposals);
     await ctx.window.loadAdminProposals();
 
-    const tbodyHtml = domElements['proposals-tbody'].innerHTML;
     const cardsHtml = domElements['proposals-cards-container'].innerHTML;
 
-    // Verificar botón Editar en tabla desktop para propuesta 63 (CONTENIDO_VENUE)
-    expect(tbodyHtml).toContain("openEditProposalModal(63)");
-    expect(tbodyHtml).toContain("✏️ Editar");
-
-    // Verificar botón Editar en tarjetas móvil para propuesta 63
+    // Verificar botón Revisar / Editar en lista editorial para propuesta 63 (CONTENIDO_VENUE)
     expect(cardsHtml).toContain("openEditProposalModal(63)");
-    expect(cardsHtml).toContain("✏️ Editar");
+    expect(cardsHtml).toContain("title=\"✏️ Editar\"");
 
     // Verificar que propuesta 62 también lo tiene
-    expect(tbodyHtml).toContain("openEditProposalModal(62)");
     expect(cardsHtml).toContain("openEditProposalModal(62)");
   });
 

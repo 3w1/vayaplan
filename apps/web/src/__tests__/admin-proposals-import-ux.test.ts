@@ -38,7 +38,6 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
     expect(mainScript).toBeDefined();
 
     const domElements: Record<string, any> = {
-      'proposals-tbody': { innerHTML: '' },
       'proposals-cards-container': { innerHTML: '' },
       'proposals-count-badge': { innerText: '', style: {} },
       'proposal-filter-status': { value: 'pending' },
@@ -434,13 +433,9 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
 
     sandbox.window.renderProposalsList(mockProposals);
 
-    const tbodyHtml = domElements['proposals-tbody'].innerHTML;
     const cardsHtml = domElements['proposals-cards-container'].innerHTML;
 
-    // Comprobar que en la tabla de escritorio se muestra "⚠️ Local sin asignar"
-    expect(tbodyHtml).toContain('⚠️ Local sin asignar');
-
-    // Comprobar que en la vista de tarjetas móviles se muestra "⚠️ Local sin asignar"
+    // Comprobar que en la lista editorial se muestra "⚠️ Local sin asignar"
     expect(cardsHtml).toContain('⚠️ Local sin asignar');
   });
 });

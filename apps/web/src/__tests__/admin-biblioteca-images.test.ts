@@ -21,7 +21,6 @@ describe('apps/web — Panel de Administración: Imágenes de Biblioteca Públic
     expect(mainScript).toBeDefined();
 
     const domElements: Record<string, any> = {
-      'proposals-tbody': { innerHTML: '' },
       'proposals-cards-container': { innerHTML: '' },
       'proposals-count-badge': { innerText: '', style: {} },
       'bib-decision-event-id': { value: '' },
@@ -134,14 +133,12 @@ describe('apps/web — Panel de Administración: Imágenes de Biblioteca Públic
 
     await ctx.window.loadBibliotecaImageProposals();
 
-    const tbodyHtml = domElements['proposals-tbody'].innerHTML;
     const cardsHtml = domElements['proposals-cards-container'].innerHTML;
 
-    expect(tbodyHtml).toContain("Exposición de fotografía 'Una mirada sincera'");
-    expect(tbodyHtml).toContain('Sin Imagen');
-    expect(tbodyHtml).toContain('Adoptar imagen oficial');
-    expect(tbodyHtml).toContain('Proponer alternativa');
-
+    expect(cardsHtml).toContain("Exposición de fotografía 'Una mirada sincera'");
+    expect(cardsHtml).toContain('Sin Imagen');
+    expect(cardsHtml).toContain('Adoptar imagen oficial');
+    expect(cardsHtml).toContain('Proponer alternativa');
     expect(cardsHtml).toContain('Exposición: «El jazz está en los libros»');
     expect(cardsHtml).toContain('Oficial R2');
 

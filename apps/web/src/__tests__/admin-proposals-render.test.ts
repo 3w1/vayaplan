@@ -20,7 +20,6 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
     expect(mainScript).toBeDefined();
 
     const domElements: Record<string, any> = {
-      'proposals-tbody': { innerHTML: '' },
       'proposals-cards-container': { innerHTML: '' },
       'proposals-count-badge': { innerText: '', style: {} },
       'proposal-filter-status': { value: 'pending' },
@@ -178,18 +177,11 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
     // Cargar propuestas
     await ctx.window.loadAdminProposals();
 
-    // Comprobar que no hay mensajes de error en tbody ni cards
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Error al cargar propuestas');
+    // Comprobar que no hay mensajes de error en cards
     expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Error al cargar propuestas');
 
     // 1. Pestaña inicial 'all'
-    const tbodyHtmlAll = domElements['proposals-tbody'].innerHTML;
     const cardsHtmlAll = domElements['proposals-cards-container'].innerHTML;
-
-    expect(tbodyHtmlAll).toContain('Exposición de Antonio Capel');
-    expect(tbodyHtmlAll).toContain('Del 2026-10-01 al 2026-10-30');
-    expect(tbodyHtmlAll).toContain('De 08:00 a 18:00');
-    expect(tbodyHtmlAll).toContain('No informado');
 
     expect(cardsHtmlAll).toContain('Exposición de Antonio Capel');
     expect(cardsHtmlAll).toContain('Del 2026-10-01 al 2026-10-30');
@@ -199,18 +191,18 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
 
     // 2. Cambiar a pestaña 'continuous'
     ctx.window.switchProposalTab('continuous');
-    expect(domElements['proposals-tbody'].innerHTML).toContain('Exposición de Antonio Capel');
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Concierto Acústico');
+    expect(domElements['proposals-cards-container'].innerHTML).toContain('Exposición de Antonio Capel');
+    expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Concierto Acústico');
 
     // 3. Cambiar a pestaña 'ateneo'
-    ctx.window.switchProposalTab('ateneo');
-    expect(domElements['proposals-tbody'].innerHTML).toContain('Exposición de Antonio Capel');
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Concierto Acústico');
+    await ctx.window.switchProposalTab('ateneo');
+    expect(domElements['proposals-cards-container'].innerHTML).toContain('Exposición de Antonio Capel');
+    expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Concierto Acústico');
 
     // 4. Cambiar a pestaña 'events'
     ctx.window.switchProposalTab('events');
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Exposición de Antonio Capel');
-    expect(domElements['proposals-tbody'].innerHTML).toContain('Concierto Acústico');
+    expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Exposición de Antonio Capel');
+    expect(domElements['proposals-cards-container'].innerHTML).toContain('Concierto Acústico');
 
     // 5. Modal de aprobación con propuesta #21 no lanza ReferenceError y rellena campos
     expect(() => ctx.openApproveProposalModal(21)).not.toThrow();
@@ -226,5 +218,39 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
     expect(domElements['approve-prop-title-input'].value).toBe('Concierto Acústico');
     expect(domElements['approve-prop-date-input'].value).toBe('2026-10-25');
     expect(domElements['approve-prop-time-input'].value).toBe('20:30');
+
+    // 7. Rediseño editorial: lista compacta, acción principal ✏️ Revisar y menú secundario •••
+    expect(cardsHtmlAll).toContain('prop-item-21');
+    expect(cardsHtmlAll).toContain('openEditProposalModal(21)');
+    expect(cardsHtmlAll).toContain('✏️ Revisar');
+    expect(cardsHtmlAll).toContain('btn-menu-trigger');
+    expect(cardsHtmlAll).toContain('toggleProposalActionsMenu(21, event)');
+
+    // 8. Visor de imagen para propuestas
+    expect(typeof ctx.openProposalImageModal).toBe('function');
+    let openedModalId = '';
+    ctx.openModal = (id: string) => { openedModalId = id; };
+    ctx.openProposalImageModal(21);
+    expect(openedModalId).toBe('modal-proposal-image');
+    expect(domElements['modal-prop-img-element'].src).toBe('https://media.vayaplan.com/ateneo/capel.jpg');
+    expect(domElements['modal-prop-img-title'].textContent).toBe('Cartel: Exposición de Antonio Capel');
+
+    // 9. Alternancia del menú secundario de acciones
+    expect(typeof ctx.toggleProposalActionsMenu).toBe('function');
+    expect(typeof ctx.closeAllProposalActionMenus).toBe('function');
+    const mockEvent = { stopPropagation: () => {} };
+    ctx.toggleProposalActionsMenu(21, mockEvent);
+    expect(ctx.activeProposalOpenMenuId).toBe(21);
+    expect(domElements['prop-menu-dropdown-21'].style.display).toBe('flex');
+    ctx.closeAllProposalActionMenus();
+    expect(ctx.activeProposalOpenMenuId).toBeNull();
+    expect(domElements['prop-menu-dropdown-21'].style.display).toBe('none');
+
+    // 10. Navegación por pestañas de estado (Pendientes, Resueltas, Todas)
+    expect(typeof ctx.switchProposalStateTab).toBe('function');
+    ctx.switchProposalStateTab('resolved');
+    expect(ctx.currentProposalStateTab).toBe('resolved');
+    ctx.switchProposalStateTab('pending');
+    expect(ctx.currentProposalStateTab).toBe('pending');
   });
 });

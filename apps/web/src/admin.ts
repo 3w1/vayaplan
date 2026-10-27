@@ -1393,7 +1393,6 @@ export function renderAdminHtml(): string {
       .recurrences-cards-mobile,
       .places-cards-mobile,
       .qr-cards-mobile,
-      .proposals-cards-mobile,
       .sources-cards-mobile {
         display: flex !important;
       }
@@ -1405,7 +1404,6 @@ export function renderAdminHtml(): string {
       .recurrences-table-desktop,
       .places-table-desktop,
       .qr-table-desktop,
-      .proposals-table-desktop,
       .sources-table-desktop {
         display: block !important;
       }
@@ -1415,7 +1413,6 @@ export function renderAdminHtml(): string {
       .recurrences-cards-mobile,
       .places-cards-mobile,
       .qr-cards-mobile,
-      .proposals-cards-mobile,
       .sources-cards-mobile {
         display: none !important;
       }
@@ -2110,6 +2107,412 @@ export function renderAdminHtml(): string {
         grid-template-columns: 1fr;
       }
     }
+
+    /* ==============================================================================
+       REDISEÑO DE PROPUESTAS — LISTA EDITORIAL Y FILTROS COMPACTOS (FASE 1)
+       ============================================================================== */
+    .proposals-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .proposals-header-text h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+    .proposals-header-text p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    .proposals-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .proposals-state-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .prop-state-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 700;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .prop-state-tab:hover {
+      background: var(--bg-subtle);
+      color: var(--text-main);
+    }
+    .prop-state-tab.active {
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-color: #ddd6fe;
+    }
+    .prop-tab-badge {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 10px;
+      background: #f1f5f9;
+      color: var(--text-muted);
+      font-weight: 700;
+    }
+    .prop-state-tab.active .prop-tab-badge {
+      background: var(--primary);
+      color: #ffffff;
+    }
+    .proposals-filter-bar {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.875rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .proposals-filter-main-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.625rem;
+      align-items: center;
+    }
+    .proposal-search-box {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      flex: 1 1 220px;
+      min-width: 180px;
+    }
+    .proposal-search-icon {
+      position: absolute;
+      left: 0.75rem;
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+    .proposal-search-box input {
+      width: 100%;
+      padding: 0.5rem 2rem 0.5rem 2.25rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.875rem;
+      background: var(--bg-page);
+      color: var(--text-main);
+    }
+    .proposal-search-clear {
+      position: absolute;
+      right: 0.5rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      padding: 0.2rem;
+    }
+    .proposals-filter-main-controls select {
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.875rem;
+      background: var(--bg-page);
+      color: var(--text-main);
+      max-width: 220px;
+    }
+    .btn-more-filters {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.5rem 0.85rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .active-filters-dot {
+      color: var(--primary);
+      font-size: 0.875rem;
+      font-weight: 800;
+    }
+    .proposals-more-filters-panel {
+      margin-top: 0.875rem;
+      padding-top: 0.875rem;
+      border-top: 1px solid var(--border);
+    }
+    .more-filters-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+    .filter-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .filter-field label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .filter-field select,
+    .filter-field input {
+      padding: 0.45rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      background: var(--bg-page);
+      color: var(--text-main);
+    }
+    .proposals-active-chips-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+      padding-top: 0.5rem;
+      border-top: 1px dashed var(--border);
+      align-items: center;
+    }
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.2rem 0.55rem;
+      background: var(--primary-soft);
+      color: var(--primary);
+      border: 1px solid #ddd6fe;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .filter-chip-remove {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.875rem;
+      line-height: 1;
+      padding: 0 0.15rem;
+    }
+    .proposals-summary-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding: 0 0.25rem;
+    }
+    .proposals-count-text {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .proposals-editorial-list {
+      display: flex !important;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .proposal-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.875rem 1rem;
+      box-shadow: var(--shadow-sm);
+      display: grid;
+      grid-template-columns: 88px 1fr auto;
+      gap: 1rem;
+      align-items: center;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .proposal-item:hover {
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-md);
+    }
+    .proposal-thumb-box {
+      width: 88px;
+      height: 88px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #f8fafc;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .proposal-thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #f8fafc;
+      transition: transform 0.15s ease;
+    }
+    .proposal-thumb-img:hover {
+      transform: scale(1.03);
+    }
+    .btn-thumb-zoom {
+      position: absolute;
+      bottom: 3px;
+      right: 3px;
+      background: rgba(15, 23, 42, 0.75);
+      color: #ffffff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      padding: 2px 4px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .btn-thumb-zoom:hover {
+      background: rgba(15, 23, 42, 0.95);
+    }
+    .proposal-no-image {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 0.25rem;
+    }
+    .proposal-main-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+    .proposal-title-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .proposal-id-tag {
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: var(--text-dim);
+      background: var(--bg-subtle);
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+    }
+    .proposal-title {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--text-main);
+      line-height: 1.35;
+      margin: 0;
+      word-break: break-word;
+    }
+    .proposal-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+    }
+    .proposal-details-row {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      font-size: 0.8125rem;
+      color: var(--text-main);
+      margin-top: 0.15rem;
+    }
+    .proposal-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      position: relative;
+    }
+    .proposal-menu-wrapper {
+      position: relative;
+    }
+    .proposal-menu-dropdown {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 4px);
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow-lg);
+      padding: 0.35rem 0;
+      min-width: 195px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    .proposal-menu-item {
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: none;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-main);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      transition: background 0.1s ease;
+    }
+    .proposal-menu-item:hover,
+    .proposal-menu-item:focus {
+      background: var(--bg-subtle);
+      outline: none;
+    }
+    .proposal-menu-item.danger {
+      color: #dc2626;
+    }
+    .proposal-menu-item.danger:hover,
+    .proposal-menu-item.danger:focus {
+      background: #fef2f2;
+    }
+    @media (max-width: 768px) {
+      .proposal-item {
+        grid-template-columns: 76px 1fr;
+        gap: 0.75rem;
+        align-items: flex-start;
+      }
+      .proposal-thumb-box {
+        width: 76px;
+        height: 76px;
+      }
+      .proposal-item-actions {
+        grid-column: 1 / -1;
+        width: 100%;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+        justify-content: flex-end;
+      }
+      .proposals-state-tabs {
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .proposals-filter-main-controls select {
+        max-width: 100%;
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
@@ -2727,97 +3130,169 @@ export function renderAdminHtml(): string {
         </div>
       </section>
 
-      <!-- SECCIÓN PROPUESTAS DE BARES (INSTAGRAM) -->
+      <!-- SECCIÓN PROPUESTAS DE CURACIÓN (EDITORIAL REDESIGN) -->
       <section id="section-proposals" style="display:none;">
-        <!-- Pestañas de Curación Editorial (Fase 7) -->
-        <div class="subfilter-pills" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
-          <button type="button" id="prop-tab-all" class="subfilter-pill active" onclick="switchProposalTab('all')" style="font-weight:700;">Todas</button>
-          <button type="button" id="prop-tab-events" class="subfilter-pill" onclick="switchProposalTab('events')" style="font-weight:700;">🎯 1. Propuestas de eventos</button>
-          <button type="button" id="prop-tab-no-time" class="subfilter-pill" onclick="switchProposalTab('no_time')" style="font-weight:700;">⏰ 2. Eventos sin hora</button>
-          <button type="button" id="prop-tab-duplicates" class="subfilter-pill" onclick="switchProposalTab('duplicates')" style="font-weight:700;">⚠️ 3. Posibles duplicados</button>
-          <button type="button" id="prop-tab-venue-content" class="subfilter-pill" onclick="switchProposalTab('venue_content')" style="font-weight:700;">🍸 4. Contenido de venues</button>
-          <button type="button" id="prop-tab-continuous" class="subfilter-pill" onclick="switchProposalTab('continuous')" style="font-weight:700;">🏛️ Eventos continuos</button>
-          <button type="button" id="prop-tab-ateneo" class="subfilter-pill" onclick="switchProposalTab('ateneo')" style="font-weight:700;">🏛️ Programación Ateneo</button>
-          <button type="button" id="prop-tab-biblioteca" class="subfilter-pill" onclick="switchProposalTab('biblioteca')" style="font-weight:700;">📚 Imágenes Biblioteca Pública</button>
-          <button type="button" id="prop-tab-archived" class="subfilter-pill" onclick="switchProposalTab('archived')" style="font-weight:700;">📦 5. Archivadas</button>
-        </div>
-
-        <div class="toolbar" style="flex-wrap:wrap; gap:0.75rem; margin-bottom:1.25rem;">
-          <div style="display:flex; gap:0.5rem; align-items:center;">
-            <button type="button" id="btn-open-import-ig" class="btn-primary" onclick="openImportInstagramModal()" style="display:inline-flex; align-items:center; gap:0.35rem; background:#7c3aed; border-color:#7c3aed; font-weight:700; padding:0.5rem 0.85rem; font-size:0.875rem;">
+        <!-- Cabecera de la sección -->
+        <div class="proposals-header">
+          <div class="proposals-header-text">
+            <h2>Propuestas</h2>
+            <p>Revisa contenido externo antes de crear un evento.</p>
+          </div>
+          <div class="proposals-header-actions">
+            <button type="button" id="btn-refresh-proposals" class="btn-secondary" onclick="loadAdminProposals()" title="Volver a consultar el listado sin ejecutar ingesta" style="display:inline-flex; align-items:center; gap:0.35rem; font-weight:700;">
+              🔄 Actualizar
+            </button>
+            <button type="button" id="btn-open-import-ig" class="btn-primary" onclick="openImportInstagramModal()" style="display:inline-flex; align-items:center; gap:0.35rem; background:#7c3aed; border-color:#7c3aed; font-weight:700;">
               📥 Importar Post de Instagram
             </button>
+            <button type="button" id="prop-tab-ateneo" class="btn-secondary" onclick="filterAteneoProposals()" title="Filtrar propuestas del Ateneo Cultural" style="font-weight:600;">
+              🏛️ Ateneo
+            </button>
+            <button type="button" id="prop-tab-biblioteca" class="btn-secondary" onclick="switchProposalTab('biblioteca')" title="Ir a la revisión de imágenes de Biblioteca Pública" style="font-weight:600;">
+              📚 Imágenes Biblioteca Pública
+            </button>
           </div>
-          <div class="filter-group" style="flex-wrap:wrap; gap:0.5rem; align-items:center;">
-            <select id="proposal-filter-status" onchange="onProposalFilterChange()" aria-label="Filtrar por estado">
-              <option value="pending" selected>Pendientes de revisión</option>
-              <option value="approved_draft">Aprobados como borrador</option>
-              <option value="rejected">Rechazados</option>
-              <option value="archived">Archivados</option>
-              <option value="promotion">Promociones</option>
-              <option value="">Todos los estados</option>
+        </div>
+
+        <!-- Navegación por Estado (3 Pestañas Principales) -->
+        <div class="proposals-state-tabs" role="tablist" aria-label="Navegación por estado de propuestas">
+          <button type="button" id="prop-tab-pending" class="prop-state-tab active" role="tab" aria-selected="true" onclick="switchProposalStateTab('pending')">
+            Pendientes
+          </button>
+          <button type="button" id="prop-tab-resolved" class="prop-state-tab" role="tab" aria-selected="false" onclick="switchProposalStateTab('resolved')">
+            Resueltas
+          </button>
+          <button type="button" id="prop-tab-all" class="prop-state-tab" role="tab" aria-selected="false" onclick="switchProposalStateTab('all')">
+            Todas
+          </button>
+        </div>
+
+        <!-- Barra de Filtros Principal -->
+        <div class="proposals-filter-bar">
+          <div class="proposals-filter-main-controls">
+            <!-- Buscador -->
+            <div class="proposal-search-box">
+              <span class="proposal-search-icon" aria-hidden="true">🔍</span>
+              <input type="text" id="proposal-filter-search" placeholder="Buscar en propuestas cargadas..." title="Filtra sobre las propuestas cargadas en la página actual" aria-label="Buscar en propuestas cargadas" oninput="onProposalSearchInput(this.value)">
+              <button type="button" id="proposal-filter-search-clear" class="proposal-search-clear" onclick="clearProposalSearch()" aria-label="Limpiar búsqueda" style="display:none;">✕</button>
+            </div>
+
+            <!-- Procedencia -->
+            <select id="proposal-filter-source" onchange="onProposalFilterChange()" aria-label="Filtrar por procedencia">
+              <option value="" selected>Todas las procedencias</option>
+              <option value="INSTAGRAM_POST">📷 Instagram (@posts)</option>
+              <option value="WEB_PROGRAMACION">🏛️ Ateneo de Palencia (Web)</option>
             </select>
-            <select id="proposal-filter-price-status" onchange="onProposalFilterChange()" aria-label="Filtrar por estado de precio">
-              <option value="" selected>Todos los estados de precio</option>
-              <option value="NOT_INFORMED">Precio no informado</option>
-              <option value="FREE">Gratis</option>
-              <option value="CHECK_BOX_OFFICE">Consultar en taquilla</option>
-              <option value="CONFIRMED">Precio confirmado</option>
-              <option value="UNKNOWN">Desconocido (UNKNOWN)</option>
-            </select>
+
+            <!-- Local -->
             <select id="proposal-filter-venue" onchange="onProposalFilterChange()" aria-label="Filtrar por local">
               <option value="" selected>Todos los locales</option>
             </select>
-            <select id="proposal-filter-category" onchange="onProposalFilterChange()" aria-label="Filtrar por categoría">
-              <option value="" selected>Todas las categorías</option>
-              <option value="dj_tardeo">DJ / Tardeo</option>
-              <option value="musica_directo">Música en directo</option>
-              <option value="musica">Música general</option>
-              <option value="concierto">Concierto</option>
-              <option value="ocio">Ocio nocturno</option>
-              <option value="fiesta">Fiesta temática</option>
-              <option value="cultura">Cultura</option>
-              <option value="gastronomia">Gastronomía</option>
-              <option value="otros">Otros</option>
-            </select>
-            <select id="proposal-filter-confidence" onchange="onProposalFilterChange()" aria-label="Filtrar por confianza">
-              <option value="" selected>Toda confianza</option>
-              <option value="ALTA">Alta</option>
-              <option value="MEDIA">Media</option>
-              <option value="BAJA">Baja</option>
-            </select>
-            <input type="date" id="proposal-filter-date" onchange="onProposalFilterChange()" aria-label="Filtrar por fecha">
-            <div style="position:relative; display:inline-flex; align-items:center;">
-              <input type="text" id="proposal-filter-search" placeholder="Buscar en propuestas..." aria-label="Buscar en propuestas" oninput="onProposalSearchInput(this.value)" style="padding-right:2rem; min-width:180px;">
-              <button type="button" id="proposal-filter-search-clear" onclick="clearProposalSearch()" aria-label="Limpiar búsqueda" style="position:absolute; right:0.5rem; background:none; border:none; cursor:pointer; color:var(--text-dim); font-size:0.875rem; display:none; padding:0.2rem;">✕</button>
-            </div>
-            <button type="button" id="proposal-filter-clear-btn" class="btn-secondary" onclick="resetProposalFilters()" aria-label="Limpiar filtros" style="display:none; padding:0.5rem 0.75rem; font-size:0.8125rem;">Limpiar filtros</button>
-            <span id="proposals-count-badge" class="badge-tag" style="display:none; font-size:0.8125rem; font-weight:600; padding:0.35rem 0.65rem; background:#f1f5f9; color:var(--text-muted); border-radius:6px;"></span>
+
+            <!-- Botón Más Filtros -->
+            <button type="button" id="btn-toggle-more-filters" class="btn-secondary btn-more-filters" onclick="toggleMoreProposalFilters()" aria-expanded="false" aria-controls="proposals-more-filters-panel">
+              <span>⚙️ Más filtros</span>
+              <span id="more-filters-active-dot" class="active-filters-dot" style="display:none;" aria-label="Filtros avanzados activos">●</span>
+            </button>
+
+            <!-- Botón Limpiar Filtros -->
+            <button type="button" id="proposal-filter-clear-btn" class="btn-secondary" onclick="resetProposalFilters()" aria-label="Limpiar filtros" style="display:none; padding:0.5rem 0.75rem; font-size:0.8125rem;">
+              ✕ Limpiar filtros
+            </button>
           </div>
+
+          <!-- Panel Desplegable: Más Filtros -->
+          <div id="proposals-more-filters-panel" class="proposals-more-filters-panel" style="display:none;">
+            <div class="more-filters-grid">
+              <!-- Estado de revisión detallado -->
+              <div class="filter-field">
+                <label for="proposal-filter-status">Estado de revisión</label>
+                <select id="proposal-filter-status" onchange="onProposalDetailedStatusChange()" aria-label="Estado de revisión detallado">
+                  <option value="pending" selected>Pendientes de revisión</option>
+                  <option value="approved_draft">Aprobados como borrador</option>
+                  <option value="rejected">Rechazados</option>
+                  <option value="archived">Archivados</option>
+                  <option value="promotion">Promociones comerciales</option>
+                  <option value="">Todos los estados</option>
+                </select>
+              </div>
+
+              <!-- Tipo / Clasificación (Pestañas previas conservadas) -->
+              <div class="filter-field">
+                <label for="proposal-filter-classification">Tipo / Clasificación</label>
+                <select id="proposal-filter-classification" onchange="onProposalFilterChange()" aria-label="Tipo o clasificación">
+                  <option value="" selected>Todos los tipos</option>
+                  <option value="events">🎯 Propuestas de eventos estándar</option>
+                  <option value="no_time">⏰ Eventos sin hora</option>
+                  <option value="duplicates">⚠️ Posibles duplicados</option>
+                  <option value="continuous">🏛️ Eventos continuos</option>
+                  <option value="venue_content">🍸 Contenido de local / ambiente</option>
+                  <option value="ateneo">🏛️ Programación Ateneo</option>
+                </select>
+              </div>
+
+              <!-- Categoría -->
+              <div class="filter-field">
+                <label for="proposal-filter-category">Categoría</label>
+                <select id="proposal-filter-category" onchange="onProposalFilterChange()" aria-label="Filtrar por categoría">
+                  <option value="" selected>Todas las categorías</option>
+                  <option value="dj_tardeo">DJ / Tardeo</option>
+                  <option value="musica_directo">Música en directo</option>
+                  <option value="musica">Música general</option>
+                  <option value="concierto">Concierto</option>
+                  <option value="ocio">Ocio nocturno</option>
+                  <option value="fiesta">Fiesta temática</option>
+                  <option value="cultura">Cultura</option>
+                  <option value="gastronomia">Gastronomía</option>
+                  <option value="otros">Otros</option>
+                </select>
+              </div>
+
+              <!-- Estado de precio -->
+              <div class="filter-field">
+                <label for="proposal-filter-price-status">Estado de precio</label>
+                <select id="proposal-filter-price-status" onchange="onProposalFilterChange()" aria-label="Filtrar por estado de precio">
+                  <option value="" selected>Todos los estados de precio</option>
+                  <option value="NOT_INFORMED">Precio no informado</option>
+                  <option value="FREE">Gratis</option>
+                  <option value="CHECK_BOX_OFFICE">Consultar en taquilla</option>
+                  <option value="CONFIRMED">Precio confirmado</option>
+                  <option value="UNKNOWN">Desconocido (UNKNOWN)</option>
+                </select>
+              </div>
+
+              <!-- Confianza -->
+              <div class="filter-field">
+                <label for="proposal-filter-confidence">Confianza</label>
+                <select id="proposal-filter-confidence" onchange="onProposalFilterChange()" aria-label="Filtrar por confianza">
+                  <option value="" selected>Toda confianza</option>
+                  <option value="ALTA">Alta</option>
+                  <option value="MEDIA">Media</option>
+                  <option value="BAJA">Baja</option>
+                </select>
+              </div>
+
+              <!-- Fecha puntual -->
+              <div class="filter-field">
+                <label for="proposal-filter-date">Fecha del evento</label>
+                <input type="date" id="proposal-filter-date" onchange="onProposalFilterChange()" aria-label="Filtrar por fecha puntual">
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Chips / Filtros Activos Eliminables -->
+          <div id="proposals-active-chips-bar" class="proposals-active-chips-bar" style="display:none;"></div>
         </div>
 
-        <!-- Vista Desktop: Tabla de propuestas -->
-        <div class="table-container proposals-table-desktop">
-          <table>
-            <thead>
-              <tr>
-                <th style="width:72px;">Foto</th>
-                <th>Propuesta / Local</th>
-                <th>Fecha / Hora</th>
-                <th>Categoría / Confianza</th>
-                <th>Estado</th>
-                <th style="text-align:right;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="proposals-tbody">
-              <tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas de bares...</td></tr>
-            </tbody>
-          </table>
+        <!-- Barra de Resumen y Contadores -->
+        <div class="proposals-summary-bar">
+          <div id="proposals-count-text" class="proposals-count-text">Cargando propuestas...</div>
+          <span id="proposals-count-badge" class="badge-tag" style="display:none; font-size:0.8125rem; font-weight:600; padding:0.35rem 0.65rem; background:#f1f5f9; color:var(--text-muted); border-radius:6px;"></span>
         </div>
 
-        <!-- Vista Móvil: Tarjetas individuales -->
-        <div id="proposals-cards-container" class="proposals-cards-mobile" style="display:flex; flex-direction:column; gap:1rem;">
-          <div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>
+        <!-- Contenedor Único y Responsive de la Lista Editorial Compacta -->
+        <div id="proposals-cards-container" class="proposals-editorial-list" role="feed" aria-label="Lista de propuestas">
+          <div style="text-align:center; padding:2.5rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>
         </div>
       </section>
 
@@ -4207,6 +4682,23 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
+  <!-- MODAL: VISOR DE IMAGEN / CARTEL DE PROPUESTA (ACCESIBLE Y REUTILIZABLE) -->
+  <div id="modal-proposal-image" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-proposal-image')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-prop-img-title" style="max-width:760px; width:92%; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; background:#ffffff; border-radius:14px;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="flex-shrink:0; border-bottom:1px solid var(--border);">
+        <h3 id="modal-prop-img-title" style="margin:0; font-size:1.1rem; font-weight:800; color:var(--text-main); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Cartel de la propuesta</h3>
+        <button type="button" class="modal-close" onclick="closeModal('modal-proposal-image')" aria-label="Cerrar visor de imagen">✕</button>
+      </div>
+      <div class="modal-body" style="flex:1; overflow:auto; padding:1rem; display:flex; align-items:center; justify-content:center; background:#0f172a; min-height:240px;">
+        <img id="modal-prop-img-element" src="" alt="Cartel ampliado" style="max-width:100%; max-height:72vh; object-fit:contain; border-radius:6px;">
+      </div>
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding:0.75rem 1.25rem;">
+        <a id="modal-prop-img-external" href="#" target="_blank" rel="noopener noreferrer" class="btn-secondary" style="font-size:0.8125rem; font-weight:600; text-decoration:none;">Abrir en pestaña nueva ↗</a>
+        <button type="button" class="btn-primary" onclick="closeModal('modal-proposal-image')" style="font-weight:700;">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: EDITAR METADATOS Y CLASIFICACIÓN DE PROPUESTA -->
   <div id="modal-edit-proposal" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-edit-proposal')">
     <div class="modal-card modal-card-large" role="dialog" aria-modal="true" aria-labelledby="modal-edit-prop-title" style="max-width:760px; width:95%; max-height:92vh; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
@@ -5007,7 +5499,7 @@ export function renderAdminHtml(): string {
         if (pVenueSelect) {
           const curVal = pVenueSelect.value;
           pVenueSelect.innerHTML = '<option value="">Todos los locales</option>' +
-            cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
+            cachedVenues.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + (v.is_active === false ? ' (inactivo)' : '') + '</option>').join('');
           pVenueSelect.value = curVal;
         }
 
@@ -9354,6 +9846,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        if (typeof window.closeAllProposalActionMenus === 'function' && window.activeProposalOpenMenuId !== null) {
+          window.closeAllProposalActionMenus();
+          e.stopPropagation();
+          return;
+        }
         const activeModal = document.querySelector('.modal-overlay.active');
         if (activeModal) {
           // Bloquear Escape si hay una petición de reasignación en vuelo
@@ -9373,6 +9870,17 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           closeModal(activeModal.id);
         } else {
           toggleMobileDrawer(false);
+        }
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (window.activeProposalOpenMenuId !== null) {
+        const target = e.target;
+        if (!target || !target.closest || !target.closest('.proposal-menu-wrapper')) {
+          if (typeof window.closeAllProposalActionMenus === 'function') {
+            window.closeAllProposalActionMenus();
+          }
         }
       }
     });
@@ -10046,159 +10554,37 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     window.setRouteToArchiveId = function(id) { routeToArchiveId = id; };
 
     // ==============================================================================
-    // GESTIÓN DE PROPUESTAS DE BARES (INSTAGRAM)
+    // GESTIÓN DE PROPUESTAS DE BARES (EDITORIAL REDESIGN)
     // ==============================================================================
     let cachedProposals = [];
     let proposalSearchQuery = '';
-    let currentProposalTab = 'all';
+    let currentProposalTab = 'all'; // compatibilidad retroactiva
+    let currentProposalStateTab = 'pending'; // 'pending' | 'resolved' | 'all'
+    Object.defineProperty(window, 'currentProposalStateTab', {
+      get: () => currentProposalStateTab,
+      set: (val) => { currentProposalStateTab = val; },
+      configurable: true
+    });
+    let isMoreFiltersOpen = false;
+    let activeProposalOpenMenuId = null;
+    window.activeProposalOpenMenuId = null;
+    let adminProposalsRequestId = 0;
 
-    window.switchProposalTab = function(tab) {
-      currentProposalTab = tab;
-      const tabIds = {
-        all: 'prop-tab-all',
-        events: 'prop-tab-events',
-        no_time: 'prop-tab-no-time',
-        duplicates: 'prop-tab-duplicates',
-        venue_content: 'prop-tab-venue-content',
-        continuous: 'prop-tab-continuous',
-        ateneo: 'prop-tab-ateneo',
-        biblioteca: 'prop-tab-biblioteca',
-        archived: 'prop-tab-archived'
-      };
-      Object.keys(tabIds).forEach(t => {
-        const el = document.getElementById(tabIds[t]);
-        if (el) {
-          if (t === tab) {
-            el.classList.add('active');
-            el.style.background = '#059669';
-            el.style.color = '#ffffff';
-          } else {
-            el.classList.remove('active');
-            el.style.background = '';
-            el.style.color = '';
-          }
-        }
-      });
-      if (tab === 'biblioteca') {
-        loadBibliotecaImageProposals();
-      } else {
-        renderProposalsList(cachedProposals);
-      }
-    };
-
-    window.onProposalFilterChange = function() {
-      loadAdminProposals();
-    };
-
-    window.onProposalSearchInput = function(val) {
-      proposalSearchQuery = (val || '').trim().toLowerCase();
-      const clearBtn = document.getElementById('proposal-filter-search-clear');
-      if (clearBtn) clearBtn.style.display = proposalSearchQuery ? 'block' : 'none';
-      renderProposalsList(cachedProposals);
-    };
-
-    window.clearProposalSearch = function() {
-      const searchInput = document.getElementById('proposal-filter-search');
-      if (searchInput) searchInput.value = '';
-      window.onProposalSearchInput('');
-    };
-
-    window.resetProposalFilters = function() {
-      const statusEl = document.getElementById('proposal-filter-status');
-      const venueEl = document.getElementById('proposal-filter-venue');
-      const catEl = document.getElementById('proposal-filter-category');
-      const priceStatusEl = document.getElementById('proposal-filter-price-status');
-      const confEl = document.getElementById('proposal-filter-confidence');
-      const dateEl = document.getElementById('proposal-filter-date');
-      const searchEl = document.getElementById('proposal-filter-search');
-      const clearSearchBtn = document.getElementById('proposal-filter-search-clear');
-      const clearAllBtn = document.getElementById('proposal-filter-clear-btn');
-
-      if (statusEl) statusEl.value = 'pending';
-      if (venueEl) venueEl.value = '';
-      if (catEl) catEl.value = '';
-      if (priceStatusEl) priceStatusEl.value = '';
-      if (confEl) confEl.value = '';
-      if (dateEl) dateEl.value = '';
-      if (searchEl) searchEl.value = '';
-      if (clearSearchBtn) clearSearchBtn.style.display = 'none';
-      if (clearAllBtn) clearAllBtn.style.display = 'none';
-
-      proposalSearchQuery = '';
-      currentProposalTab = 'all';
-      switchProposalTab('all');
-      loadAdminProposals();
-    };
-
-    window.loadAdminProposals = async function() {
-      const tbody = document.getElementById('proposals-tbody');
-      const cards = document.getElementById('proposals-cards-container');
-      const badge = document.getElementById('proposals-count-badge');
-      const clearAllBtn = document.getElementById('proposal-filter-clear-btn');
-
-      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas de bares...</td></tr>';
-      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>';
-
-      const status = document.getElementById('proposal-filter-status')?.value || '';
-      const venueId = document.getElementById('proposal-filter-venue')?.value || '';
-      const category = document.getElementById('proposal-filter-category')?.value || '';
-      const priceStatus = document.getElementById('proposal-filter-price-status')?.value || '';
-      const confidence = document.getElementById('proposal-filter-confidence')?.value || '';
-      const date = document.getElementById('proposal-filter-date')?.value || '';
-
-      const isFiltered = status !== 'pending' || venueId || category || priceStatus || confidence || date || proposalSearchQuery;
-      if (clearAllBtn) clearAllBtn.style.display = isFiltered ? 'inline-block' : 'none';
-
-      const params = new URLSearchParams();
-      if (status) params.append('review_status', status);
-      if (venueId) params.append('venue_id', venueId);
-      if (category) params.append('category', category);
-      if (priceStatus) params.append('price_status', priceStatus);
-      if (confidence) params.append('confidence', confidence);
-      if (date) params.append('date', date);
-
-      try {
-        const res = await apiFetch('/api/v1/admin/proposals?' + params.toString());
-        const data = await res.json();
-        cachedProposals = data.proposals || [];
-        renderProposalsList(cachedProposals);
-        updateCurationCounts();
-      } catch (err) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-danger);">Error al cargar propuestas: ' + escapeHtml(err.message) + '</td></tr>';
-        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas.</div>';
-      }
-    };
-
-    window.confirmLinkProposal = async function(propId, targetEventId) {
-      if (!confirm('¿Deseas vincular la propuesta #' + propId + ' al evento existente #' + targetEventId + '? Esta acción NO creará un evento duplicado.')) {
-        return;
-      }
-      try {
-        const res = await apiFetch('/api/v1/admin/proposals/' + propId + '/link-event', {
-          method: 'POST',
-          body: JSON.stringify({ target_event_id: targetEventId })
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          alert('Error al vincular: ' + (data.message || res.statusText));
-          return;
-        }
-        alert(data.message || 'Propuesta vinculada con éxito.');
-        loadAdminProposals();
-      } catch (err) {
-        alert('Error de conexión: ' + err.message);
-      }
-    };
+    function isContinuousProposal(proposal) {
+      if (!proposal) return false;
+      return proposal.classification === 'EVENTO_CONTINUO' || Boolean(proposal.proposed_end_date && proposal.proposed_end_date !== proposal.proposed_date);
+    }
+    window.isContinuousProposal = isContinuousProposal;
 
     function getProposalClassificationBadge(cls) {
       if (cls === 'CONTENIDO_VENUE') {
-        return '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">🍸 CONTENIDO VENUE</span>';
+        return '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">🍸 CONTENIDO LOCAL</span>';
       } else if (cls === 'EVENTO_CONTINUO') {
         return '<span class="badge-tag" style="background:#ede9fe; color:#6d28d9; border:1px solid #c4b5fd; font-weight:700;">🏛️ EVENTO CONTINUO</span>';
       } else if (cls === 'EVENTO_POSIBLE_SIN_HORA') {
         return '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">⏰ SIN HORA</span>';
       } else if (cls === 'DUPLICADO_POSIBLE') {
-        return '<span class="badge-tag" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-weight:700;">⚠️ DUPLICADO POSIBLE</span>';
+        return '<span class="badge-tag" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-weight:700;">⚠️ POSIBLE DUPLICADO</span>';
       } else if (cls === 'EVENTO_POSIBLE') {
         return '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🎯 EVENTO POSIBLE</span>';
       }
@@ -10225,298 +10611,689 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       return text;
     }
 
-    function isContinuousProposal(proposal) {
-      if (!proposal) return false;
-      return proposal.classification === 'EVENTO_CONTINUO' || Boolean(proposal.proposed_end_date && proposal.proposed_end_date !== proposal.proposed_date);
-    }
-    window.isContinuousProposal = isContinuousProposal;
+    window.switchProposalStateTab = function(tab) {
+      currentProposalStateTab = tab;
+      syncStateTabButtons();
 
-    window.renderProposalsList = function(proposals) {
-      const tbody = document.getElementById('proposals-tbody');
-      const cards = document.getElementById('proposals-cards-container');
-      const badge = document.getElementById('proposals-count-badge');
-
-      let list = proposals;
-
-      // Filtrado por pestaña de curación (Fase 7)
-      if (currentProposalTab === 'events') {
-        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE' || p.classification === 'NUEVA_PROPUESTA') && p.review_status === 'pending');
-      } else if (currentProposalTab === 'no_time') {
-        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) && p.classification !== 'CONTENIDO_VENUE' && !isContinuousProposal(p) && p.review_status === 'pending');
-      } else if (currentProposalTab === 'duplicates') {
-        list = list.filter(p => p.classification === 'DUPLICADO_POSIBLE' || !!p.matched_event_id);
-      } else if (currentProposalTab === 'venue_content') {
-        list = list.filter(p => p.classification === 'CONTENIDO_VENUE');
-      } else if (currentProposalTab === 'continuous') {
-        list = list.filter(p => isContinuousProposal(p));
-      } else if (currentProposalTab === 'ateneo') {
-        list = list.filter(p => p.source_type === 'WEB_PROGRAMACION' || p.venue_id === 10149);
-      } else if (currentProposalTab === 'archived') {
-        list = list.filter(p => p.review_status === 'archived' || p.review_status === 'rejected');
+      const statusEl = document.getElementById('proposal-filter-status');
+      if (tab === 'pending') {
+        if (statusEl) statusEl.value = 'pending';
+      } else if (tab === 'resolved') {
+        if (statusEl && (statusEl.value === 'pending' || !statusEl.value)) {
+          statusEl.value = '';
+        }
+      } else if (tab === 'all') {
+        if (statusEl && statusEl.value === 'pending') {
+          statusEl.value = '';
+        }
       }
 
+      loadAdminProposals();
+    };
+
+    function syncStateTabButtons() {
+      const tabPending = document.getElementById('prop-tab-pending');
+      const tabResolved = document.getElementById('prop-tab-resolved');
+      const tabAll = document.getElementById('prop-tab-all');
+
+      if (tabPending && tabPending.classList) {
+        if (currentProposalStateTab === 'pending') {
+          if (typeof tabPending.classList.add === 'function') tabPending.classList.add('active');
+        } else {
+          if (typeof tabPending.classList.remove === 'function') tabPending.classList.remove('active');
+        }
+        if (typeof tabPending.setAttribute === 'function') tabPending.setAttribute('aria-selected', currentProposalStateTab === 'pending' ? 'true' : 'false');
+      }
+      if (tabResolved && tabResolved.classList) {
+        if (currentProposalStateTab === 'resolved') {
+          if (typeof tabResolved.classList.add === 'function') tabResolved.classList.add('active');
+        } else {
+          if (typeof tabResolved.classList.remove === 'function') tabResolved.classList.remove('active');
+        }
+        if (typeof tabResolved.setAttribute === 'function') tabResolved.setAttribute('aria-selected', currentProposalStateTab === 'resolved' ? 'true' : 'false');
+      }
+      if (tabAll && tabAll.classList) {
+        if (currentProposalStateTab === 'all') {
+          if (typeof tabAll.classList.add === 'function') tabAll.classList.add('active');
+        } else {
+          if (typeof tabAll.classList.remove === 'function') tabAll.classList.remove('active');
+        }
+        if (typeof tabAll.setAttribute === 'function') tabAll.setAttribute('aria-selected', currentProposalStateTab === 'all' ? 'true' : 'false');
+      }
+    }
+
+    window.onProposalDetailedStatusChange = function() {
+      const statusEl = document.getElementById('proposal-filter-status');
+      const val = statusEl ? statusEl.value : '';
+
+      if (val === 'pending') {
+        if (currentProposalStateTab !== 'pending') {
+          currentProposalStateTab = 'pending';
+          syncStateTabButtons();
+        }
+      } else if (val === 'approved_draft' || val === 'rejected' || val === 'archived' || val === 'promotion') {
+        if (currentProposalStateTab !== 'resolved') {
+          currentProposalStateTab = 'resolved';
+          syncStateTabButtons();
+        }
+      } else if (val === '') {
+        if (currentProposalStateTab === 'pending') {
+          currentProposalStateTab = 'all';
+          syncStateTabButtons();
+        }
+      }
+
+      loadAdminProposals();
+    };
+
+    window.filterAteneoProposals = function() {
+      const venueEl = document.getElementById('proposal-filter-venue');
+      if (venueEl) venueEl.value = '';
+      const dateEl = document.getElementById('proposal-filter-date');
+      if (dateEl) dateEl.value = '';
+      const classEl = document.getElementById('proposal-filter-classification');
+      if (classEl) classEl.value = '';
+      const sourceEl = document.getElementById('proposal-filter-source');
+      if (sourceEl) sourceEl.value = 'WEB_PROGRAMACION';
+      return loadAdminProposals();
+    };
+
+    window.switchProposalTab = function(tab) {
+      currentProposalTab = tab;
+      const classEl = document.getElementById('proposal-filter-classification');
+      const sourceEl = document.getElementById('proposal-filter-source');
+
+      if (tab === 'all') {
+        currentProposalStateTab = 'all';
+        syncStateTabButtons();
+        if (classEl) classEl.value = '';
+        if (sourceEl) sourceEl.value = '';
+        return loadAdminProposals();
+      } else if (tab === 'archived') {
+        currentProposalStateTab = 'resolved';
+        syncStateTabButtons();
+        const statusEl = document.getElementById('proposal-filter-status');
+        if (statusEl) statusEl.value = 'archived';
+        return loadAdminProposals();
+      } else if (tab === 'biblioteca') {
+        if (typeof loadBibliotecaImageProposals === 'function') loadBibliotecaImageProposals();
+        return;
+      } else if (tab === 'ateneo') {
+        return filterAteneoProposals();
+      } else {
+        if (classEl) classEl.value = tab;
+        if (sourceEl && sourceEl.value === 'WEB_PROGRAMACION') sourceEl.value = '';
+        renderProposalsList(cachedProposals);
+      }
+    };
+
+    window.toggleMoreProposalFilters = function() {
+      const panel = document.getElementById('proposals-more-filters-panel');
+      const btn = document.getElementById('btn-toggle-more-filters');
+      if (!panel || !btn) return;
+      isMoreFiltersOpen = !isMoreFiltersOpen;
+      panel.style.display = isMoreFiltersOpen ? 'block' : 'none';
+      btn.setAttribute('aria-expanded', isMoreFiltersOpen ? 'true' : 'false');
+    };
+
+    window.onProposalFilterChange = function() {
+      loadAdminProposals();
+    };
+
+    window.onProposalSearchInput = function(val) {
+      proposalSearchQuery = (val || '').trim().toLowerCase();
+      const clearBtn = document.getElementById('proposal-filter-search-clear');
+      if (clearBtn) clearBtn.style.display = proposalSearchQuery ? 'inline-block' : 'none';
+      renderProposalsList(cachedProposals);
+    };
+
+    window.clearProposalSearch = function() {
+      const searchInput = document.getElementById('proposal-filter-search');
+      if (searchInput) searchInput.value = '';
+      window.onProposalSearchInput('');
+      if (searchInput && typeof searchInput.focus === 'function') searchInput.focus();
+    };
+
+    window.resetProposalFilters = function() {
+      currentProposalStateTab = 'pending';
+      syncStateTabButtons();
+
+      const statusEl = document.getElementById('proposal-filter-status');
+      const venueEl = document.getElementById('proposal-filter-venue');
+      const catEl = document.getElementById('proposal-filter-category');
+      const priceStatusEl = document.getElementById('proposal-filter-price-status');
+      const confEl = document.getElementById('proposal-filter-confidence');
+      const dateEl = document.getElementById('proposal-filter-date');
+      const searchEl = document.getElementById('proposal-filter-search');
+      const sourceEl = document.getElementById('proposal-filter-source');
+      const classEl = document.getElementById('proposal-filter-classification');
+      const clearSearchBtn = document.getElementById('proposal-filter-search-clear');
+      const clearAllBtn = document.getElementById('proposal-filter-clear-btn');
+      const moreFiltersPanel = document.getElementById('proposals-more-filters-panel');
+      const moreFiltersBtn = document.getElementById('btn-toggle-more-filters');
+      const moreFiltersDot = document.getElementById('more-filters-active-dot');
+
+      if (statusEl) statusEl.value = 'pending';
+      if (venueEl) venueEl.value = '';
+      if (catEl) catEl.value = '';
+      if (priceStatusEl) priceStatusEl.value = '';
+      if (confEl) confEl.value = '';
+      if (dateEl) dateEl.value = '';
+      if (searchEl) searchEl.value = '';
+      if (sourceEl) sourceEl.value = '';
+      if (classEl) classEl.value = '';
+      if (clearSearchBtn) clearSearchBtn.style.display = 'none';
+      if (clearAllBtn) clearAllBtn.style.display = 'none';
+      if (moreFiltersDot) moreFiltersDot.style.display = 'none';
+
+      isMoreFiltersOpen = false;
+      if (moreFiltersPanel) moreFiltersPanel.style.display = 'none';
+      if (moreFiltersBtn) moreFiltersBtn.setAttribute('aria-expanded', 'false');
+
+      proposalSearchQuery = '';
+      currentProposalTab = 'all';
+
+      loadAdminProposals();
+    };
+
+    function renderActiveFilterChips() {
+      const container = document.getElementById('proposals-active-chips-bar');
+      if (!container) return;
+
+      const chips = [];
+
       if (proposalSearchQuery) {
+        chips.push({ key: 'search', label: 'Búsqueda: "' + escapeHtml(proposalSearchQuery) + '"' });
+      }
+
+      const sourceEl = document.getElementById('proposal-filter-source');
+      if (sourceEl && sourceEl.value) {
+        const txt = (sourceEl.options && sourceEl.selectedIndex >= 0 && sourceEl.options[sourceEl.selectedIndex]?.text) || sourceEl.value;
+        chips.push({ key: 'source', label: 'Procedencia: ' + escapeHtml(txt) });
+      }
+
+      const venueEl = document.getElementById('proposal-filter-venue');
+      if (venueEl && venueEl.value) {
+        const txt = (venueEl.options && venueEl.selectedIndex >= 0 && venueEl.options[venueEl.selectedIndex]?.text) || ('Local #' + venueEl.value);
+        chips.push({ key: 'venue', label: 'Local: ' + escapeHtml(txt) });
+      }
+
+      const classEl = document.getElementById('proposal-filter-classification');
+      if (classEl && classEl.value) {
+        const txt = (classEl.options && classEl.selectedIndex >= 0 && classEl.options[classEl.selectedIndex]?.text) || classEl.value;
+        chips.push({ key: 'classification', label: 'Tipo: ' + escapeHtml(txt) });
+      }
+
+      const catEl = document.getElementById('proposal-filter-category');
+      if (catEl && catEl.value) {
+        const txt = (catEl.options && catEl.selectedIndex >= 0 && catEl.options[catEl.selectedIndex]?.text) || catEl.value;
+        chips.push({ key: 'category', label: 'Cat: ' + escapeHtml(txt) });
+      }
+
+      const priceEl = document.getElementById('proposal-filter-price-status');
+      if (priceEl && priceEl.value) {
+        const txt = (priceEl.options && priceEl.selectedIndex >= 0 && priceEl.options[priceEl.selectedIndex]?.text) || priceEl.value;
+        chips.push({ key: 'price_status', label: 'Precio: ' + escapeHtml(txt) });
+      }
+
+      const confEl = document.getElementById('proposal-filter-confidence');
+      if (confEl && confEl.value) {
+        chips.push({ key: 'confidence', label: 'Confianza: ' + escapeHtml(confEl.value) });
+      }
+
+      const dateEl = document.getElementById('proposal-filter-date');
+      if (dateEl && dateEl.value) {
+        chips.push({ key: 'date', label: 'Fecha: ' + escapeHtml(dateEl.value) });
+      }
+
+      const statusEl = document.getElementById('proposal-filter-status');
+      if (statusEl && statusEl.value && ((currentProposalStateTab === 'pending' && statusEl.value !== 'pending') || (currentProposalStateTab === 'resolved' && statusEl.value) || (currentProposalStateTab === 'all' && statusEl.value))) {
+        const txt = (statusEl.options && statusEl.selectedIndex >= 0 && statusEl.options[statusEl.selectedIndex]?.text) || statusEl.value;
+        chips.push({ key: 'status', label: 'Estado: ' + escapeHtml(txt) });
+      }
+
+      if (chips.length === 0) {
+        container.style.display = 'none';
+        container.innerHTML = '';
+        return;
+      }
+
+      container.style.display = 'flex';
+      container.innerHTML = '<span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-right:0.25rem;">Filtros activos:</span>' +
+        chips.map(c => '<span class="filter-chip">' +
+          c.label +
+          '<button type="button" class="filter-chip-remove" onclick="removeProposalFilterChip(&quot;' + c.key + '&quot;)" aria-label="Eliminar filtro ' + escapeHtml(c.label) + '">✕</button>' +
+        '</span>').join('');
+    }
+
+    window.removeProposalFilterChip = function(key) {
+      if (key === 'search') {
+        clearProposalSearch();
+      } else if (key === 'source') {
+        const el = document.getElementById('proposal-filter-source');
+        if (el) el.value = '';
+        renderProposalsList(cachedProposals);
+      } else if (key === 'venue') {
+        const el = document.getElementById('proposal-filter-venue');
+        if (el) el.value = '';
+        loadAdminProposals();
+      } else if (key === 'classification') {
+        const el = document.getElementById('proposal-filter-classification');
+        if (el) el.value = '';
+        renderProposalsList(cachedProposals);
+      } else if (key === 'category') {
+        const el = document.getElementById('proposal-filter-category');
+        if (el) el.value = '';
+        loadAdminProposals();
+      } else if (key === 'price_status') {
+        const el = document.getElementById('proposal-filter-price-status');
+        if (el) el.value = '';
+        loadAdminProposals();
+      } else if (key === 'confidence') {
+        const el = document.getElementById('proposal-filter-confidence');
+        if (el) el.value = '';
+        loadAdminProposals();
+      } else if (key === 'date') {
+        const el = document.getElementById('proposal-filter-date');
+        if (el) el.value = '';
+        loadAdminProposals();
+      } else if (key === 'status') {
+        const el = document.getElementById('proposal-filter-status');
+        if (el) {
+          el.value = currentProposalStateTab === 'pending' ? 'pending' : '';
+        }
+        loadAdminProposals();
+      }
+    };
+
+    window.openProposalImageModal = function(id) {
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!prop || !prop.image_url) return;
+
+      const imgUrl = String(prop.image_url).trim();
+      if (!imgUrl.startsWith('https://') && !imgUrl.startsWith('http://') && !imgUrl.startsWith('data:image/')) {
+        return;
+      }
+
+      const imgEl = document.getElementById('modal-prop-img-element');
+      const titleEl = document.getElementById('modal-prop-img-title');
+      const extLink = document.getElementById('modal-prop-img-external');
+      if (imgEl) {
+        imgEl.src = imgUrl;
+        imgEl.alt = 'Cartel de ' + (prop.title || 'Propuesta #' + prop.id);
+      }
+      if (titleEl) {
+        titleEl.textContent = 'Cartel: ' + (prop.title || '#' + prop.id);
+        try { titleEl.innerText = titleEl.textContent; } catch (_) {}
+      }
+      if (extLink) {
+        extLink.href = imgUrl;
+      }
+      openModal('modal-proposal-image');
+    };
+
+    window.toggleProposalActionsMenu = function(id, evt) {
+      if (evt && typeof evt.stopPropagation === 'function') evt.stopPropagation();
+      const isAlreadyOpen = (activeProposalOpenMenuId === id);
+      window.closeAllProposalActionMenus();
+      if (!isAlreadyOpen) {
+        const menu = document.getElementById('prop-menu-dropdown-' + id);
+        const trigger = document.getElementById('prop-menu-trigger-' + id);
+        if (menu) menu.style.display = 'flex';
+        if (trigger && typeof trigger.setAttribute === 'function') trigger.setAttribute('aria-expanded', 'true');
+        activeProposalOpenMenuId = id;
+        window.activeProposalOpenMenuId = id;
+        if (menu && typeof menu.querySelector === 'function') {
+          const firstItem = menu.querySelector('button, a');
+          if (firstItem && typeof firstItem.focus === 'function') firstItem.focus();
+        }
+      }
+    };
+
+    window.closeAllProposalActionMenus = function() {
+      const menus = document.querySelectorAll('.proposal-menu-dropdown');
+      menus.forEach(m => m.style.display = 'none');
+      const triggers = document.querySelectorAll('.btn-menu-trigger');
+      triggers.forEach(t => t.setAttribute('aria-expanded', 'false'));
+      if (activeProposalOpenMenuId !== null) {
+        const openMenu = document.getElementById('prop-menu-dropdown-' + activeProposalOpenMenuId);
+        if (openMenu) openMenu.style.display = 'none';
+        const trigger = document.getElementById('prop-menu-trigger-' + activeProposalOpenMenuId);
+        if (trigger) {
+          if (typeof trigger.setAttribute === 'function') trigger.setAttribute('aria-expanded', 'false');
+          if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.proposal-menu-dropdown')) {
+            trigger.focus();
+          }
+        }
+        activeProposalOpenMenuId = null;
+        window.activeProposalOpenMenuId = null;
+      }
+    };
+
+    window.loadAdminProposals = async function() {
+      const currentReqId = ++adminProposalsRequestId;
+      const cards = document.getElementById('proposals-cards-container');
+      const countText = document.getElementById('proposals-count-text');
+      const badge = document.getElementById('proposals-count-badge');
+      const clearAllBtn = document.getElementById('proposal-filter-clear-btn');
+
+      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>';
+      if (countText) countText.innerText = 'Consultando propuestas...';
+
+      const status = document.getElementById('proposal-filter-status')?.value || '';
+      const venueId = document.getElementById('proposal-filter-venue')?.value || '';
+      const category = document.getElementById('proposal-filter-category')?.value || '';
+      const priceStatus = document.getElementById('proposal-filter-price-status')?.value || '';
+      const confidence = document.getElementById('proposal-filter-confidence')?.value || '';
+      const date = document.getElementById('proposal-filter-date')?.value || '';
+      const source = document.getElementById('proposal-filter-source')?.value || '';
+      const classification = document.getElementById('proposal-filter-classification')?.value || '';
+
+      const isFiltered = (currentProposalStateTab !== 'pending') || (status && status !== 'pending') || venueId || category || priceStatus || confidence || date || source || classification || proposalSearchQuery;
+      if (clearAllBtn) clearAllBtn.style.display = isFiltered ? 'inline-block' : 'none';
+
+      const moreFiltersActiveDot = document.getElementById('more-filters-active-dot');
+      const hasAdvancedFilters = Boolean((status && status !== 'pending' && currentProposalStateTab === 'pending') || category || priceStatus || confidence || date || classification);
+      if (moreFiltersActiveDot) moreFiltersActiveDot.style.display = hasAdvancedFilters ? 'inline' : 'none';
+
+      const params = new URLSearchParams();
+      if (currentProposalStateTab === 'pending') {
+        params.append('review_status', 'pending');
+      } else if (currentProposalStateTab === 'resolved') {
+        if (status && status !== 'pending') {
+          params.append('review_status', status);
+        }
+      } else if (currentProposalStateTab === 'all') {
+        if (status) params.append('review_status', status);
+      }
+
+      if (venueId && !isNaN(parseInt(venueId, 10))) params.append('venue_id', venueId);
+      if (category) params.append('category', category);
+      if (priceStatus) params.append('price_status', priceStatus);
+      if (confidence) params.append('confidence', confidence);
+      if (date) params.append('date', date);
+      if (classification === 'EVENTO_POSIBLE' || classification === 'EVENTO_CONTINUO' || classification === 'CONTENIDO_VENUE' || classification === 'DUPLICADO_POSIBLE') {
+        params.append('classification', classification);
+      }
+
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals?' + params.toString());
+        if (currentReqId !== adminProposalsRequestId) return;
+        const data = await res.json();
+        if (currentReqId !== adminProposalsRequestId) return;
+        cachedProposals = data.proposals || [];
+        renderProposalsList(cachedProposals);
+      } catch (err) {
+        if (currentReqId !== adminProposalsRequestId) return;
+        const errMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);"><strong>Error al cargar propuestas:</strong> ' + escapeHtml(err.message) + '</div>';
+        if (cards) cards.innerHTML = errMsg;
+        if (countText) countText.innerText = 'Error al cargar';
+      }
+    };
+
+    window.confirmLinkProposal = async function(propId, targetEventId) {
+      if (!confirm('¿Deseas vincular la propuesta #' + propId + ' al evento existente #' + targetEventId + '? Esta acción NO creará un evento duplicado.')) {
+        return;
+      }
+      try {
+        const res = await apiFetch('/api/v1/admin/proposals/' + propId + '/link-event', {
+          method: 'POST',
+          body: JSON.stringify({ target_event_id: targetEventId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          alert('Error al vincular: ' + (data.message || res.statusText));
+          return;
+        }
+        alert(data.message || 'Propuesta vinculada con éxito.');
+        loadAdminProposals();
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    };
+
+    function renderProposalEditorialItem(p) {
+      const isContinuous = isContinuousProposal(p);
+
+      const statusBadge = p.review_status === 'pending'
+        ? '<span class="badge-status badge-draft" style="background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe; font-size:0.75rem; font-weight:700;">Pendiente</span>'
+        : (p.review_status === 'approved_draft'
+          ? '<span class="badge-status badge-published" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-size:0.75rem; font-weight:700;">✓ Borrador Creado</span>'
+          : (p.review_status === 'rejected'
+            ? '<span class="badge-status badge-danger" style="background:#fef2f2; color:#991b1b; border:1px solid #fecaca; font-size:0.75rem; font-weight:700;">Rechazado</span>'
+            : (p.review_status === 'promotion'
+              ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-size:0.75rem; font-weight:700;">Promoción</span>'
+              : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-size:0.75rem; font-weight:700;">Archivado</span>')));
+
+      const isInstagram = (p.source_type === 'INSTAGRAM_POST') || (p.source_url && p.source_url.includes('instagram.com'));
+      const sourceLabel = (p.source_type === 'WEB_PROGRAMACION' || p.venue_id === 10149)
+        ? '<span style="display:inline-flex; align-items:center; gap:0.25rem;">🏛️ Ateneo (Web)</span>'
+        : (isInstagram
+          ? '<span style="display:inline-flex; align-items:center; gap:0.25rem;">📷 Instagram</span>'
+          : '<span style="display:inline-flex; align-items:center; gap:0.25rem;">🌐 Web original</span>');
+      const sourceLinkText = isInstagram ? '↗ Ver en Instagram' : '↗ Ver publicación original';
+
+      const dateFormatted = isContinuous
+        ? '<span style="color:#6d28d9; font-weight:700;">Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') + '</span>'
+        : (p.proposed_date ? '<span>📅 ' + escapeHtml(p.proposed_date) + '</span>' : '<span style="color:#d97706; font-weight:600;">Sin fecha</span>');
+
+      const timeFormatted = isContinuous
+        ? (p.proposed_time
+            ? '<span style="color:#6d28d9; font-weight:600;">De ' + escapeHtml(p.proposed_time) + (p.proposed_end_time ? ' a ' + escapeHtml(p.proposed_end_time) : '') + '</span>'
+            : (p.proposed_end_time
+                ? '<span style="color:#6d28d9; font-weight:600;">De 08:00 a ' + escapeHtml(p.proposed_end_time) + '</span>'
+                : '<span style="color:#6d28d9; font-weight:600;">De 08:00 a 18:00</span>'))
+        : (p.proposed_time
+            ? '<span style="font-weight:700;">⏰ ' + escapeHtml(p.proposed_time) + ' h</span>'
+            : '<span style="color:#d97706; font-weight:600;">⏰ Hora por completar</span>');
+
+      const priceFormatted = '<span style="font-size:0.8125rem;">💶 ' + formatProposalPrice(p.price, p.price_status, p.price_note) + '</span>';
+
+      const venueDisplay = p.venue_name
+        ? '📍 <strong>' + escapeHtml(p.venue_name) + '</strong>'
+        : (p.venue_id ? '📍 <strong>Local #' + p.venue_id + '</strong>' : '<span style="color:#b45309; font-weight:700;">⚠️ Local sin asignar</span>');
+
+      const originAccount = p.instagram_username
+        ? '<span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>'
+        : '';
+
+      const confBadge = p.confidence === 'ALTA'
+        ? '<span class="badge-tag" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-size:0.7rem; font-weight:700;">ALTA</span>'
+        : (p.confidence === 'MEDIA'
+          ? '<span class="badge-tag" style="background:#fffbeb; color:#92400e; border:1px solid #fde68a; font-size:0.7rem; font-weight:700;">MEDIA</span>'
+          : '<span class="badge-tag" style="background:#f3f4f6; color:#4b5563; border:1px solid #e5e7eb; font-size:0.7rem;">BAJA</span>');
+
+      let thumbHtml = '';
+      if (p.image_url) {
+        thumbHtml = '<div class="proposal-thumb-box">' +
+          '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" class="proposal-thumb-img" onclick="openProposalImageModal(' + p.id + ')" role="button" tabindex="0" onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();openProposalImageModal(' + p.id + ');}">' +
+          '<button type="button" class="btn-thumb-zoom" onclick="openProposalImageModal(' + p.id + ')" aria-label="Ampliar cartel de ' + escapeHtml(p.title) + '" title="Ampliar imagen">🔍</button>' +
+        '</div>';
+      } else {
+        thumbHtml = '<div class="proposal-thumb-box"><div class="proposal-no-image"><span aria-hidden="true" style="font-size:1.25rem;">🖼️</span><div>Sin imagen</div></div></div>';
+      }
+
+      let matchAlertHtml = '';
+      if (p.matched_event_id) {
+        matchAlertHtml = '<div style="margin-top:0.35rem; padding:0.35rem 0.6rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; color:#991b1b; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">' +
+          '<span><strong>⚠️ Posible duplicado:</strong> Evento #' + p.matched_event_id + (p.matched_event_title ? ' — ' + escapeHtml(p.matched_event_title) : '') + ' [' + escapeHtml(p.match_level || 'POSIBLE') + ']</span>' +
+          (p.review_status === 'pending' ? '<button type="button" class="btn-sm btn-secondary" onclick="confirmLinkProposal(' + p.id + ', ' + p.matched_event_id + ')" style="padding:0.15rem 0.45rem; font-size:0.7rem; background:#fee2e2; border-color:#fca5a5; font-weight:700;">🔗 Vincular</button>' : '') +
+        '</div>';
+      }
+
+      let rejectionHtml = '';
+      if (p.rejection_reason) {
+        rejectionHtml = '<div style="margin-top:0.35rem; padding:0.35rem 0.6rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; color:#dc2626;"><strong>Motivo rechazo:</strong> ' + escapeHtml(p.rejection_reason) + '</div>';
+      }
+
+      let primaryBtnHtml = '';
+      let menuItemsHtml = '';
+
+      if (p.review_status === 'pending') {
+        primaryBtnHtml = '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="✏️ Editar" aria-label="Revisar y editar propuesta #' + p.id + '" style="font-weight:700; white-space:nowrap;">✏️ Revisar</button>';
+
+        let approveBtnText = '✓ Aprobar Borrador';
+        if (!isContinuous && (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time)) {
+          approveBtnText = '⏰ Asignar Hora y Aprobar';
+        }
+
+        menuItemsHtml = (p.classification !== 'CONTENIDO_VENUE'
+            ? '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openApproveProposalModal(' + p.id + ')">' + approveBtnText + '</button>'
+            : '') +
+          (p.matched_event_id
+            ? '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); confirmLinkProposal(' + p.id + ', ' + p.matched_event_id + ')">🔗 Vincular a Evento #' + p.matched_event_id + '</button>'
+            : '') +
+          '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openProposalCaptionModal(' + p.id + ')">📄 Ver Detalle / Post</button>' +
+          (p.source_url
+            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">' + sourceLinkText + '</a>'
+            : '') +
+          '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); archiveProposal(' + p.id + ')">📦 Archivar</button>' +
+          '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); markProposalPromotion(' + p.id + ')">⭐ Marcar Promoción</button>' +
+          '<button type="button" class="proposal-menu-item danger" onclick="closeAllProposalActionMenus(); openRejectProposalModal(' + p.id + ')">❌ Rechazar</button>';
+
+      } else if (p.review_status === 'approved_draft') {
+        if (p.created_event_id) {
+          primaryBtnHtml = '<button type="button" class="btn-sm btn-secondary" onclick="editEvent(' + p.created_event_id + ')" title="Abrir ficha del evento #' + p.created_event_id + '" style="font-weight:700; color:#059669; border-color:#a7f3d0; white-space:nowrap;">🎯 Ver evento #' + p.created_event_id + '</button>';
+        } else {
+          primaryBtnHtml = '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" style="white-space:nowrap;">Ver Detalle</button>';
+        }
+        menuItemsHtml = (p.created_event_id
+            ? '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); editEvent(' + p.created_event_id + ')">🎯 Ver evento #' + p.created_event_id + '</button>'
+            : '') +
+          '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openProposalCaptionModal(' + p.id + ')">📄 Ver Detalle / Post</button>' +
+          (p.source_url
+            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">' + sourceLinkText + '</a>'
+            : '');
+
+      } else {
+        primaryBtnHtml = '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" style="white-space:nowrap;">Ver Detalle</button>';
+        menuItemsHtml = '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openProposalCaptionModal(' + p.id + ')">📄 Ver Detalle / Post</button>' +
+          (p.source_url
+            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">' + sourceLinkText + '</a>'
+            : '');
+      }
+
+      return '<article class="proposal-item" id="prop-item-' + p.id + '">' +
+        thumbHtml +
+        '<div class="proposal-main-content">' +
+          '<div class="proposal-title-row">' +
+            '<span class="proposal-id-tag">#' + p.id + '</span>' +
+            statusBadge +
+            getProposalClassificationBadge(p.classification) +
+            '<h4 class="proposal-title">' + escapeHtml(p.title) + '</h4>' +
+          '</div>' +
+          '<div class="proposal-meta-row">' +
+            venueDisplay +
+            originAccount +
+            '<span style="color:var(--border-strong);">·</span>' +
+            sourceLabel +
+          '</div>' +
+          '<div class="proposal-details-row">' +
+            dateFormatted +
+            '<span style="color:var(--border-strong);">·</span>' +
+            timeFormatted +
+            '<span style="color:var(--border-strong);">·</span>' +
+            priceFormatted +
+            '<span style="color:var(--border-strong);">·</span>' +
+            '<span class="badge-tag" style="font-size:0.75rem;">🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
+            confBadge +
+          '</div>' +
+          matchAlertHtml +
+          rejectionHtml +
+        '</div>' +
+        '<div class="proposal-item-actions">' +
+          primaryBtnHtml +
+          '<div class="proposal-menu-wrapper" id="prop-menu-wrap-' + p.id + '">' +
+            '<button type="button" class="btn-sm btn-secondary btn-menu-trigger" id="prop-menu-trigger-' + p.id + '" onclick="toggleProposalActionsMenu(' + p.id + ', event)" aria-haspopup="true" aria-expanded="false" aria-label="Más acciones para propuesta #' + p.id + '" style="font-weight:700; padding:0.35rem 0.55rem; line-height:1;">•••</button>' +
+            '<div class="proposal-menu-dropdown" id="prop-menu-dropdown-' + p.id + '" style="display:none;" role="menu">' +
+              menuItemsHtml +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</article>';
+    }
+
+    window.renderProposalsList = function(proposals) {
+      const cards = document.getElementById('proposals-cards-container');
+      const countText = document.getElementById('proposals-count-text');
+      const badge = document.getElementById('proposals-count-badge');
+
+      let list = proposals || [];
+
+      // 1. Filtrado por Pestaña de Estado
+      if (currentProposalStateTab === 'pending') {
+        list = list.filter(p => p.review_status === 'pending');
+      } else if (currentProposalStateTab === 'resolved') {
+        list = list.filter(p => p.review_status !== 'pending');
+      }
+
+      // 2. Filtrado por Procedencia
+      const source = document.getElementById('proposal-filter-source')?.value || '';
+      if (source === 'INSTAGRAM_POST') {
+        list = list.filter(p => p.source_type === 'INSTAGRAM_POST' && p.venue_id !== 10149);
+      } else if (source === 'WEB_PROGRAMACION') {
+        list = list.filter(p => p.source_type === 'WEB_PROGRAMACION' || p.venue_id === 10149);
+      }
+
+      // 3. Filtrado por Clasificación / Tipo
+      const classification = document.getElementById('proposal-filter-classification')?.value || '';
+      if (classification === 'events') {
+        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE' || p.classification === 'NUEVA_PROPUESTA'));
+      } else if (classification === 'no_time') {
+        list = list.filter(p => (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) && p.classification !== 'CONTENIDO_VENUE' && !isContinuousProposal(p));
+      } else if (classification === 'duplicates') {
+        list = list.filter(p => p.classification === 'DUPLICADO_POSIBLE' || !!p.matched_event_id);
+      } else if (classification === 'continuous') {
+        list = list.filter(p => isContinuousProposal(p));
+      } else if (classification === 'venue_content') {
+        list = list.filter(p => p.classification === 'CONTENIDO_VENUE');
+      } else if (classification === 'ateneo') {
+        list = list.filter(p => p.source_type === 'WEB_PROGRAMACION' || p.venue_id === 10149);
+      }
+
+      // 4. Filtrado por búsqueda de texto
+      if (proposalSearchQuery) {
+        const q = proposalSearchQuery.toLowerCase().trim();
         list = list.filter(p => {
           const t = (p.title || '').toLowerCase();
           const v = (p.venue_name || '').toLowerCase();
           const c = (p.caption || '').toLowerCase();
           const u = (p.instagram_username || '').toLowerCase();
           const idStr = String(p.id);
-          return t.includes(proposalSearchQuery) || v.includes(proposalSearchQuery) || c.includes(proposalSearchQuery) || u.includes(proposalSearchQuery) || idStr === proposalSearchQuery;
+          return t.includes(q) || v.includes(q) || c.includes(q) || u.includes(q) || idStr === q;
         });
       }
 
+      const hasClientFilter = Boolean(proposalSearchQuery || source || (classification && (classification === 'no_time' || classification === 'duplicates' || classification === 'continuous' || classification === 'ateneo')));
+
       if (badge) {
-        badge.innerText = list.length + (list.length === 1 ? ' propuesta' : ' propuestas');
+        badge.innerText = hasClientFilter
+          ? (list.length + (list.length === 1 ? ' coincidencia' : ' coincidencias'))
+          : (list.length + (list.length === 1 ? ' propuesta' : ' propuestas'));
         badge.style.display = 'inline-block';
       }
+      if (countText) {
+        if (hasClientFilter || list.length !== cachedProposals.length) {
+          countText.innerText = list.length + ' de ' + cachedProposals.length + ' cargadas (filtro en página)';
+        } else {
+          countText.innerText = list.length + (list.length === 1 ? ' propuesta cargada' : ' propuestas cargadas') + ' (servidor)';
+        }
+      }
+
+      renderActiveFilterChips();
 
       if (list.length === 0) {
-        const emptyMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-muted);"><div style="font-size:1.5rem; margin-bottom:0.5rem;">🍸</div><strong>No se encontraron propuestas</strong><p style="margin:0.25rem 0 0 0; font-size:0.875rem;">Ajusta la pestaña o los filtros para ver más elementos.</p></div>';
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6">' + emptyMsg + '</td></tr>';
-        if (cards) cards.innerHTML = '<div style="background:#ffffff; border-radius:12px; border:1px solid var(--border);">' + emptyMsg + '</div>';
+        const emptyMsg = '<div style="text-align:center; padding:3rem 1.5rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">' +
+          '<div style="font-size:1.75rem; margin-bottom:0.5rem;" aria-hidden="true">📋</div>' +
+          '<strong style="font-size:1rem; color:var(--text-main);">No se encontraron propuestas</strong>' +
+          '<p style="margin:0.35rem 0 0 0; font-size:0.875rem;">Ajusta los filtros o la pestaña para ver otros registros.</p>' +
+        '</div>';
+        if (cards) cards.innerHTML = emptyMsg;
         return;
       }
 
-      // Render Desktop Rows
-      if (tbody) {
-        tbody.innerHTML = list.map(p => {
-          const confBadge = p.confidence === 'ALTA'
-            ? '<span class="badge-tag" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700;">ALTA</span>'
-            : (p.confidence === 'MEDIA'
-              ? '<span class="badge-tag" style="background:#fffbeb; color:#92400e; border:1px solid #fde68a; font-weight:700;">MEDIA</span>'
-              : '<span class="badge-tag" style="background:#f3f4f6; color:#4b5563; border:1px solid #e5e7eb;">BAJA</span>');
-
-          const statusBadge = p.review_status === 'pending'
-            ? '<span class="badge-status badge-draft" style="background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe;">Pendiente</span>'
-            : (p.review_status === 'approved_draft'
-              ? '<span class="badge-status badge-published" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;">Borrador Creado</span>'
-              : (p.review_status === 'rejected'
-                ? '<span class="badge-status badge-danger" style="background:#fef2f2; color:#991b1b; border:1px solid #fecaca;">Rechazado</span>'
-                : (p.review_status === 'promotion'
-                  ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">Promoción</span>'
-                  : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">Archivado</span>')));
-
-          const isContinuous = isContinuousProposal(p);
-
-          const timeHtml = isContinuous
-            ? (p.proposed_time
-                ? '<div style="font-weight:700; color:#6d28d9; font-size:0.875rem;">🏛️ De ' + escapeHtml(p.proposed_time) + (p.proposed_end_time ? ' a ' + escapeHtml(p.proposed_end_time) : '') + '</div>'
-                : (p.proposed_end_time
-                    ? '<div style="font-weight:700; color:#6d28d9; font-size:0.875rem;">🏛️ De 08:00 a ' + escapeHtml(p.proposed_end_time) + '</div>'
-                    : '<div style="font-size:0.75rem; color:#6d28d9; font-weight:600;">🏛️ Continuo (De 08:00 a 18:00)</div>'))
-            : (p.proposed_time
-                ? '<div style="font-weight:700; color:var(--text-main); font-size:0.875rem;">⏰ ' + escapeHtml(p.proposed_time) + ' h</div>'
-                : '<div style="font-size:0.75rem; color:#d97706; font-weight:600;">⚠️ Sin hora</div>');
-
-          const priceHtml = '<div style="font-size:0.8125rem; margin-top:0.25rem;">💶 ' + formatProposalPrice(p.price, p.price_status, p.price_note) + '</div>';
-
-          // Alerta de duplicado / matching
-          let matchAlertHtml = '';
-          if (p.matched_event_id) {
-            matchAlertHtml = '<div style="margin-top:0.35rem; padding:0.35rem 0.5rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; color:#991b1b;">' +
-              '<strong>⚠️ Match (' + escapeHtml(p.match_level || 'POSIBLE') + '):</strong> Evento #' + p.matched_event_id + (p.matched_event_title ? ' — ' + escapeHtml(p.matched_event_title) : '') +
-              (p.review_status === 'pending' ? ' <button type="button" class="btn-sm btn-secondary" onclick="confirmLinkProposal(' + p.id + ', ' + p.matched_event_id + ')" style="padding:0.15rem 0.4rem; font-size:0.7rem; margin-left:0.25rem; background:#fee2e2; border-color:#fca5a5; font-weight:700;">🔗 Vincular</button>' : '') +
-            '</div>';
-          }
-
-          let actionsHtml = '';
-          if (p.review_status === 'pending') {
-            if (p.classification === 'CONTENIDO_VENUE') {
-              // CONTENIDO_VENUE: No se puede aprobar directamente como evento, pero sí editar/reclasificar o archivar
-              actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
-                '<span style="font-size:0.75rem; color:#64748b; align-self:center; margin-right:0.25rem;">(Material local - no evento)</span>' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta y reclasificar" style="background:#2563eb; border-color:#2563eb; font-weight:700;">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')" title="Archivar contenido">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')" title="Marcar como promoción comercial">Promoción</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" title="Ver texto original">Ver Post</button>' +
-              '</div>';
-            } else if (p.classification === 'EVENTO_CONTINUO') {
-              // EVENTO_CONTINUO: Aprobación directa como borrador sin exigir hora puntual
-              actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Revisar y aprobar borrador continuo" style="background:#059669; border-color:#059669; font-weight:700;">✓ Aprobar Borrador</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-              '</div>';
-            } else if (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) {
-              // EVENTO_POSIBLE_SIN_HORA: Requiere asignar hora para aprobar
-              actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Asignar hora y aprobar borrador" style="background:#d97706; border-color:#d97706; font-weight:700;">⏰ Asignar Hora</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-              '</div>';
-            } else {
-              // EVENTO_POSIBLE o DUPLICADO_POSIBLE con hora
-              actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Aprobar y crear borrador" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" title="Rechazar con motivo" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-              '</div>';
-            }
-          } else if (p.review_status === 'approved_draft') {
-            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
-              (p.created_event_id ? '<span style="font-size:0.75rem; font-weight:700; color:#059669;">Evento #' + p.created_event_id + ' (Draft)</span>' : '') +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-            '</div>';
-          } else {
-            actionsHtml = '<div style="display:flex; justify-content:flex-end; gap:0.4rem; align-items:center;">' +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Detalle</button>' +
-            '</div>';
-          }
-
-          return '<tr id="prop-row-' + p.id + '">' +
-            '<td>' +
-              '<div style="width:56px; height:56px; border-radius:6px; overflow:hidden; border:1px solid var(--border); background:#f1f5f9; display:flex; align-items:center; justify-content:center;">' +
-                (p.image_url ? '<a href="' + escapeHtml(p.image_url) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;"></a>' : '<span style="font-size:0.7rem; color:var(--text-muted);">Sin foto</span>') +
-              '</div>' +
-            '</td>' +
-            '<td>' +
-              '<div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.2rem;">' +
-                '<span style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">#' + p.id + '</span>' +
-                '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35;">' + escapeHtml(p.title) + '</div>' +
-              '</div>' +
-              '<div style="font-size:0.8rem; color:var(--text-dim); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">' +
-                '<span>📍 <strong>' + escapeHtml(p.venue_name || (p.venue_id ? 'Local #' + p.venue_id : '⚠️ Local sin asignar')) + '</strong></span>' +
-                (p.instagram_username ? '<span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>' : '') +
-              '</div>' +
-              matchAlertHtml +
-            '</td>' +
-            '<td>' +
-              '<div style="font-weight:600; font-size:0.875rem;">' + (
-                isContinuous
-                  ? '<span style="color:#6d28d9; font-weight:700;">Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') + '</span>'
-                  : (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>')
-              ) + '</div>' +
-              timeHtml +
-              priceHtml +
-            '</td>' +
-            '<td>' +
-              '<div style="display:flex; flex-direction:column; gap:0.25rem;">' +
-                getProposalClassificationBadge(p.classification) +
-                '<span class="badge-tag" style="font-size:0.75rem; align-self:flex-start;">' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
-                confBadge +
-              '</div>' +
-            '</td>' +
-            '<td>' +
-              statusBadge +
-              (p.rejection_reason ? '<div style="font-size:0.75rem; color:#dc2626; margin-top:0.25rem; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(p.rejection_reason) + '">' + escapeHtml(p.rejection_reason) + '</div>' : '') +
-            '</td>' +
-            '<td style="text-align:right;">' +
-              actionsHtml +
-            '</td>' +
-          '</tr>';
-        }).join('');
-      }
-
-      // Render Mobile Cards
-      if (cards) {
-        cards.innerHTML = list.map(p => {
-          const confBadge = p.confidence === 'ALTA'
-            ? '<span class="badge-tag" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-weight:700;">ALTA</span>'
-            : (p.confidence === 'MEDIA'
-              ? '<span class="badge-tag" style="background:#fffbeb; color:#92400e; border:1px solid #fde68a; font-weight:700;">MEDIA</span>'
-              : '<span class="badge-tag" style="background:#f3f4f6; color:#4b5563; border:1px solid #e5e7eb;">BAJA</span>');
-
-          const statusBadge = p.review_status === 'pending'
-            ? '<span class="badge-status badge-draft" style="background:#f5f3ff; color:#6d28d9; border:1px solid #ddd6fe;">Pendiente</span>'
-            : (p.review_status === 'approved_draft'
-              ? '<span class="badge-status badge-published" style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;">Borrador Creado</span>'
-              : (p.review_status === 'rejected'
-                ? '<span class="badge-status badge-danger" style="background:#fef2f2; color:#991b1b; border:1px solid #fecaca;">Rechazado</span>'
-                : (p.review_status === 'promotion'
-                  ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">Promoción</span>'
-                  : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">Archivado</span>')));
-
-          const isContinuous = isContinuousProposal(p);
-
-          let matchAlertHtml = '';
-          if (p.matched_event_id) {
-            matchAlertHtml = '<div style="margin-top:0.5rem; padding:0.5rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.75rem; color:#991b1b;">' +
-              '<strong>⚠️ Match (' + escapeHtml(p.match_level || 'POSIBLE') + '):</strong> Evento #' + p.matched_event_id + (p.matched_event_title ? ' — ' + escapeHtml(p.matched_event_title) : '') +
-              (p.review_status === 'pending' ? ' <div style="margin-top:0.25rem;"><button type="button" class="btn-sm btn-secondary" onclick="confirmLinkProposal(' + p.id + ', ' + p.matched_event_id + ')" style="padding:0.2rem 0.5rem; font-size:0.75rem; background:#fee2e2; border-color:#fca5a5; font-weight:700;">🔗 Vincular a Evento #' + p.matched_event_id + '</button></div>' : '') +
-            '</div>';
-          }
-
-          let mobileActionsHtml = '';
-          if (p.review_status === 'pending') {
-            if (p.classification === 'CONTENIDO_VENUE') {
-              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
-                '<span style="font-size:0.75rem; color:#64748b; align-self:center;">(Material local - no evento)</span>' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="Editar propuesta y reclasificar" style="background:#2563eb; border-color:#2563eb; font-weight:700;">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-              '</div>';
-            } else if (isContinuous) {
-              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" title="Revisar y aprobar borrador continuo" style="background:#059669; border-color:#059669; font-weight:700;">✓ Aprobar Borrador</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626; border-color:#fecaca;">Rechazar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-              '</div>';
-            } else if (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time) {
-              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" style="background:#d97706; border-color:#d97706; font-weight:700;">⏰ Asignar Hora</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626;">Rechazar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-              '</div>';
-            } else {
-              mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openApproveProposalModal(' + p.id + ')" style="background:#059669; border-color:#059669; font-weight:700;">Aprobar Borrador</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openEditProposalModal(' + p.id + ')">✏️ Editar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openRejectProposalModal(' + p.id + ')" style="color:#dc2626;">Rechazar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="archiveProposal(' + p.id + ')">Archivar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="markProposalPromotion(' + p.id + ')">Promoción</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Ver Post</button>' +
-              '</div>';
-            }
-          } else {
-            mobileActionsHtml = '<div style="display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end;">' +
-              (p.created_event_id ? '<span style="font-size:0.75rem; font-weight:700; color:#059669; align-self:center;">Evento #' + p.created_event_id + '</span>' : '') +
-              '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')">Detalle</button>' +
-            '</div>';
-          }
-
-          return '<article style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
-            '<div style="display:flex; gap:0.75rem; margin-bottom:0.75rem;">' +
-              '<div style="width:70px; height:70px; border-radius:8px; overflow:hidden; border:1px solid var(--border); background:#f1f5f9; flex-shrink:0;">' +
-                (p.image_url ? '<a href="' + escapeHtml(p.image_url) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.title) + '" style="width:100%; height:100%; object-fit:cover;"></a>' : '<div style="display:flex; height:100%; align-items:center; justify-content:center; color:var(--text-muted); font-size:0.75rem;">Sin foto</div>') +
-              '</div>' +
-              '<div style="flex:1; min-width:0;">' +
-                '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; margin-bottom:0.25rem;">' +
-                  '<div>' + statusBadge + ' ' + getProposalClassificationBadge(p.classification) + '</div>' +
-                  confBadge +
-                '</div>' +
-                '<h4 style="margin:0 0 0.25rem 0; font-size:0.95rem; font-weight:800; color:var(--text-main); line-height:1.3;">' +
-                  '<span style="font-size:0.75rem; color:var(--text-muted); margin-right:0.35rem;">#' + p.id + '</span>' + escapeHtml(p.title) +
-                '</h4>' +
-                '<div style="font-size:0.8rem; color:var(--text-dim);">📍 <strong>' + escapeHtml(p.venue_name || (p.venue_id ? 'Local #' + p.venue_id : '⚠️ Local sin asignar')) + '</strong>' +
-                  (p.instagram_username ? ' <span style="color:var(--text-muted);">(@' + escapeHtml(p.instagram_username) + ')</span>' : '') +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-            matchAlertHtml +
-            '<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.8125rem; color:var(--text-dim); margin-bottom:0.75rem; flex-wrap:wrap; gap:0.5rem;">' +
-              '<span>📅 ' + (isContinuous ? 'Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') : (p.proposed_date || '<span style="color:#d97706;">Sin fecha</span>')) + '</span>' +
-              '<span>' + (isContinuous ? (p.proposed_time ? '🏛️ De ' + escapeHtml(p.proposed_time) + ' a ' + escapeHtml(p.proposed_end_time || '18:00') : (p.proposed_end_time ? '🏛️ De 08:00 a ' + escapeHtml(p.proposed_end_time) : '🏛️ De 08:00 a 18:00')) : (p.proposed_time ? '⏰ ' + escapeHtml(p.proposed_time) + ' h' : '<span style="color:#d97706;">⚠️ Sin hora</span>')) + '</span>' +
-              '<span>💶 ' + formatProposalPrice(p.price, p.price_status, p.price_note) + '</span>' +
-              '<span>🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
-            '</div>' +
-            (p.rejection_reason ? '<div style="font-size:0.8rem; color:#dc2626; background:#fef2f2; padding:0.4rem 0.6rem; border-radius:6px; margin-bottom:0.75rem;"><strong>Motivo rechazo:</strong> ' + escapeHtml(p.rejection_reason) + '</div>' : '') +
-            mobileActionsHtml +
-          '</article>';
-        }).join('');
-      }
+      const itemsHtml = list.map(p => renderProposalEditorialItem(p)).join('');
+      if (cards) cards.innerHTML = itemsHtml;
     };
 
     window.applyTaquillaSuggestion = function(time, price) {
@@ -11351,7 +12128,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
         closeModal('modal-edit-proposal');
         alert('✓ ' + (data.message || 'Propuesta editada con éxito.'));
-        loadAdminProposals();
+        const savedScrollY = (typeof window !== 'undefined' && window.scrollY !== undefined) ? window.scrollY : 0;
+        await loadAdminProposals();
+        if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+          window.scrollTo(0, savedScrollY);
+        }
       } catch (err) {
         if (errBox) {
           errBox.innerText = 'Error de conexión: ' + err.message;
@@ -11502,12 +12283,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     let cachedBibliotecaProposals = [];
 
     window.loadBibliotecaImageProposals = async function() {
-      const tbody = document.getElementById('proposals-tbody');
       const cards = document.getElementById('proposals-cards-container');
       const badge = document.getElementById('proposals-count-badge');
 
-      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas de imágenes de Biblioteca Pública...</td></tr>';
-      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando...</div>';
+      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas de imágenes de Biblioteca Pública...</div>';
 
       try {
         const res = await apiFetch('/api/v1/admin/biblioteca-images/proposals');
@@ -11515,13 +12294,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         cachedBibliotecaProposals = data.proposals || [];
         renderBibliotecaImagesList(cachedBibliotecaProposals);
       } catch (err) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-danger);">Error al cargar propuestas de biblioteca: ' + escapeHtml(err.message) + '</td></tr>';
-        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas.</div>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas de biblioteca: ' + escapeHtml(err.message) + '</div>';
       }
     };
 
     window.renderBibliotecaImagesList = function(proposals) {
-      const tbody = document.getElementById('proposals-tbody');
       const cards = document.getElementById('proposals-cards-container');
       const badge = document.getElementById('proposals-count-badge');
 
@@ -11540,60 +12317,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       }
 
       if (list.length === 0) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">No se encontraron imágenes pendientes para la Biblioteca Pública.</td></tr>';
-        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No se encontraron imágenes pendientes.</div>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No se encontraron imágenes pendientes para la Biblioteca Pública.</div>';
         return;
-      }
-
-      if (tbody) {
-        tbody.innerHTML = list.map(function(item) {
-          const currentImgHtml = item.currentImageUrl
-            ? '<div style="display:flex; flex-direction:column; align-items:center;"><a href="' + escapeHtml(item.currentImageUrl) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(item.currentImageUrl) + '" alt="Actual" style="width:72px; height:72px; object-fit:cover; border-radius:6px; border:1px solid var(--border);"></a><span style="font-size:0.7rem; color:' + (item.currentImageStatus === 'IMAGEN_GENERICA' ? '#d97706' : '#64748b') + '; font-weight:700; margin-top:0.25rem;">' + (item.currentImageStatus === 'IMAGEN_GENERICA' ? '⚠️ Genérica' : 'Existente') + '</span></div>'
-            : '<div style="width:72px; height:72px; border-radius:6px; border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; background:#f8fafc; font-size:0.7rem; color:var(--text-muted); text-align:center; padding:0.25rem;">Sin Imagen</div>';
-
-          const proposedImgHtml = item.proposedImageUrl
-            ? '<div style="display:flex; flex-direction:column; align-items:center;"><a href="' + escapeHtml(item.proposedImageUrl) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(item.proposedImageUrl) + '" alt="Oficial R2" style="width:72px; height:72px; object-fit:cover; border-radius:6px; border:2px solid #059669; box-shadow:0 1px 3px rgba(5,150,105,0.2);"></a><span style="font-size:0.7rem; color:#059669; font-weight:800; margin-top:0.25rem;">✨ Oficial R2</span><span style="font-size:0.65rem; color:var(--text-muted);">' + item.imageWidth + 'x' + item.imageHeight + ' (' + Math.round(item.sizeBytes / 1024) + ' KB)</span></div>'
-            : '<span style="color:var(--text-muted); font-size:0.75rem;">No disponible</span>';
-
-          const recBadge = item.recommendedAction === 'ADOPTAR_IMAGEN_OFICIAL'
-            ? '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🟢 Adoptar imagen oficial</span>'
-            : (item.recommendedAction === 'PROPONER_ALTERNATIVA'
-              ? '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">🟡 Proponer alternativa</span>'
-              : '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">⚪ Mantener actual</span>');
-
-          const datesText = item.endDate && item.endDate !== item.editorialDate
-            ? 'Del ' + escapeHtml(item.editorialDate) + ' al ' + escapeHtml(item.endDate)
-            : escapeHtml(item.editorialDate);
-
-          return '<tr id="bib-row-' + item.eventId + '">' +
-            '<td style="min-width:240px;">' +
-              '<div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.25rem;">' +
-                '<span style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">#' + item.eventId + '</span>' +
-                '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35;">' + escapeHtml(item.eventTitle) + '</div>' +
-              '</div>' +
-              '<div style="font-size:0.8rem; color:var(--text-dim); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">' +
-                '<span>📅 <strong>' + datesText + '</strong></span>' +
-                '<span>📍 <strong>' + escapeHtml(item.venueName) + '</strong></span>' +
-              '</div>' +
-            '</td>' +
-            '<td style="text-align:center;">' + currentImgHtml + '</td>' +
-            '<td style="text-align:center;">' + proposedImgHtml + '</td>' +
-            '<td style="font-size:0.8125rem;">' +
-              '<div style="font-weight:700; color:var(--text-main);">' + escapeHtml(item.sourceName) + '</div>' +
-              '<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Crédito: ' + escapeHtml(item.credit) + '</div>' +
-              '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(item.sourcePageUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--primary); font-size:0.75rem; font-weight:700; text-decoration:none;">Ficha Oficial ↗</a></div>' +
-            '</td>' +
-            '<td>' + recBadge + '</td>' +
-            '<td style="text-align:right;">' +
-              '<div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;adopt&quot;)" style="background:#059669; border-color:#059669; font-weight:700;">✓ Adoptar Oficial</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;keep_current&quot;)">Mantener Actual</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;discard&quot;)" style="color:#dc2626; border-color:#fecaca;">Descartar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;request_search&quot;)" style="color:#2563eb; border-color:#bfdbfe;">Solicitar Búsqueda</button>' +
-              '</div>' +
-            '</td>' +
-          '</tr>';
-        }).join('');
       }
 
       if (cards) {
