@@ -76,18 +76,55 @@ Este documento detalla la secuencia operativa paso a paso para desplegar en prod
    curl -fsS -I http://localhost:3030/ || echo "Web no responde"
    ```
 
-### Fase 4: Asignación de Metadatos de Procedencia a los Eventos del Teatro Principal
-Una vez aplicada la migración y desplegado el código, actualizar los 8 eventos con sus datos de procedencia:
+### Fase 4: Asignación de Metadatos de Procedencia a las 25 Funciones del Teatro Principal
+Una vez aplicada la migración y desplegado el código, actualizar las 25 funciones del Teatro Principal con sus datos de procedencia:
+
 ```sql
+-- 1. 22 funciones procedentes de la web del Teatro Principal de Palencia
 UPDATE events SET 
   image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/el-paraiso-de-los-negros-29-10',
   image_source_title = 'web del Teatro Principal de Palencia'
 WHERE id = 96;
 
 UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/el-invencible-verano-de-liliana-2',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 58;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/largo-viaje-hacia-la-noche-3',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 59;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/teatro-delusio',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 60;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/nadia-1',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 61;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/la-barraca-3',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 62;
+
+UPDATE events SET 
   image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/urban-simphony',
   image_source_title = 'web del Teatro Principal de Palencia'
 WHERE id = 97;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/leonora-2',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 63;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/panorama-desde-el-puente-3',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 64;
 
 UPDATE events SET 
   image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/festival-internacional-de-guitarra-roberto-fabbri-y-fabio-macera',
@@ -105,9 +142,29 @@ UPDATE events SET
 WHERE id = 100;
 
 UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/la-malquerida',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 65;
+
+UPDATE events SET 
   image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/flamenc-oh-',
   image_source_title = 'web del Teatro Principal de Palencia'
 WHERE id = 101;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/agua-sucia',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 66;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/iconos-o-la-exploracion-del-destino-1',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 67;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/jason-y-las-furias-1',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 68;
 
 UPDATE events SET 
   image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/concierto-banda-municipal-20-dic-26',
@@ -115,9 +172,40 @@ UPDATE events SET
 WHERE id = 102;
 
 UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/camu%C3%B1as-3',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 69;
+
+UPDATE events SET 
   image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/jirafa',
   image_source_title = 'web del Teatro Principal de Palencia'
 WHERE id = 103;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/rossini-en-la-cocina-1',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 70;
+
+UPDATE events SET 
+  image_source_url = 'https://teatroprincipaldepalencia.es/es/productos/descripcion/el-viaje-de-nuru-3',
+  image_source_title = 'web del Teatro Principal de Palencia'
+WHERE id = 71;
+
+-- 2. 3 funciones del Festival Jazz Palencia (mantienen cartel genérico del festival enlazado a su ficha de actividad)
+UPDATE events SET 
+  image_source_url = 'https://jazzpalencia.es/actividades/antonio-serrano-kaele-jimenez-cuarteto/',
+  image_source_title = 'Festival Jazz Palencia'
+WHERE id = 31;
+
+UPDATE events SET 
+  image_source_url = 'https://jazzpalencia.es/actividades/swing-for-kids/',
+  image_source_title = 'Festival Jazz Palencia'
+WHERE id = 32;
+
+UPDATE events SET 
+  image_source_url = 'https://jazzpalencia.es/actividades/banda-municipal-de-musica',
+  image_source_title = 'Festival Jazz Palencia'
+WHERE id = 50;
 ```
 
 ---
