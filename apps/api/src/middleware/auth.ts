@@ -51,7 +51,7 @@ export async function requireAdminAuth(c: Context, next: Next) {
     }
 
     const user: AdminUser = {
-      email: String(payload.email || 'admin@vayaplan.com'),
+      email: typeof payload.email === 'string' ? payload.email.trim() : '',
       role: 'admin',
     };
 

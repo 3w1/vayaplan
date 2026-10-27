@@ -2,6 +2,7 @@
  * Servicio de Inventario y Carga Editorial de Imágenes para Biblioteca Pública de Palencia
  */
 
+import crypto from 'node:crypto';
 import { query, getClient } from '@vayaplan/db';
 import {
   BibliotecaEventInventoryItem,
@@ -9,6 +10,7 @@ import {
   BibliotecaProposedImage,
   BibliotecaRecommendedAction,
   BibliotecaDecisionRecord,
+  EventImageDecisionEntity,
 } from './biblioteca-types';
 import {
   processAndUploadBibliotecaImage,
@@ -123,7 +125,8 @@ export function determineRecommendedAction(status: BibliotecaImageStatus): Bibli
  * Obtiene el inventario de eventos publicados vinculados a la Biblioteca Pública de Palencia
  */
 export async function getBibliotecaEventsInventory(
-  currentDate = '2026-10-24'
+  currentDate = '2026-10-24',
+  customQueryFn?: (sql: string, params: any[]) => Promise<any>
 ): Promise<BibliotecaEventInventoryItem[]> {
   const sql = `
     SELECT 
@@ -138,7 +141,9 @@ export async function getBibliotecaEventsInventory(
       v.name AS venue_name, 
       e.image_url, 
       e.source_type, 
-      e.source_url
+      e.source_url,
+      e.verified_at,
+      e.verified_by
     FROM events e
     JOIN venues v ON e.venue_id = v.id
     WHERE e.venue_id = 10127
@@ -147,9 +152,9 @@ export async function getBibliotecaEventsInventory(
     ORDER BY e.editorial_date ASC, e.id ASC;
   `;
 
-  const res = await query(sql, [currentDate]);
+  const res = await (customQueryFn || query)(sql, [currentDate]);
 
-  return res.rows.map((row) => ({
+  return res.rows.map((row: any) => ({
     id: row.id,
     title: row.title,
     editorial_date: row.editorial_date instanceof Date ? row.editorial_date.toISOString().slice(0, 10) : String(row.editorial_date),
@@ -163,6 +168,8 @@ export async function getBibliotecaEventsInventory(
     current_image_url: row.image_url || null,
     source_type: row.source_type || 'api',
     source_url: row.source_url || '',
+    verified_at: row.verified_at instanceof Date ? row.verified_at.toISOString() : (row.verified_at ? String(row.verified_at) : null),
+    verified_by: row.verified_by ? String(row.verified_by) : null,
   }));
 }
 
@@ -215,6 +222,8 @@ export async function processBibliotecaBatch(params?: {
       sizeBytes: r2Result.sizeBytes,
       lastCheckedAt: r2Result.lastCheckedAt,
       recommendedAction: determineRecommendedAction(item.current_image_status),
+      isPending: true,
+      activeDecision: null,
     });
   }
 
@@ -222,71 +231,281 @@ export async function processBibliotecaBatch(params?: {
 }
 
 /**
- * Aplica una decisión editorial humana sobre un evento específico:
- * - Si se adopta la imagen oficial, actualiza image_url, image_thumb_url y guarda la anterior en image_original_url como histórico.
- * - Registra verified_by y verified_at.
- * - No modifica fecha, hora, status (permanece 'published') ni precio.
+ * Recupera la decisión editorial activa más reciente para cada par (evento, candidata).
+ * Orden determinista: id DESC (secuencia monótona autoincremental de PostgreSQL bajo bloqueo FOR UPDATE, sin suposiciones de reloj).
  */
-export async function applyBibliotecaDecision(decision: BibliotecaDecisionRecord): Promise<{ success: boolean; event: any }> {
-  const client = await getClient();
+export async function getLatestEventImageDecisions(
+  eventIds: number[],
+  customQueryFn?: (sql: string, params: any[]) => Promise<any>
+): Promise<Map<string, EventImageDecisionEntity>> {
+  if (!eventIds || eventIds.length === 0) return new Map();
+
+  const sql = `
+    SELECT DISTINCT ON (event_id, candidate_key)
+      id,
+      event_id,
+      candidate_key,
+      candidate_url,
+      action,
+      operator_email,
+      notes,
+      idempotency_key,
+      payload_hash,
+      created_at
+    FROM event_image_decisions
+    WHERE event_id = ANY($1::int[])
+    ORDER BY event_id, candidate_key, id DESC;
+  `;
+
+  try {
+    const res = await (customQueryFn || query)(sql, [eventIds]);
+    const map = new Map<string, EventImageDecisionEntity>();
+    for (const row of res.rows) {
+      map.set(`${row.event_id}:${row.candidate_key}`, {
+        id: row.id,
+        eventId: row.event_id,
+        candidateKey: row.candidate_key,
+        candidateUrl: row.candidate_url,
+        action: row.action,
+        operatorEmail: row.operator_email,
+        notes: row.notes,
+        idempotencyKey: row.idempotency_key,
+        payloadHash: row.payload_hash,
+        createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      });
+    }
+    return map;
+  } catch (err: any) {
+    // Si la tabla no existe en entornos no migrados, devolver mapa vacío defensivamente
+    return new Map();
+  }
+}
+
+/**
+ * Aplica una decisión editorial humana sobre un evento específico de forma atómica e idempotente:
+ * - Serializa concurrentes con bloqueo pesimista de fila (FOR UPDATE) en el evento.
+ * - Idempotencia: reintentos con misma idempotencyKey y mismo payload retornan el resultado sin duplicar.
+ *   Reutilizar idempotencyKey con payload divergente lanza error 409 (idempotency_conflict).
+ * - Verificación de candidata: no adopta silenciosamente si la candidata cambió durante la revisión.
+ * - Si es 'adopt': actualiza image_url, image_thumb_url y preserva histórico en image_original_url.
+ * - Si es 'keep_current', 'discard' o 'request_search': NO modifica la tabla events.
+ * - NO altera ni borra jamás verified_at ni verified_by editoriales generales.
+ */
+export async function applyBibliotecaDecision(
+  decision: BibliotecaDecisionRecord,
+  customClient?: any
+): Promise<{ success: boolean; idempotent?: boolean; event: any; decision: any }> {
+  const client = customClient || (await getClient());
+  const shouldRelease = !customClient;
+
+  const validActions = ['adopt', 'keep_current', 'discard', 'request_search'];
+  if (!validActions.includes(decision.action)) {
+    throw new Error(`Acción no reconocida: ${decision.action}`);
+  }
+
+  // Identidad canónica y estable de la candidata
+  const candidateKey = decision.candidateKey || decision.adoptedR2Key || ('event-' + decision.eventId);
+  const candidateUrl = decision.candidateUrl || decision.adoptedImageUrl || '';
+
+  // Cálculo determinista del hash de carga útil para validación de idempotencia
+  const canonicalPayload = JSON.stringify({
+    eventId: decision.eventId,
+    candidateKey,
+    candidateUrl,
+    action: decision.action,
+    notes: (decision.notes || '').trim(),
+  });
+  const payloadHash = crypto.createHash('sha256').update(canonicalPayload).digest('hex');
+
   try {
     await client.query('BEGIN');
 
-    const evRes = await client.query(`SELECT * FROM events WHERE id = $1;`, [decision.eventId]);
+    // Detección defensiva de la columna image_detail_url en events
+    let hasDetailCol = false;
+    try {
+      const colRes = await client.query(`
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'events' AND column_name = 'image_detail_url' LIMIT 1;
+      `);
+      hasDetailCol = colRes && colRes.rows && colRes.rows.length > 0;
+    } catch {
+      hasDetailCol = false;
+    }
+
+    // 1. Serialización concurrente con bloqueo de fila en events
+    const evSql = hasDetailCol
+      ? `SELECT id, image_url, image_thumb_url, image_detail_url, image_original_url, verified_at, verified_by, updated_at FROM events WHERE id = $1 FOR UPDATE;`
+      : `SELECT id, image_url, image_thumb_url, image_original_url, verified_at, verified_by, updated_at FROM events WHERE id = $1 FOR UPDATE;`;
+
+    const evRes = await client.query(evSql, [decision.eventId]);
+
     if (evRes.rows.length === 0) {
       throw new Error(`Evento con ID ${decision.eventId} no encontrado.`);
     }
     const currentEvent = evRes.rows[0];
 
+    // 2. Control de idempotencia por operación
+    if (decision.idempotencyKey) {
+      const existingRes = await client.query(
+        `SELECT * FROM event_image_decisions WHERE idempotency_key = $1;`,
+        [decision.idempotencyKey]
+      );
+
+      if (existingRes.rows.length > 0) {
+        const existing = existingRes.rows[0];
+        if (existing.payload_hash && existing.payload_hash !== payloadHash) {
+          throw new Error('idempotency_conflict: La clave de idempotencia ya fue utilizada con una carga de datos divergente.');
+        }
+        await client.query('COMMIT');
+        return {
+          success: true,
+          idempotent: true,
+          event: currentEvent,
+          decision: existing,
+        };
+      }
+    }
+
+    // 3. Control de estado previo (optimistic concurrency guard)
+    // Previene sobreescrituras silenciosas si otro operador ya decidió sobre esta candidata
+    if (decision.expectedPreviousDecisionId !== undefined) {
+      const lastDecRes = await client.query(
+        `SELECT id, action, candidate_key, operator_email, created_at
+         FROM event_image_decisions
+         WHERE event_id = $1 AND candidate_key = $2
+         ORDER BY id DESC
+         LIMIT 1;`,
+        [decision.eventId, candidateKey]
+      );
+      const latestDecision = lastDecRes.rows[0] || null;
+      const latestDecisionId = latestDecision ? latestDecision.id : null;
+
+      if (decision.expectedPreviousDecisionId === null && latestDecisionId !== null) {
+        throw new Error(
+          `stale_decision_state: El estado de revisión ha cambiado (el operador '${latestDecision.operator_email}' aplicó la decisión #${latestDecision.id} '${latestDecision.action}'). Actualiza la lista antes de decidir.`
+        );
+      } else if (
+        decision.expectedPreviousDecisionId !== null &&
+        latestDecisionId !== decision.expectedPreviousDecisionId
+      ) {
+        const op = latestDecision ? latestDecision.operator_email : 'desconocido';
+        const act = latestDecision ? latestDecision.action : 'ninguna';
+        throw new Error(
+          `stale_decision_state: El estado de revisión ha cambiado (la última decisión es #${latestDecisionId} '${act}' por '${op}', se esperaba #${decision.expectedPreviousDecisionId}). Actualiza la lista antes de decidir.`
+        );
+      }
+    }
+
+    // 4. Ejecutar efectos específicos según la acción
+    let updatedEvent = currentEvent;
+
     if (decision.action === 'adopt') {
-      if (!decision.adoptedImageUrl) {
-        throw new Error('adoptedImageUrl es obligatorio para la acción adopt.');
+      if (!candidateUrl) {
+        throw new Error('candidateUrl es obligatorio para la acción adopt.');
       }
 
-      // Guardar imagen anterior como histórico en image_original_url si no tenía otra o preservarla
-      const previousImageHistory = currentEvent.image_url || currentEvent.image_original_url || null;
+      // Preservar la referencia original o previa en image_original_url:
+      // 1. Si ya existe image_original_url, se conserva intacto.
+      // 2. Si no tiene image_original_url, se guarda la imagen previa solo si es distinta de la candidata que se adopta.
+      // 3. Si la imagen actual ya era la candidata (adopción repetida), no se sustituye ni se crea auto-referencia.
+      const previousDistinctImage =
+        (currentEvent.image_url && currentEvent.image_url !== candidateUrl)
+          ? currentEvent.image_url
+          : ((currentEvent.image_detail_url && currentEvent.image_detail_url !== candidateUrl)
+              ? currentEvent.image_detail_url
+              : null);
 
-      const updateSql = `
-        UPDATE events
-        SET
-          image_url = $1,
-          image_thumb_url = $1,
-          image_original_url = COALESCE($2, image_original_url),
-          verified_by = $3,
-          verified_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $4
-        RETURNING *;
-      `;
+      // Se actualizan todas las variantes públicas (image_url, image_thumb_url y image_detail_url si existe)
+      // para que ningún listado, detalle o visor retenga una variante antigua
+      const updateSql = hasDetailCol
+        ? `
+          UPDATE events
+          SET
+            image_url = $1,
+            image_thumb_url = $1,
+            image_detail_url = $1,
+            image_original_url = COALESCE(image_original_url, $2),
+            updated_at = clock_timestamp()
+          WHERE id = $3
+          RETURNING *;
+        `
+        : `
+          UPDATE events
+          SET
+            image_url = $1,
+            image_thumb_url = $1,
+            image_original_url = COALESCE(image_original_url, $2),
+            updated_at = clock_timestamp()
+          WHERE id = $3
+          RETURNING *;
+        `;
 
       const updateRes = await client.query(updateSql, [
-        decision.adoptedImageUrl,
-        previousImageHistory,
-        decision.operatorEmail,
+        candidateUrl,
+        previousDistinctImage,
         decision.eventId,
       ]);
+      updatedEvent = updateRes.rows[0];
+    }
 
-      await client.query('COMMIT');
-      return { success: true, event: updateRes.rows[0] };
-    } else {
-      // Registrar solo auditoría de verificación
-      const auditSql = `
-        UPDATE events
-        SET
-          verified_by = $1,
-          verified_at = NOW(),
-          updated_at = NOW()
-        WHERE id = $2
+    // 5. Inserción atómica en la tabla dedicada de auditoría event_image_decisions
+    let decisionRow: any = null;
+    try {
+      const insertDecisionSql = `
+        INSERT INTO event_image_decisions (
+          event_id,
+          candidate_key,
+          candidate_url,
+          action,
+          operator_email,
+          notes,
+          idempotency_key,
+          payload_hash,
+          created_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, clock_timestamp()
+        )
         RETURNING *;
       `;
-      const updateRes = await client.query(auditSql, [decision.operatorEmail, decision.eventId]);
-      await client.query('COMMIT');
-      return { success: true, event: updateRes.rows[0] };
+
+      const decRes = await client.query(insertDecisionSql, [
+        decision.eventId,
+        candidateKey,
+        candidateUrl,
+        decision.action,
+        decision.operatorEmail,
+        decision.notes || null,
+        decision.idempotencyKey || null,
+        payloadHash,
+      ]);
+      decisionRow = decRes.rows[0];
+    } catch (insertErr: any) {
+      // Manejar colisión de clave de idempotencia en caso de carrera
+      if (insertErr.code === '23505' && insertErr.constraint === 'idx_event_image_decisions_idempotency') {
+        const raceRes = await client.query(
+          `SELECT * FROM event_image_decisions WHERE idempotency_key = $1;`,
+          [decision.idempotencyKey]
+        );
+        if (raceRes.rows.length > 0) {
+          const existing = raceRes.rows[0];
+          if (existing.payload_hash && existing.payload_hash !== payloadHash) {
+            throw new Error('idempotency_conflict: La clave de idempotencia ya fue utilizada con una carga de datos divergente.');
+          }
+          await client.query('COMMIT');
+          return { success: true, idempotent: true, event: updatedEvent, decision: existing };
+        }
+      }
+      throw insertErr;
     }
+
+    await client.query('COMMIT');
+    return { success: true, event: updatedEvent, decision: decisionRow };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    if (shouldRelease && client && typeof client.release === 'function') {
+      client.release();
+    }
   }
 }
