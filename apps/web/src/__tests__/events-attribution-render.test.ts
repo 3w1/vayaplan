@@ -52,6 +52,19 @@ describe('apps/web — Atribución Fotográfica en Eventos (public-page.ts)', ()
       expect(html).toContain('CC BY-SA 4.0');
     });
 
+    test('procedencia de cartel oficial de festival: "Imagen: Festival Jazz Palencia" con enlace a la fuente', () => {
+      const attribution = {
+        source_url: 'https://jazzpalencia.es/actividades/antonio-serrano-kaele-jimenez-cuarteto/',
+        source_title: 'Festival Jazz Palencia',
+        author: null,
+      };
+
+      const html = renderEventCreditHtml(attribution);
+      expect(html).toContain('Imagen: ');
+      expect(html).toContain('href="https://jazzpalencia.es/actividades/antonio-serrano-kaele-jimenez-cuarteto/"');
+      expect(html).toContain('Festival Jazz Palencia');
+    });
+
     test('fallback seguro sin URL válida: renderiza solo el texto plano sin enlace', () => {
       const attribution = {
         source_url: 'javascript:alert(1)',
@@ -123,6 +136,40 @@ describe('apps/web — Atribución Fotográfica en Eventos (public-page.ts)', ()
       expect(html).toContain('José Luis Filpo Cabana');
       expect(html).toContain('CC BY 4.0');
       expect(html).toContain('&middot;');
+    });
+  });
+
+  describe('4. Alternancia y ausencia de bloques vacíos', () => {
+    test('evento sin atribución no genera HTML de crédito', () => {
+      expect(renderEventCreditHtml(null)).toBe('');
+      expect(renderEventCreditHtml(undefined)).toBe('');
+    });
+
+    test('simulación de alternancia en lightbox: evento con crédito -> evento sin crédito -> lugar con crédito', () => {
+      // 1. Evento con crédito
+      const eventCredit = {
+        source_url: 'https://teatroprincipaldepalencia.es/es/productos/descripcion/el-paraiso-de-los-negros-29-10',
+        source_title: 'web del Teatro Principal de Palencia',
+        author: null,
+      };
+      const renderedEvent = renderEventCreditHtml(eventCredit);
+      expect(renderedEvent).toContain('web del Teatro Principal de Palencia');
+
+      // 2. Evento sin crédito (debe limpiar completamente)
+      const renderedNoCredit = renderEventCreditHtml(null);
+      expect(renderedNoCredit).toBe('');
+
+      // 3. Lugar con crédito Creative Commons
+      const placeCredit = {
+        author: 'José Luis Filpo Cabana',
+        source_url: 'https://commons.wikimedia.org/wiki/File:Fachada.jpg',
+        license: 'CC BY 4.0',
+        license_url: 'https://creativecommons.org/licenses/by/4.0/',
+      };
+      const renderedPlace = renderEventCreditHtml(placeCredit);
+      expect(renderedPlace).toContain('Foto: ');
+      expect(renderedPlace).toContain('José Luis Filpo Cabana');
+      expect(renderedPlace).toContain('CC BY 4.0');
     });
   });
 });

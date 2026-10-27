@@ -5,12 +5,14 @@ import {
   computeEditorialLabel,
   formatPriceLabel,
   resolveGoogleMapsUrl,
+  serializeEventImageAttribution,
 } from '@vayaplan/shared';
 import type {
   ActivePromotionsResponseContract,
   EventCategory,
   PublicActivePromotionItem,
 } from '@vayaplan/types';
+import { hasEventAttributionColumns } from '../services/image-storage';
 
 export const activePromotionsRoutes = new Hono();
 
@@ -130,6 +132,11 @@ activePromotionsRoutes.get('/cities/:citySlug/promotions/active', async (c) => {
   const total = countResult.rows[0]?.total || 0;
 
   // 6. Consulta de datos con ordenación estable y paginación
+  const hasAttribution = await hasEventAttributionColumns();
+  const attributionEventCols = hasAttribution
+    ? 'e.image_source_url AS event_image_source_url, e.image_source_title AS event_image_source_title, e.image_author AS event_image_author, e.image_license AS event_image_license, e.image_license_url AS event_image_license_url,'
+    : 'NULL::text AS event_image_source_url, NULL::text AS event_image_source_title, NULL::text AS event_image_author, NULL::text AS event_image_license, NULL::text AS event_image_license_url,';
+
   const dataParams: any[] = [city.id];
   let dataSql = `
     SELECT 
@@ -146,6 +153,7 @@ activePromotionsRoutes.get('/cities/:citySlug/promotions/active', async (c) => {
       e.price_cents AS event_price_cents,
       e.is_free AS event_is_free,
       e.image_url AS event_image_url,
+      ${attributionEventCols}
       e.source_type AS event_source_type,
       e.source_url AS event_source_url,
       e.status AS event_status,
@@ -230,6 +238,13 @@ activePromotionsRoutes.get('/cities/:citySlug/promotions/active', async (c) => {
           google_maps_url: mapsUrl,
         },
         image_url: row.event_image_url,
+        image_attribution: serializeEventImageAttribution({
+          image_source_url: row.event_image_source_url,
+          image_source_title: row.event_image_source_title,
+          image_author: row.event_image_author,
+          image_license: row.event_image_license,
+          image_license_url: row.event_image_license_url,
+        }),
         actions: {
           maps_url: mapsUrl,
           booking_url: null,
