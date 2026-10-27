@@ -3145,7 +3145,10 @@ export function renderAdminHtml(): string {
             <button type="button" id="btn-open-import-ig" class="btn-primary" onclick="openImportInstagramModal()" style="display:inline-flex; align-items:center; gap:0.35rem; background:#7c3aed; border-color:#7c3aed; font-weight:700;">
               📥 Importar Post de Instagram
             </button>
-            <button type="button" id="prop-tab-biblioteca" class="btn-secondary" onclick="switchSection('biblioteca-images')" title="Ir a la revisión de imágenes de Biblioteca Pública" style="font-weight:600;">
+            <button type="button" id="prop-tab-ateneo" class="btn-secondary" onclick="filterAteneoProposals()" title="Filtrar propuestas del Ateneo Cultural" style="font-weight:600;">
+              🏛️ Ateneo
+            </button>
+            <button type="button" id="prop-tab-biblioteca" class="btn-secondary" onclick="switchProposalTab('biblioteca')" title="Ir a la revisión de imágenes de Biblioteca Pública" style="font-weight:600;">
               📚 Imágenes Biblioteca Pública
             </button>
           </div>
@@ -3154,13 +3157,13 @@ export function renderAdminHtml(): string {
         <!-- Navegación por Estado (3 Pestañas Principales) -->
         <div class="proposals-state-tabs" role="tablist" aria-label="Navegación por estado de propuestas">
           <button type="button" id="prop-tab-pending" class="prop-state-tab active" role="tab" aria-selected="true" onclick="switchProposalStateTab('pending')">
-            Pendientes <span id="prop-tab-count-pending" class="prop-tab-badge"></span>
+            Pendientes
           </button>
           <button type="button" id="prop-tab-resolved" class="prop-state-tab" role="tab" aria-selected="false" onclick="switchProposalStateTab('resolved')">
-            Resueltas <span id="prop-tab-count-resolved" class="prop-tab-badge"></span>
+            Resueltas
           </button>
           <button type="button" id="prop-tab-all" class="prop-state-tab" role="tab" aria-selected="false" onclick="switchProposalStateTab('all')">
-            Todas <span id="prop-tab-count-all" class="prop-tab-badge"></span>
+            Todas
           </button>
         </div>
 
@@ -3170,7 +3173,7 @@ export function renderAdminHtml(): string {
             <!-- Buscador -->
             <div class="proposal-search-box">
               <span class="proposal-search-icon" aria-hidden="true">🔍</span>
-              <input type="text" id="proposal-filter-search" placeholder="Buscar por título, local, usuario..." aria-label="Buscar en propuestas" oninput="onProposalSearchInput(this.value)">
+              <input type="text" id="proposal-filter-search" placeholder="Buscar en propuestas cargadas..." title="Filtra sobre las propuestas cargadas en la página actual" aria-label="Buscar en propuestas cargadas" oninput="onProposalSearchInput(this.value)">
               <button type="button" id="proposal-filter-search-clear" class="proposal-search-clear" onclick="clearProposalSearch()" aria-label="Limpiar búsqueda" style="display:none;">✕</button>
             </div>
 
@@ -3291,9 +3294,6 @@ export function renderAdminHtml(): string {
         <div id="proposals-cards-container" class="proposals-editorial-list" role="feed" aria-label="Lista de propuestas">
           <div style="text-align:center; padding:2.5rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>
         </div>
-
-        <!-- Contenedor auxiliar oculto para retrocompatibilidad con tests unitarios -->
-        <div id="proposals-tbody" style="display:none;" aria-hidden="true"></div>
       </section>
 
       <!-- SECCIÓN VENUES DE INGESTA INSTAGRAM -->
@@ -10685,13 +10685,28 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       loadAdminProposals();
     };
 
+    window.filterAteneoProposals = function() {
+      const sourceEl = document.getElementById('proposal-filter-source');
+      if (sourceEl) sourceEl.value = 'WEB_PROGRAMACION';
+      const classEl = document.getElementById('proposal-filter-classification');
+      if (classEl) classEl.value = '';
+      if (!cachedProposals || cachedProposals.length === 0) {
+        loadAdminProposals();
+      } else {
+        renderProposalsList(cachedProposals);
+      }
+    };
+
     window.switchProposalTab = function(tab) {
       currentProposalTab = tab;
+      const classEl = document.getElementById('proposal-filter-classification');
+      const sourceEl = document.getElementById('proposal-filter-source');
+
       if (tab === 'all') {
         currentProposalStateTab = 'all';
         syncStateTabButtons();
-        const classEl = document.getElementById('proposal-filter-classification');
         if (classEl) classEl.value = '';
+        if (sourceEl) sourceEl.value = '';
       } else if (tab === 'archived') {
         currentProposalStateTab = 'resolved';
         syncStateTabButtons();
@@ -10700,9 +10715,12 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       } else if (tab === 'biblioteca') {
         if (typeof loadBibliotecaImageProposals === 'function') loadBibliotecaImageProposals();
         return;
+      } else if (tab === 'ateneo') {
+        if (sourceEl) sourceEl.value = 'WEB_PROGRAMACION';
+        if (classEl) classEl.value = '';
       } else {
-        const classEl = document.getElementById('proposal-filter-classification');
         if (classEl) classEl.value = tab;
+        if (sourceEl && sourceEl.value === 'WEB_PROGRAMACION') sourceEl.value = '';
       }
       renderProposalsList(cachedProposals);
     };
@@ -10889,11 +10907,17 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     window.openProposalImageModal = function(id) {
       const prop = cachedProposals.find(p => p.id === id);
       if (!prop || !prop.image_url) return;
+
+      const imgUrl = String(prop.image_url).trim();
+      if (!imgUrl.startsWith('https://') && !imgUrl.startsWith('http://') && !imgUrl.startsWith('data:image/')) {
+        return;
+      }
+
       const imgEl = document.getElementById('modal-prop-img-element');
       const titleEl = document.getElementById('modal-prop-img-title');
       const extLink = document.getElementById('modal-prop-img-external');
       if (imgEl) {
-        imgEl.src = prop.image_url;
+        imgEl.src = imgUrl;
         imgEl.alt = 'Cartel de ' + (prop.title || 'Propuesta #' + prop.id);
       }
       if (titleEl) {
@@ -10901,7 +10925,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         try { titleEl.innerText = titleEl.textContent; } catch (_) {}
       }
       if (extLink) {
-        extLink.href = prop.image_url;
+        extLink.href = imgUrl;
       }
       openModal('modal-proposal-image');
     };
@@ -10944,29 +10968,13 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       }
     };
 
-    function updateProposalStateCounts() {
-      const pendingCount = cachedProposals.filter(p => p.review_status === 'pending').length;
-      const resolvedCount = cachedProposals.filter(p => p.review_status !== 'pending').length;
-      const totalCount = cachedProposals.length;
-
-      const countPendingEl = document.getElementById('prop-tab-count-pending');
-      const countResolvedEl = document.getElementById('prop-tab-count-resolved');
-      const countAllEl = document.getElementById('prop-tab-count-all');
-
-      if (countPendingEl) countPendingEl.innerText = pendingCount > 0 ? String(pendingCount) : '';
-      if (countResolvedEl) countResolvedEl.innerText = resolvedCount > 0 ? String(resolvedCount) : '';
-      if (countAllEl) countAllEl.innerText = totalCount > 0 ? String(totalCount) : '';
-    }
-
     window.loadAdminProposals = async function() {
       const cards = document.getElementById('proposals-cards-container');
-      const tbody = document.getElementById('proposals-tbody');
       const countText = document.getElementById('proposals-count-text');
       const badge = document.getElementById('proposals-count-badge');
       const clearAllBtn = document.getElementById('proposal-filter-clear-btn');
 
       if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas...</div>';
-      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas...</td></tr>';
       if (countText) countText.innerText = 'Consultando propuestas...';
 
       const status = document.getElementById('proposal-filter-status')?.value || '';
@@ -11001,17 +11009,18 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (priceStatus) params.append('price_status', priceStatus);
       if (confidence) params.append('confidence', confidence);
       if (date) params.append('date', date);
+      if (classification === 'EVENTO_POSIBLE' || classification === 'EVENTO_CONTINUO' || classification === 'CONTENIDO_VENUE' || classification === 'DUPLICADO_POSIBLE') {
+        params.append('classification', classification);
+      }
 
       try {
         const res = await apiFetch('/api/v1/admin/proposals?' + params.toString());
         const data = await res.json();
         cachedProposals = data.proposals || [];
         renderProposalsList(cachedProposals);
-        updateProposalStateCounts();
       } catch (err) {
         const errMsg = '<div style="text-align:center; padding:2.5rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);"><strong>Error al cargar propuestas:</strong> ' + escapeHtml(err.message) + '</div>';
         if (cards) cards.innerHTML = errMsg;
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-danger);">Error al cargar propuestas: ' + escapeHtml(err.message) + '</td></tr>';
         if (countText) countText.innerText = 'Error al cargar';
       }
     };
@@ -11050,9 +11059,13 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
               ? '<span class="badge-status" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-size:0.75rem; font-weight:700;">Promoción</span>'
               : '<span class="badge-status" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-size:0.75rem; font-weight:700;">Archivado</span>')));
 
+      const isInstagram = (p.source_type === 'INSTAGRAM_POST') || (p.source_url && p.source_url.includes('instagram.com'));
       const sourceLabel = (p.source_type === 'WEB_PROGRAMACION' || p.venue_id === 10149)
         ? '<span style="display:inline-flex; align-items:center; gap:0.25rem;">🏛️ Ateneo (Web)</span>'
-        : '<span style="display:inline-flex; align-items:center; gap:0.25rem;">📷 Instagram</span>';
+        : (isInstagram
+          ? '<span style="display:inline-flex; align-items:center; gap:0.25rem;">📷 Instagram</span>'
+          : '<span style="display:inline-flex; align-items:center; gap:0.25rem;">🌐 Web original</span>');
+      const sourceLinkText = isInstagram ? '↗ Ver en Instagram' : '↗ Ver publicación original';
 
       const dateFormatted = isContinuous
         ? '<span style="color:#6d28d9; font-weight:700;">Del ' + escapeHtml(p.proposed_date || '—') + ' al ' + escapeHtml(p.proposed_end_date || '—') + '</span>'
@@ -11126,7 +11139,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             : '') +
           '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openProposalCaptionModal(' + p.id + ')">📄 Ver Detalle / Post</button>' +
           (p.source_url
-            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">↗ Ver en Instagram</a>'
+            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">' + sourceLinkText + '</a>'
             : '') +
           '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); archiveProposal(' + p.id + ')">📦 Archivar</button>' +
           '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); markProposalPromotion(' + p.id + ')">⭐ Marcar Promoción</button>' +
@@ -11134,20 +11147,23 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       } else if (p.review_status === 'approved_draft') {
         if (p.created_event_id) {
-          primaryBtnHtml = '<button type="button" class="btn-sm btn-secondary" onclick="switchSection(&quot;events&quot;)" style="font-weight:700; color:#059669; border-color:#a7f3d0; white-space:nowrap;">🎯 Evento #' + p.created_event_id + ' (Draft)</button>';
+          primaryBtnHtml = '<button type="button" class="btn-sm btn-secondary" onclick="editEvent(' + p.created_event_id + ')" title="Abrir ficha del evento #' + p.created_event_id + '" style="font-weight:700; color:#059669; border-color:#a7f3d0; white-space:nowrap;">🎯 Ver evento #' + p.created_event_id + '</button>';
         } else {
           primaryBtnHtml = '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" style="white-space:nowrap;">Ver Detalle</button>';
         }
-        menuItemsHtml = '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openProposalCaptionModal(' + p.id + ')">📄 Ver Detalle / Post</button>' +
+        menuItemsHtml = (p.created_event_id
+            ? '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); editEvent(' + p.created_event_id + ')">🎯 Ver evento #' + p.created_event_id + '</button>'
+            : '') +
+          '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openProposalCaptionModal(' + p.id + ')">📄 Ver Detalle / Post</button>' +
           (p.source_url
-            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">↗ Ver en Instagram</a>'
+            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">' + sourceLinkText + '</a>'
             : '');
 
       } else {
         primaryBtnHtml = '<button type="button" class="btn-sm btn-secondary" onclick="openProposalCaptionModal(' + p.id + ')" style="white-space:nowrap;">Ver Detalle</button>';
         menuItemsHtml = '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openProposalCaptionModal(' + p.id + ')">📄 Ver Detalle / Post</button>' +
           (p.source_url
-            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">↗ Ver en Instagram</a>'
+            ? '<a href="' + escapeHtml(p.source_url) + '" target="_blank" rel="noopener noreferrer" class="proposal-menu-item" onclick="closeAllProposalActionMenus()">' + sourceLinkText + '</a>'
             : '');
       }
 
@@ -11193,7 +11209,6 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
     window.renderProposalsList = function(proposals) {
       const cards = document.getElementById('proposals-cards-container');
-      const tbody = document.getElementById('proposals-tbody');
       const countText = document.getElementById('proposals-count-text');
       const badge = document.getElementById('proposals-count-badge');
 
@@ -11243,15 +11258,19 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         });
       }
 
+      const hasClientFilter = Boolean(proposalSearchQuery || source || (classification && (classification === 'no_time' || classification === 'duplicates' || classification === 'continuous' || classification === 'ateneo')));
+
       if (badge) {
-        badge.innerText = list.length + (list.length === 1 ? ' propuesta' : ' propuestas');
+        badge.innerText = hasClientFilter
+          ? (list.length + (list.length === 1 ? ' coincidencia' : ' coincidencias'))
+          : (list.length + (list.length === 1 ? ' propuesta' : ' propuestas'));
         badge.style.display = 'inline-block';
       }
       if (countText) {
-        if (list.length === cachedProposals.length) {
-          countText.innerText = list.length + (list.length === 1 ? ' propuesta cargada' : ' propuestas cargadas');
+        if (hasClientFilter || list.length !== cachedProposals.length) {
+          countText.innerText = list.length + ' de ' + cachedProposals.length + ' cargadas (filtro en página)';
         } else {
-          countText.innerText = list.length + ' de ' + cachedProposals.length + (cachedProposals.length === 1 ? ' propuesta mostrada' : ' propuestas mostradas');
+          countText.innerText = list.length + (list.length === 1 ? ' propuesta cargada' : ' propuestas cargadas') + ' (servidor)';
         }
       }
 
@@ -11264,13 +11283,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           '<p style="margin:0.35rem 0 0 0; font-size:0.875rem;">Ajusta los filtros o la pestaña para ver otros registros.</p>' +
         '</div>';
         if (cards) cards.innerHTML = emptyMsg;
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6">' + emptyMsg + '</td></tr>';
         return;
       }
 
       const itemsHtml = list.map(p => renderProposalEditorialItem(p)).join('');
       if (cards) cards.innerHTML = itemsHtml;
-      if (tbody) tbody.innerHTML = itemsHtml;
     };
 
     window.applyTaquillaSuggestion = function(time, price) {
@@ -12260,12 +12277,10 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
     let cachedBibliotecaProposals = [];
 
     window.loadBibliotecaImageProposals = async function() {
-      const tbody = document.getElementById('proposals-tbody');
       const cards = document.getElementById('proposals-cards-container');
       const badge = document.getElementById('proposals-count-badge');
 
-      if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando propuestas de imágenes de Biblioteca Pública...</td></tr>';
-      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando...</div>';
+      if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Cargando propuestas de imágenes de Biblioteca Pública...</div>';
 
       try {
         const res = await apiFetch('/api/v1/admin/biblioteca-images/proposals');
@@ -12273,13 +12288,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         cachedBibliotecaProposals = data.proposals || [];
         renderBibliotecaImagesList(cachedBibliotecaProposals);
       } catch (err) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-danger);">Error al cargar propuestas de biblioteca: ' + escapeHtml(err.message) + '</td></tr>';
-        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas.</div>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-danger); background:#ffffff; border-radius:12px; border:1px solid var(--border);">Error al cargar propuestas de biblioteca: ' + escapeHtml(err.message) + '</div>';
       }
     };
 
     window.renderBibliotecaImagesList = function(proposals) {
-      const tbody = document.getElementById('proposals-tbody');
       const cards = document.getElementById('proposals-cards-container');
       const badge = document.getElementById('proposals-count-badge');
 
@@ -12298,60 +12311,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       }
 
       if (list.length === 0) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">No se encontraron imágenes pendientes para la Biblioteca Pública.</td></tr>';
-        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No se encontraron imágenes pendientes.</div>';
+        if (cards) cards.innerHTML = '<div style="text-align:center; padding:2.5rem 1rem; color:var(--text-muted); background:#ffffff; border-radius:12px; border:1px solid var(--border);">No se encontraron imágenes pendientes para la Biblioteca Pública.</div>';
         return;
-      }
-
-      if (tbody) {
-        tbody.innerHTML = list.map(function(item) {
-          const currentImgHtml = item.currentImageUrl
-            ? '<div style="display:flex; flex-direction:column; align-items:center;"><a href="' + escapeHtml(item.currentImageUrl) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(item.currentImageUrl) + '" alt="Actual" style="width:72px; height:72px; object-fit:cover; border-radius:6px; border:1px solid var(--border);"></a><span style="font-size:0.7rem; color:' + (item.currentImageStatus === 'IMAGEN_GENERICA' ? '#d97706' : '#64748b') + '; font-weight:700; margin-top:0.25rem;">' + (item.currentImageStatus === 'IMAGEN_GENERICA' ? '⚠️ Genérica' : 'Existente') + '</span></div>'
-            : '<div style="width:72px; height:72px; border-radius:6px; border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; background:#f8fafc; font-size:0.7rem; color:var(--text-muted); text-align:center; padding:0.25rem;">Sin Imagen</div>';
-
-          const proposedImgHtml = item.proposedImageUrl
-            ? '<div style="display:flex; flex-direction:column; align-items:center;"><a href="' + escapeHtml(item.proposedImageUrl) + '" target="_blank" rel="noopener noreferrer"><img src="' + escapeHtml(item.proposedImageUrl) + '" alt="Oficial R2" style="width:72px; height:72px; object-fit:cover; border-radius:6px; border:2px solid #059669; box-shadow:0 1px 3px rgba(5,150,105,0.2);"></a><span style="font-size:0.7rem; color:#059669; font-weight:800; margin-top:0.25rem;">✨ Oficial R2</span><span style="font-size:0.65rem; color:var(--text-muted);">' + item.imageWidth + 'x' + item.imageHeight + ' (' + Math.round(item.sizeBytes / 1024) + ' KB)</span></div>'
-            : '<span style="color:var(--text-muted); font-size:0.75rem;">No disponible</span>';
-
-          const recBadge = item.recommendedAction === 'ADOPTAR_IMAGEN_OFICIAL'
-            ? '<span class="badge-tag" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; font-weight:700;">🟢 Adoptar imagen oficial</span>'
-            : (item.recommendedAction === 'PROPONER_ALTERNATIVA'
-              ? '<span class="badge-tag" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a; font-weight:700;">🟡 Proponer alternativa</span>'
-              : '<span class="badge-tag" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; font-weight:700;">⚪ Mantener actual</span>');
-
-          const datesText = item.endDate && item.endDate !== item.editorialDate
-            ? 'Del ' + escapeHtml(item.editorialDate) + ' al ' + escapeHtml(item.endDate)
-            : escapeHtml(item.editorialDate);
-
-          return '<tr id="bib-row-' + item.eventId + '">' +
-            '<td style="min-width:240px;">' +
-              '<div style="display:flex; align-items:center; gap:0.4rem; margin-bottom:0.25rem;">' +
-                '<span style="font-size:0.75rem; font-weight:800; color:var(--text-muted);">#' + item.eventId + '</span>' +
-                '<div style="font-weight:700; font-size:0.925rem; color:var(--text-main); line-height:1.35;">' + escapeHtml(item.eventTitle) + '</div>' +
-              '</div>' +
-              '<div style="font-size:0.8rem; color:var(--text-dim); display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">' +
-                '<span>📅 <strong>' + datesText + '</strong></span>' +
-                '<span>📍 <strong>' + escapeHtml(item.venueName) + '</strong></span>' +
-              '</div>' +
-            '</td>' +
-            '<td style="text-align:center;">' + currentImgHtml + '</td>' +
-            '<td style="text-align:center;">' + proposedImgHtml + '</td>' +
-            '<td style="font-size:0.8125rem;">' +
-              '<div style="font-weight:700; color:var(--text-main);">' + escapeHtml(item.sourceName) + '</div>' +
-              '<div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">Crédito: ' + escapeHtml(item.credit) + '</div>' +
-              '<div style="margin-top:0.35rem;"><a href="' + escapeHtml(item.sourcePageUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--primary); font-size:0.75rem; font-weight:700; text-decoration:none;">Ficha Oficial ↗</a></div>' +
-            '</td>' +
-            '<td>' + recBadge + '</td>' +
-            '<td style="text-align:right;">' +
-              '<div style="display:flex; flex-direction:column; gap:0.35rem; align-items:flex-end;">' +
-                '<button type="button" class="btn-sm btn-primary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;adopt&quot;)" style="background:#059669; border-color:#059669; font-weight:700;">✓ Adoptar Oficial</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;keep_current&quot;)">Mantener Actual</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;discard&quot;)" style="color:#dc2626; border-color:#fecaca;">Descartar</button>' +
-                '<button type="button" class="btn-sm btn-secondary" onclick="openBibliotecaDecisionModal(' + item.eventId + ', &quot;request_search&quot;)" style="color:#2563eb; border-color:#bfdbfe;">Solicitar Búsqueda</button>' +
-              '</div>' +
-            '</td>' +
-          '</tr>';
-        }).join('');
       }
 
       if (cards) {

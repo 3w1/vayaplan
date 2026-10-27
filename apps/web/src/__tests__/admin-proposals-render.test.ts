@@ -20,7 +20,6 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
     expect(mainScript).toBeDefined();
 
     const domElements: Record<string, any> = {
-      'proposals-tbody': { innerHTML: '' },
       'proposals-cards-container': { innerHTML: '' },
       'proposals-count-badge': { innerText: '', style: {} },
       'proposal-filter-status': { value: 'pending' },
@@ -178,18 +177,11 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
     // Cargar propuestas
     await ctx.window.loadAdminProposals();
 
-    // Comprobar que no hay mensajes de error en tbody ni cards
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Error al cargar propuestas');
+    // Comprobar que no hay mensajes de error en cards
     expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Error al cargar propuestas');
 
     // 1. Pestaña inicial 'all'
-    const tbodyHtmlAll = domElements['proposals-tbody'].innerHTML;
     const cardsHtmlAll = domElements['proposals-cards-container'].innerHTML;
-
-    expect(tbodyHtmlAll).toContain('Exposición de Antonio Capel');
-    expect(tbodyHtmlAll).toContain('Del 2026-10-01 al 2026-10-30');
-    expect(tbodyHtmlAll).toContain('De 08:00 a 18:00');
-    expect(tbodyHtmlAll).toContain('No informado');
 
     expect(cardsHtmlAll).toContain('Exposición de Antonio Capel');
     expect(cardsHtmlAll).toContain('Del 2026-10-01 al 2026-10-30');
@@ -199,18 +191,18 @@ describe('apps/web — Renderizado de Propuestas en Admin (admin.ts)', () => {
 
     // 2. Cambiar a pestaña 'continuous'
     ctx.window.switchProposalTab('continuous');
-    expect(domElements['proposals-tbody'].innerHTML).toContain('Exposición de Antonio Capel');
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Concierto Acústico');
+    expect(domElements['proposals-cards-container'].innerHTML).toContain('Exposición de Antonio Capel');
+    expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Concierto Acústico');
 
     // 3. Cambiar a pestaña 'ateneo'
     ctx.window.switchProposalTab('ateneo');
-    expect(domElements['proposals-tbody'].innerHTML).toContain('Exposición de Antonio Capel');
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Concierto Acústico');
+    expect(domElements['proposals-cards-container'].innerHTML).toContain('Exposición de Antonio Capel');
+    expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Concierto Acústico');
 
     // 4. Cambiar a pestaña 'events'
     ctx.window.switchProposalTab('events');
-    expect(domElements['proposals-tbody'].innerHTML).not.toContain('Exposición de Antonio Capel');
-    expect(domElements['proposals-tbody'].innerHTML).toContain('Concierto Acústico');
+    expect(domElements['proposals-cards-container'].innerHTML).not.toContain('Exposición de Antonio Capel');
+    expect(domElements['proposals-cards-container'].innerHTML).toContain('Concierto Acústico');
 
     // 5. Modal de aprobación con propuesta #21 no lanza ReferenceError y rellena campos
     expect(() => ctx.openApproveProposalModal(21)).not.toThrow();
