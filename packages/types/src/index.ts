@@ -392,6 +392,14 @@ export interface RecurrenceItem {
   price_cents: number;
 }
 
+export interface PlaceImageAttribution {
+  author: string;
+  source_url: string;
+  license: string;
+  license_url: string;
+  modifications?: string | null;
+}
+
 export interface PlaceItem {
   id: number;
   name: string;
@@ -405,6 +413,7 @@ export interface PlaceItem {
   longitude: number | null;
   google_maps_url: string | null;
   image_url: string | null;
+  image_attribution: PlaceImageAttribution | null;
 }
 
 export interface CitySummary {

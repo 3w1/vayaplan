@@ -34,6 +34,34 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+export function sanitizeLinkHref(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const trimmed = rawUrl.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null;
+    }
+  } catch (_) {
+    return null;
+  }
+  return trimmed
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+export function renderSafeCreditLink(url: string | null | undefined, text: string): string {
+  const safeHref = sanitizeLinkHref(url);
+  const escapedText = escapeHtml(text);
+  if (!safeHref) {
+    return escapedText;
+  }
+  return '<a href="' + safeHref + '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">' + escapedText + '</a>';
+}
+
 function escapeJsonForScript(data: any): string {
   return JSON.stringify(data)
     .replace(/</g, '\\u003c')
@@ -1471,6 +1499,53 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       z-index: 10;
       flex-shrink: 0;
     }
+    .poster-lightbox-credit {
+      font-size: 0.8125rem;
+      color: #E2E8F0;
+      margin-bottom: 0.35rem;
+      line-height: 1.4;
+      display: none;
+    }
+    .poster-lightbox-credit a {
+      color: #9D7BFF;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .poster-lightbox-credit a:hover {
+      color: #FFFFFF;
+    }
+    .place-image-credit {
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+      padding: 0.5rem 1rem 0;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    .place-image-credit a {
+      color: var(--color-primary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .place-image-credit a:hover {
+      color: var(--color-night);
+    }
+    .card-credit-badge {
+      position: absolute;
+      bottom: 3px;
+      left: 3px;
+      background: rgba(11, 15, 59, 0.85);
+      color: #fff;
+      font-size: 0.5625rem;
+      font-weight: 800;
+      padding: 1px 3px;
+      border-radius: 2px;
+      line-height: 1;
+      pointer-events: none;
+      letter-spacing: 0.02em;
+    }
 
     .modal-sticky-header {
       position: sticky;
@@ -2021,6 +2096,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         <img id="poster-lightbox-img" class="poster-lightbox-img" src="" alt="Cartel completo del evento">
       </div>
       <div class="poster-lightbox-footer">
+        <div id="poster-lightbox-credit" class="poster-lightbox-credit"></div>
         <small>💡 Pulsa sobre la imagen para alternar zoom (100% / 200%). Puedes arrastrar para desplazarte. Pulsa Esc para cerrar.</small>
       </div>
     </div>
@@ -2192,6 +2268,34 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function sanitizeLinkHref(rawUrl) {
+      if (!rawUrl || typeof rawUrl !== 'string') return null;
+      const trimmed = rawUrl.trim();
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          return null;
+        }
+      } catch (_) {
+        return null;
+      }
+      return trimmed
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function renderSafeCreditLink(url, text) {
+      const safeHref = sanitizeLinkHref(url);
+      const escapedText = escapeHtml(text);
+      if (!safeHref) {
+        return escapedText;
+      }
+      return '<a href="' + safeHref + '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">' + escapedText + '</a>';
     }
 
     function getCategoryLabel(category) {
@@ -3166,7 +3270,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       for (const place of places) {
         html += \`
           <button type="button" class="card-compact" data-action="open-place" data-id="\${place.id}" aria-label="Lugar permanente: \${escapeHtml(place.name)}">
-            \${renderEventThumbnail(place.image_thumb_url || place.image_url, place.name)}
+            <div style="position:relative;flex-shrink:0;">
+              \${renderEventThumbnail(place.image_thumb_url || place.image_url, place.name)}
+              \${(place.image_thumb_url || place.image_url) && place.image_attribution ? \`<span class="card-credit-badge" aria-label="Foto bajo licencia \${escapeHtml(place.image_attribution.license)} por \${escapeHtml(place.image_attribution.author)}" title="Foto bajo licencia \${escapeHtml(place.image_attribution.license)} por \${escapeHtml(place.image_attribution.author)}">CC</span>\` : ''}
+            </div>
             <div class="card-info">
               <div>
                 <span class="place-badge">★ Siempre disponible</span>
@@ -3321,7 +3428,10 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         for (const p of currentData.places) {
           html += \`
             <button type="button" class="card-compact" data-action="open-place" data-id="\${p.id}" aria-label="Lugar permanente: \${escapeHtml(p.name)}">
-              \${renderEventThumbnail(p.image_thumb_url || p.image_url, p.name)}
+              <div style="position:relative;flex-shrink:0;">
+                \${renderEventThumbnail(p.image_thumb_url || p.image_url, p.name)}
+                \${(p.image_thumb_url || p.image_url) && p.image_attribution ? \`<span class="card-credit-badge" aria-label="Foto bajo licencia \${escapeHtml(p.image_attribution.license)} por \${escapeHtml(p.image_attribution.author)}" title="Foto bajo licencia \${escapeHtml(p.image_attribution.license)} por \${escapeHtml(p.image_attribution.author)}">CC</span>\` : ''}
+              </div>
               <div class="card-info">
                 <div>
                   <span class="place-badge">★ Siempre disponible</span>
@@ -3799,7 +3909,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
           </button>
         </div>
 
-        <div class="modal-hero-cover" style="aspect-ratio:16/9;" \${place.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(place.image_url)}" data-poster-title="\${escapeHtml(place.name)}" aria-label="Ver imagen completa de \${escapeHtml(place.name)}" style="aspect-ratio:16/9;cursor:zoom-in;"\` : ''}>
+        <div class="modal-hero-cover" style="aspect-ratio:16/9;" \${place.image_url ? \`role="button" tabindex="0" data-action="open-full-poster" data-poster-url="\${escapeHtml(place.image_url)}" data-poster-title="\${escapeHtml(place.name)}" data-poster-attribution="\${escapeHtml(JSON.stringify(place.image_attribution || null))}" aria-label="Ver imagen completa de \${escapeHtml(place.name)}" style="aspect-ratio:16/9;cursor:zoom-in;"\` : ''}>
           \${place.image_url ? \`
             <img class="modal-hero-backdrop" src="\${escapeHtml(place.image_url)}" alt="" aria-hidden="true">
             <img class="modal-hero-img" src="\${escapeHtml(place.image_url)}" alt="\${escapeHtml(place.name)}" onerror="this.onerror=null;this.closest('.modal-hero-cover').replaceWith(createSvgFallbackNode(true));">
@@ -3813,12 +3923,21 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
             </div>
           \`}
         </div>
+        \${place.image_attribution ? \`
+          <div class="place-image-credit">
+            <span aria-hidden="true">📷</span>
+            <span>Foto: \${renderSafeCreditLink(place.image_attribution.source_url, place.image_attribution.author)}</span>
+            <span aria-hidden="true">&middot;</span>
+            \${renderSafeCreditLink(place.image_attribution.license_url, place.image_attribution.license)}
+            \${place.image_attribution.modifications ? \`<span>(\${escapeHtml(place.image_attribution.modifications)})</span>\` : ''}
+          </div>
+        \` : ''}
 
         <div class="modal-body">
           <span class="place-badge" style="margin-bottom:0.75rem;">★ Siempre disponible</span>
           <h1 class="modal-title-main" id="modal-title-main">\${escapeHtml(place.name)}</h1>
           \${place.image_url ? \`
-            <button type="button" class="btn-poster-action" data-action="open-full-poster" data-poster-url="\${escapeHtml(place.image_url)}" data-poster-title="\${escapeHtml(place.name)}" aria-label="Ver imagen completa de \${escapeHtml(place.name)}">
+            <button type="button" class="btn-poster-action" data-action="open-full-poster" data-poster-url="\${escapeHtml(place.image_url)}" data-poster-title="\${escapeHtml(place.name)}" data-poster-attribution="\${escapeHtml(JSON.stringify(place.image_attribution || null))}" aria-label="Ver imagen completa de \${escapeHtml(place.name)}">
               <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/></svg>
               <span>Ver imagen completa</span>
             </button>
@@ -3952,6 +4071,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       const lb = document.getElementById('poster-lightbox');
       const img = document.getElementById('poster-lightbox-img');
       const titleEl = document.getElementById('poster-lightbox-title');
+      const creditEl = document.getElementById('poster-lightbox-credit');
 
       if (titleEl) {
         titleEl.textContent = title ? ('Cartel: ' + title) : 'Cartel completo';
@@ -3959,6 +4079,21 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       if (img) {
         img.src = url;
         img.alt = title ? ('Cartel completo de ' + title) : 'Cartel completo';
+      }
+      if (creditEl) {
+        let attribution = null;
+        if (triggerEl && triggerEl.dataset && triggerEl.dataset.posterAttribution) {
+          try {
+            attribution = JSON.parse(triggerEl.dataset.posterAttribution);
+          } catch (_) {}
+        }
+        if (attribution && attribution.author && attribution.license) {
+          creditEl.innerHTML = 'Foto: ' + renderSafeCreditLink(attribution.source_url, attribution.author) + ' &middot; ' + renderSafeCreditLink(attribution.license_url, attribution.license) + (attribution.modifications ? ' (' + escapeHtml(attribution.modifications) + ')' : '');
+          creditEl.style.display = 'block';
+        } else {
+          creditEl.innerHTML = '';
+          creditEl.style.display = 'none';
+        }
       }
       setLightboxZoom(1);
 
@@ -3978,6 +4113,11 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       lb.style.display = 'none';
       const img = document.getElementById('poster-lightbox-img');
       if (img) img.src = '';
+      const creditEl = document.getElementById('poster-lightbox-credit');
+      if (creditEl) {
+        creditEl.innerHTML = '';
+        creditEl.style.display = 'none';
+      }
       setLightboxZoom(1);
       if (lightboxTriggerEl && typeof lightboxTriggerEl.focus === 'function') {
         lightboxTriggerEl.focus();

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { query } from '@vayaplan/db';
-import { resolveGoogleMapsUrl } from '@vayaplan/shared';
+import { serializePlaceItem } from '@vayaplan/shared';
 import type { City, PlaceItem, PlacesResponseContract } from '@vayaplan/types';
 
 export const placesRoutes = new Hono();
@@ -59,7 +59,12 @@ placesRoutes.get('/cities/:citySlug/places', async (c) => {
       p.latitude,
       p.longitude,
       p.google_maps_url,
-      p.image_url
+      p.image_url,
+      p.image_author,
+      p.image_source_url,
+      p.image_license,
+      p.image_license_url,
+      p.image_modifications
     FROM places p
     WHERE p.city_id = $1 AND p.is_active = true
   `;
@@ -73,20 +78,7 @@ placesRoutes.get('/cities/:citySlug/places', async (c) => {
 
   const placesResult = await query(placesSql, queryParams);
 
-  const places: PlaceItem[] = placesResult.rows.map((row) => ({
-    id: Number(row.id),
-    name: row.name,
-    slug: row.slug,
-    category: row.category,
-    highlight_text: row.highlight_text,
-    description: row.description,
-    opening_hours_text: row.opening_hours_text,
-    price_text: row.price_text,
-    latitude: row.latitude !== null ? Number(row.latitude) : null,
-    longitude: row.longitude !== null ? Number(row.longitude) : null,
-    google_maps_url: resolveGoogleMapsUrl(row.google_maps_url, row.latitude, row.longitude),
-    image_url: row.image_url,
-  }));
+  const places: PlaceItem[] = placesResult.rows.map(serializePlaceItem);
 
   const response: PlacesResponseContract = {
     city: {
