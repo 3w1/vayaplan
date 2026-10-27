@@ -3,6 +3,15 @@
 -- Añade restricción CHECK para garantizar integridad atómica:
 --   - O bien no hay atribución (todas las columnas de atribución en NULL, permitiendo fotos CC0 o propias).
 --   - O bien hay atribución completa: image_url no vacía, autor, fuente, licencia y url de licencia obligatorios.
+--
+-- NOTA OPERATIVA DE CONCURRENCIA Y BLOQUEOS:
+-- ALTER TABLE requiere bloqueo ACCESS EXCLUSIVE sobre la tabla 'places'. Al ser columnas NULL sin DEFAULT
+-- y una restricción CHECK que se valida sobre una tabla pequeña, el bloqueo es muy breve (<50ms).
+-- Sin embargo, si existe contención concurrente o transacciones largas abiertas:
+--   - lock_timeout = 5s abortará la espera antes de degradar el servicio.
+--   - statement_timeout = 15s previene bloqueos residuales prolongados.
+-- Si la migración falla por timeout: DETENERSE INMEDIATAMENTE. No reintentar en bucle ni incrementar
+-- los límites sin autorización técnica expresa.
 
 SET statement_timeout = '15s';
 SET lock_timeout = '5s';

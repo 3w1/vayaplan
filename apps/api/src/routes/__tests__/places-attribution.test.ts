@@ -1,5 +1,7 @@
 import { describe, expect, test, beforeAll, afterAll } from 'bun:test';
 import { Pool } from 'pg';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const rawTestDbUrl =
   process.env.TEST_DATABASE_URL ||
@@ -29,6 +31,14 @@ const { sign } = await import('hono/jwt');
 
 const testPool = new Pool({ connectionString: rawTestDbUrl.trim() });
 
+const schema001Path = path.resolve(__dirname, '../../../../../infra/migrations/001_initial_schema.sql');
+const migration018Path = path.resolve(__dirname, '../../../../../infra/migrations/018_places_image_attribution.sql');
+const rollback018Path = path.resolve(__dirname, '../../../../../infra/migrations/rollback_018_places_image_attribution.sql');
+
+const schema001Sql = fs.readFileSync(schema001Path, 'utf-8');
+const migration018Sql = fs.readFileSync(migration018Path, 'utf-8');
+const rollback018Sql = fs.readFileSync(rollback018Path, 'utf-8');
+
 let adminToken: string;
 const createdPlaceIds: number[] = [];
 
@@ -48,6 +58,153 @@ afterAll(async () => {
 });
 
 describe('Atribución Fotográfica en Lugares Permanentes (places)', () => {
+  describe('0. Ciclo DDL de Migración y Rollback Real en BD Desechable', () => {
+    const disposableDbName = `vayaplan_disposable_mig018_${Date.now()}`;
+    const disposableDbUrl = `postgres://${parsedUrl.username}:${parsedUrl.password}@${parsedUrl.host}/${disposableDbName}`;
+    let disposablePool: Pool;
+
+    beforeAll(async () => {
+      // 1. Crear base de datos aislada desechable
+      await testPool.query(`CREATE DATABASE ${disposableDbName};`);
+      disposablePool = new Pool({ connectionString: disposableDbUrl });
+
+      // 2. Aplicar esquema inicial (001)
+      await disposablePool.query(schema001Sql);
+
+      // 3. Insertar ciudad base requerida por la FK places.city_id -> cities.id
+      await disposablePool.query(`
+        INSERT INTO cities (id, name, slug) VALUES (1, 'Palencia', 'palencia') ON CONFLICT DO NOTHING;
+      `);
+    });
+
+    afterAll(async () => {
+      if (disposablePool) {
+        await disposablePool.end();
+      }
+      try {
+        await testPool.query(`DROP DATABASE IF EXISTS ${disposableDbName};`);
+      } catch (_) {}
+    });
+
+    test('aplica el archivo SQL real 018_places_image_attribution.sql e instala columnas y CHECK', async () => {
+      // Ejecutar la migración real leída de disco
+      await disposablePool.query(migration018Sql);
+
+      // Verificar que las 5 columnas existen en information_schema
+      const colsRes = await disposablePool.query(`
+        SELECT column_name, data_type, character_maximum_length, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'places'
+          AND column_name IN (
+            'image_author', 'image_source_url', 'image_license',
+            'image_license_url', 'image_modifications'
+          )
+        ORDER BY column_name;
+      `);
+
+      expect(colsRes.rows.length).toBe(5);
+      const colMap = new Map(colsRes.rows.map((r: any) => [r.column_name, r]));
+
+      expect(colMap.get('image_author').data_type).toBe('character varying');
+      expect(colMap.get('image_author').character_maximum_length).toBe(150);
+      expect(colMap.get('image_author').is_nullable).toBe('YES');
+
+      expect(colMap.get('image_source_url').data_type).toBe('text');
+      expect(colMap.get('image_source_url').is_nullable).toBe('YES');
+
+      expect(colMap.get('image_license').data_type).toBe('character varying');
+      expect(colMap.get('image_license').character_maximum_length).toBe(50);
+      expect(colMap.get('image_license').is_nullable).toBe('YES');
+
+      expect(colMap.get('image_license_url').data_type).toBe('text');
+      expect(colMap.get('image_license_url').is_nullable).toBe('YES');
+
+      expect(colMap.get('image_modifications').data_type).toBe('character varying');
+      expect(colMap.get('image_modifications').character_maximum_length).toBe(255);
+      expect(colMap.get('image_modifications').is_nullable).toBe('YES');
+
+      // Verificar existencia y definición de la restricción CHECK en pg_constraint
+      const conRes = await disposablePool.query(`
+        SELECT conname, pg_get_constraintdef(oid) as def
+        FROM pg_constraint
+        WHERE conname = 'chk_places_image_attribution';
+      `);
+      expect(conRes.rows.length).toBe(1);
+      expect(conRes.rows[0].def).toContain('image_author IS NULL');
+      expect(conRes.rows[0].def).toContain('image_url IS NOT NULL');
+    });
+
+    test('la restricción CHECK creada por el archivo real valida integridad en la BD desechable', async () => {
+      // Inserción válida sin atribución
+      await disposablePool.query(`
+        INSERT INTO places (city_id, name, slug, category, highlight_text, is_active)
+        VALUES (1, 'Lugar Desechable Sin Atribucion', 'lugar-desechable-sin', 'cultura', 'Test', true);
+      `);
+
+      // Inserción válida con atribución completa
+      await disposablePool.query(`
+        INSERT INTO places (
+          city_id, name, slug, category, highlight_text, is_active,
+          image_url, image_author, image_source_url, image_license, image_license_url, image_modifications
+        ) VALUES (
+          1, 'Lugar Desechable Con Atribucion', 'lugar-desechable-con', 'museo', 'Test', true,
+          'https://cdn.vayaplan.com/foto.webp', 'Autor Test', 'https://fuente.org', 'CC BY 4.0', 'https://lic.org', 'WebP'
+        );
+      `);
+
+      // Inserción inválida con atribución incompleta
+      let failed = false;
+      try {
+        await disposablePool.query(`
+          INSERT INTO places (
+            city_id, name, slug, category, highlight_text, is_active,
+            image_url, image_author
+          ) VALUES (
+            1, 'Lugar Desechable Incompleto', 'lugar-desechable-incompleto', 'museo', 'Test', true,
+            'https://cdn.vayaplan.com/foto.webp', 'Autor Solitario'
+          );
+        `);
+      } catch (err: any) {
+        failed = true;
+        expect(err.message).toContain('chk_places_image_attribution');
+      }
+      expect(failed).toBe(true);
+    });
+
+    test('aplica rollback_018_places_image_attribution.sql y elimina columnas y CHECK limpiamente', async () => {
+      // Ejecutar archivo de reversión real
+      await disposablePool.query(rollback018Sql);
+
+      // Comprobar que las columnas han sido eliminadas
+      const colsRes = await disposablePool.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'places'
+          AND column_name IN (
+            'image_author', 'image_source_url', 'image_license',
+            'image_license_url', 'image_modifications'
+          );
+      `);
+      expect(colsRes.rows.length).toBe(0);
+
+      // Comprobar que la restricción CHECK ya no existe
+      const conRes = await disposablePool.query(`
+        SELECT conname
+        FROM pg_constraint
+        WHERE conname = 'chk_places_image_attribution';
+      `);
+      expect(conRes.rows.length).toBe(0);
+
+      // Comprobar que la tabla places y sus columnas básicas siguen intactas
+      const baseRes = await disposablePool.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'places'
+          AND column_name IN ('id', 'city_id', 'name', 'slug', 'image_url');
+      `);
+      expect(baseRes.rows.length).toBe(5);
+    });
+  });
   describe('1. Integridad en Base de Datos (Restricción CHECK chk_places_image_attribution)', () => {
     test('permite insertar un lugar sin atribución (columnas en NULL, imagen opcional)', async () => {
       const res = await testPool.query(`
