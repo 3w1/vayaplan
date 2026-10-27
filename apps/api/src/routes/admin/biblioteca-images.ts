@@ -224,7 +224,19 @@ bibliotecaImagesRoutes.post('/biblioteca-images/decision', async (c) => {
 
   const resolvedCandidateUrl = candidateUrl || adoptedImageUrl || r2?.finalUrl || known?.sourceImageUrl || '';
 
-  const userEmail = c.get('user')?.email || 'admin@vayaplan.com';
+  // Identidad de auditoría: debe proceder exclusivamente del usuario autenticado real
+  const authUser = c.get('user');
+  const operatorEmail = authUser && typeof authUser.email === 'string' ? authUser.email.trim() : '';
+
+  if (!operatorEmail) {
+    return c.json(
+      {
+        error: 'unauthorized',
+        message: 'No se pudo determinar la identidad del operador autenticado.',
+      },
+      401
+    );
+  }
 
   try {
     const decisionRecord: BibliotecaDecisionRecord = {
@@ -232,7 +244,7 @@ bibliotecaImagesRoutes.post('/biblioteca-images/decision', async (c) => {
       candidateKey: resolvedCandidateKey,
       candidateUrl: resolvedCandidateUrl,
       action,
-      operatorEmail: userEmail,
+      operatorEmail,
       decisionTimestamp: new Date().toISOString(),
       previousImageUrl: null,
       adoptedImageUrl: resolvedCandidateUrl || null,

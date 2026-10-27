@@ -12,6 +12,7 @@ const { app } = await import('../../../index');
 const { JWT_SECRET } = await import('../../../middleware/auth');
 const { sign } = await import('hono/jwt');
 const { getLatestEventImageDecisions } = await import('../../../services/biblioteca-images/biblioteca-service');
+const { R2_PROPOSALS_MAP } = await import('../biblioteca-images');
 
 const testPool = new Pool({ connectionString: rawTestDbUrl.trim() });
 
@@ -704,5 +705,110 @@ describe('Endpoint Real Hono: GET y POST /api/v1/admin/biblioteca-images', () =>
       client1.release();
       client2.release();
     }
+  });
+
+  test('16. Identidad real del operador en auditoría: registro exacto, rechazo ante contexto sin email y protección contra suplantación', async () => {
+    // 1. Administrador autenticado con email válido: se registra exactamente su identidad
+    const specificOperatorEmail = 'auditor-real-2026@vayaplan.com';
+    const validOperatorToken = await sign(
+      { email: specificOperatorEmail, role: 'admin' },
+      JWT_SECRET,
+      'HS256'
+    );
+
+    const candidateKey = R2_PROPOSALS_MAP[14].r2Key;
+    const candidateUrl = R2_PROPOSALS_MAP[14].finalUrl;
+
+    const resValid = await app.request('/api/v1/admin/biblioteca-images/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${validOperatorToken}`,
+      },
+      body: JSON.stringify({
+        eventId: 14,
+        action: 'keep_current',
+        candidateKey,
+        candidateUrl,
+      }),
+    });
+
+    expect(resValid.status).toBe(200);
+    const bodyValid = await resValid.json();
+    expect(bodyValid.success).toBe(true);
+
+    const dbCheckValid = await testPool.query(
+      `SELECT operator_email FROM event_image_decisions WHERE event_id = 14 ORDER BY id DESC LIMIT 1;`
+    );
+    expect(dbCheckValid.rows[0].operator_email).toBe(specificOperatorEmail);
+
+    // 2. Contexto autenticado sin email válido: operación rechazada (401) y cero escrituras
+    const noEmailToken = await sign(
+      { role: 'admin' }, // Token válido de admin pero sin email
+      JWT_SECRET,
+      'HS256'
+    );
+
+    const beforeCountRes = await testPool.query(
+      `SELECT COUNT(*)::int AS count FROM event_image_decisions WHERE event_id = 16;`
+    );
+    const countBefore = beforeCountRes.rows[0].count;
+
+    const resNoEmail = await app.request('/api/v1/admin/biblioteca-images/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${noEmailToken}`,
+      },
+      body: JSON.stringify({
+        eventId: 16,
+        action: 'keep_current',
+        candidateKey: R2_PROPOSALS_MAP[16].r2Key,
+        candidateUrl: R2_PROPOSALS_MAP[16].finalUrl,
+      }),
+    });
+
+    expect(resNoEmail.status).toBe(401);
+    const bodyNoEmail = await resNoEmail.json();
+    expect(bodyNoEmail.error).toBe('unauthorized');
+    expect(bodyNoEmail.message).toContain('No se pudo determinar la identidad del operador autenticado');
+
+    // Cero escrituras en la base de datos
+    const afterCountRes = await testPool.query(
+      `SELECT COUNT(*)::int AS count FROM event_image_decisions WHERE event_id = 16;`
+    );
+    expect(afterCountRes.rows[0].count).toBe(countBefore);
+
+    // 3. Payload con operator_email ajeno: no suplanta al usuario autenticado
+    const genuineOperatorEmail = 'genuino-seguro@vayaplan.com';
+    const genuineToken = await sign(
+      { email: genuineOperatorEmail, role: 'admin' },
+      JWT_SECRET,
+      'HS256'
+    );
+
+    const resSpoofAttempt = await app.request('/api/v1/admin/biblioteca-images/decision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${genuineToken}`,
+      },
+      body: JSON.stringify({
+        eventId: 16,
+        action: 'discard',
+        candidateKey: R2_PROPOSALS_MAP[16].r2Key,
+        candidateUrl: R2_PROPOSALS_MAP[16].finalUrl,
+        operator_email: 'suplantador@atacante.com',
+        operatorEmail: 'suplantador@atacante.com',
+      }),
+    });
+
+    expect(resSpoofAttempt.status).toBe(200);
+    const dbCheckSpoof = await testPool.query(
+      `SELECT operator_email FROM event_image_decisions WHERE event_id = 16 ORDER BY id DESC LIMIT 1;`
+    );
+    // Debe registrar la identidad del token autenticado, NUNCA el email del payload
+    expect(dbCheckSpoof.rows[0].operator_email).toBe(genuineOperatorEmail);
+    expect(dbCheckSpoof.rows[0].operator_email).not.toBe('suplantador@atacante.com');
   });
 });
