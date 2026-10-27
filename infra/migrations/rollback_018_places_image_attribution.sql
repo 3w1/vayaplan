@@ -19,15 +19,15 @@
 --   los términos legales de la licencia (ej. CC BY 4.0).
 --   En su lugar:
 --     1. Desactivar temporalmente el lugar mediante UPDATE places SET is_active = false WHERE id = <id>;
---        Esto retira el lugar de los tres endpoints públicos (/places, /events y /weekend, que filtran p.is_active = true)
---        preservando íntegros tanto image_url como los metadatos de atribución para su restablecimiento sin pérdida de datos.
+--        Esto excluye el lugar de las nuevas respuestas generadas por los tres endpoints públicos (/places, /events y /weekend),
+--        preservando íntegros image_url y los metadatos de atribución.
 --        (NOTA: NO ejecutar UPDATE places SET image_url = NULL preservando atribución, pues violaría la restricción CHECK).
---     2. Purgar las cachés específicas que exponen el lugar:
---        - URLs de API en CDN: /api/v1/cities/palencia/places, /api/v1/cities/palencia/events*, /api/v1/cities/palencia/weekend.
---        - HTML público: /.
---        - Si se requiere retirar el acceso directo por URL al archivo gráfico: purga puntual de la URL en Cloudflare o retiro del objeto en R2.
---        - NO prescribir purgas globales ("Purge Everything").
---     3. Revertir el código de la aplicación de forma segura mientras el lugar permanece oculto.
+--        (ADVERTENCIA: Clientes abiertos pueden conservar temporalmente datos en memoria o caché local; purgar capas intermedias no altera clientes ya abiertos).
+--     2. Purgar las superficies de caché pertinentes si están configuradas:
+--        - Entrega de medios (R2): URL completa y exacta https://media.vayaplan.com/places/palencia-museo-de-palencia.webp (con Cache-Control inmutable).
+--        - Origen de aplicación (https://vayaplan.com): si existen reglas de edge cache, purgar las URLs completas afectadas incluyendo query params exactos (ej. /api/v1/cities/palencia/events?date=YYYY-MM-DD) o por prefijo/tag según el plan de Cloudflare.
+--        - PROHIBIDO prescribir o ejecutar purgas globales ("Purge Everything").
+--     3. Revertir el código de la aplicación de forma segura mientras el lugar permanece oculto en nuevas respuestas.
 --
 -- Si tras análisis de emergencia se decide revertir el esquema DDL completamente (destructivo):
 --   - lock_timeout = 5s abortará si hay transacciones concurrentes sobre 'places'.
