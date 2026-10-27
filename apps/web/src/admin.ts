@@ -3655,6 +3655,37 @@ export function renderAdminHtml(): string {
             <label for="place-maps-url" style="font-weight:700; color:var(--text-main);">Enlace Google Maps</label>
             <input type="url" id="place-maps-url" placeholder="https://maps.google.com/?cid=...">
           </div>
+          <div class="form-group">
+            <label for="place-image-url" style="font-weight:700; color:var(--text-main);">URL de Imagen</label>
+            <input type="url" id="place-image-url" placeholder="https://cdn.vayaplan.com/places/...">
+          </div>
+          <div style="border-top:1px solid var(--border); padding-top:0.75rem; margin-top:0.25rem;">
+            <div style="font-size:0.875rem; font-weight:800; color:var(--text-main); margin-bottom:0.5rem;">Créditos y Atribución Fotográfica (opcional si es CC0/propia)</div>
+            <div class="form-grid two-cols" style="gap:0.75rem;">
+              <div class="form-group">
+                <label for="place-img-author" style="font-weight:700; color:var(--text-main);">Autor de la foto</label>
+                <input type="text" id="place-img-author" maxlength="150" placeholder="Ej: José Luis Filpo Cabana">
+              </div>
+              <div class="form-group">
+                <label for="place-img-source-url" style="font-weight:700; color:var(--text-main);">URL de la fuente original</label>
+                <input type="url" id="place-img-source-url" placeholder="https://commons.wikimedia.org/wiki/File:...">
+              </div>
+            </div>
+            <div class="form-grid two-cols" style="gap:0.75rem; margin-top:0.5rem;">
+              <div class="form-group">
+                <label for="place-img-license" style="font-weight:700; color:var(--text-main);">Licencia</label>
+                <input type="text" id="place-img-license" maxlength="50" placeholder="Ej: CC BY 4.0">
+              </div>
+              <div class="form-group">
+                <label for="place-img-license-url" style="font-weight:700; color:var(--text-main);">URL de la licencia</label>
+                <input type="url" id="place-img-license-url" placeholder="https://creativecommons.org/licenses/by/4.0/">
+              </div>
+            </div>
+            <div class="form-group" style="margin-top:0.5rem;">
+              <label for="place-img-modifications" style="font-weight:700; color:var(--text-main);">Modificaciones (si aplica)</label>
+              <input type="text" id="place-img-modifications" maxlength="255" placeholder="Ej: Redimensionada y convertida a WebP">
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" onclick="closeModal('modal-place')">Cancelar</button>
@@ -8402,6 +8433,18 @@ export function renderAdminHtml(): string {
       document.getElementById('modal-place-title').innerText = 'Nuevo Lugar Permanente';
       document.getElementById('form-place').reset();
       document.getElementById('place-id').value = '';
+      const imgUrlEl = document.getElementById('place-image-url');
+      if (imgUrlEl) imgUrlEl.value = '';
+      const authorEl = document.getElementById('place-img-author');
+      if (authorEl) authorEl.value = '';
+      const srcUrlEl = document.getElementById('place-img-source-url');
+      if (srcUrlEl) srcUrlEl.value = '';
+      const licenseEl = document.getElementById('place-img-license');
+      if (licenseEl) licenseEl.value = '';
+      const licUrlEl = document.getElementById('place-img-license-url');
+      if (licUrlEl) licUrlEl.value = '';
+      const modEl = document.getElementById('place-img-modifications');
+      if (modEl) modEl.value = '';
       const saveBtn = document.getElementById('btn-save-place');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -8434,6 +8477,18 @@ export function renderAdminHtml(): string {
       document.getElementById('place-hours').value = p.opening_hours_text || '';
       document.getElementById('place-price').value = p.price_text || '';
       document.getElementById('place-maps-url').value = p.google_maps_url || '';
+      const imgUrlEl = document.getElementById('place-image-url');
+      if (imgUrlEl) imgUrlEl.value = p.image_url || '';
+      const authorEl = document.getElementById('place-img-author');
+      if (authorEl) authorEl.value = p.image_author || '';
+      const srcUrlEl = document.getElementById('place-img-source-url');
+      if (srcUrlEl) srcUrlEl.value = p.image_source_url || '';
+      const licenseEl = document.getElementById('place-img-license');
+      if (licenseEl) licenseEl.value = p.image_license || '';
+      const licUrlEl = document.getElementById('place-img-license-url');
+      if (licUrlEl) licUrlEl.value = p.image_license_url || '';
+      const modEl = document.getElementById('place-img-modifications');
+      if (modEl) modEl.value = p.image_modifications || '';
       const saveBtn = document.getElementById('btn-save-place');
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -8468,6 +8523,13 @@ export function renderAdminHtml(): string {
         return;
       }
 
+      const imgUrlVal = document.getElementById('place-image-url')?.value?.trim() || null;
+      const authorVal = document.getElementById('place-img-author')?.value?.trim() || null;
+      const srcUrlVal = document.getElementById('place-img-source-url')?.value?.trim() || null;
+      const licenseVal = document.getElementById('place-img-license')?.value?.trim() || null;
+      const licUrlVal = document.getElementById('place-img-license-url')?.value?.trim() || null;
+      const modVal = document.getElementById('place-img-modifications')?.value?.trim() || null;
+
       const payload = {
         name: nameVal,
         category: document.getElementById('place-category').value,
@@ -8475,6 +8537,12 @@ export function renderAdminHtml(): string {
         opening_hours_text: document.getElementById('place-hours').value.trim() || null,
         price_text: document.getElementById('place-price').value.trim() || null,
         google_maps_url: document.getElementById('place-maps-url').value.trim() || null,
+        image_url: imgUrlVal,
+        image_author: authorVal,
+        image_source_url: srcUrlVal,
+        image_license: licenseVal,
+        image_license_url: licUrlVal,
+        image_modifications: modVal,
       };
 
       modalPlaceSaveInProgress = true;

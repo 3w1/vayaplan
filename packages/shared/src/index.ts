@@ -1,5 +1,5 @@
-import type { EventCategory, EventStatus, EventSourceType, VenueCategory, GastronomicRouteCategory, PriceStatus } from '@vayaplan/types';
-export type { PriceStatus };
+import type { EventCategory, EventStatus, EventSourceType, VenueCategory, GastronomicRouteCategory, PriceStatus, PlaceItem, PlaceImageAttribution } from '@vayaplan/types';
+export type { PriceStatus, PlaceItem, PlaceImageAttribution };
 
 /**
  * Categorías válidas de venues en VayaPlan.
@@ -737,6 +737,42 @@ export function parseAndNormalizeInstagramInput(input: unknown): ParsedInstagram
     isValid: true,
     username: cleanUsername,
     canonicalUrl: `https://www.instagram.com/${cleanUsername}/`,
+  };
+}
+
+/**
+ * Mapea y serializa una fila de base de datos de places a PlaceItem,
+ * garantizando la presencia coherente de image_attribution (o null si no aplica).
+ */
+export function serializePlaceItem(row: any): PlaceItem {
+  let imageAttribution: PlaceImageAttribution | null = null;
+
+  if (row.image_author && String(row.image_author).trim().length > 0) {
+    imageAttribution = {
+      author: String(row.image_author).trim(),
+      source_url: row.image_source_url ? String(row.image_source_url).trim() : '',
+      license: row.image_license ? String(row.image_license).trim() : '',
+      license_url: row.image_license_url ? String(row.image_license_url).trim() : '',
+      modifications: row.image_modifications && String(row.image_modifications).trim().length > 0
+        ? String(row.image_modifications).trim()
+        : null,
+    };
+  }
+
+  return {
+    id: Number(row.id),
+    name: row.name,
+    slug: row.slug,
+    category: row.category,
+    highlight_text: row.highlight_text,
+    description: row.description ? String(row.description) : null,
+    opening_hours_text: row.opening_hours_text ? String(row.opening_hours_text) : null,
+    price_text: row.price_text ? String(row.price_text) : null,
+    latitude: row.latitude !== null && row.latitude !== undefined ? Number(row.latitude) : null,
+    longitude: row.longitude !== null && row.longitude !== undefined ? Number(row.longitude) : null,
+    google_maps_url: resolveGoogleMapsUrl(row.google_maps_url, row.latitude, row.longitude),
+    image_url: row.image_url ? String(row.image_url) : null,
+    image_attribution: imageAttribution,
   };
 }
 

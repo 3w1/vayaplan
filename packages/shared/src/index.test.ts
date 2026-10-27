@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, normalizePrice, parseAndNormalizeInstagramInput, resolveGoogleMapsUrl } from './index';
+import { computeEditorialDate, formatDishPriceLabel, formatPriceLabel, normalizePrice, parseAndNormalizeInstagramInput, resolveGoogleMapsUrl, serializePlaceItem } from './index';
 
 describe('computeEditorialDate', () => {
   describe('Horario de verano (CEST, UTC+2)', () => {
@@ -470,5 +470,102 @@ describe('parseAndNormalizeInstagramInput', () => {
 
       const res2 = parseAndNormalizeInstagramInput('user!name?'); // Caracteres inválidos
       expect(res2.isValid).toBe(false);
+    });
+  });
+
+  describe('serializePlaceItem', () => {
+    test('mapea correctamente un lugar sin atribución (image_attribution = null)', () => {
+      const row = {
+        id: '1',
+        name: 'Cine Ortega',
+        slug: 'cine-ortega',
+        category: 'cine',
+        highlight_text: 'Cine histórico',
+        description: 'Salas tradicionales',
+        opening_hours_text: '17:00 a 22:30',
+        price_text: '8,00 €',
+        latitude: '42.0102',
+        longitude: '-4.5312',
+        google_maps_url: 'https://maps.google.com/?cid=123',
+        image_url: 'https://media.vayaplan.com/places/palencia-cine-ortega.webp',
+        image_author: null,
+        image_source_url: null,
+        image_license: null,
+        image_license_url: null,
+        image_modifications: null,
+      };
+
+      const result = serializePlaceItem(row);
+      expect(result.id).toBe(1);
+      expect(result.name).toBe('Cine Ortega');
+      expect(result.latitude).toBe(42.0102);
+      expect(result.longitude).toBe(-4.5312);
+      expect(result.image_url).toBe('https://media.vayaplan.com/places/palencia-cine-ortega.webp');
+      expect(result.image_attribution).toBeNull();
+    });
+
+    test('mapea correctamente un lugar con atribución completa', () => {
+      const row = {
+        id: 2,
+        name: 'Museo de Palencia',
+        slug: 'museo-de-palencia',
+        category: 'museo',
+        highlight_text: 'Casa del Cordón',
+        description: null,
+        opening_hours_text: null,
+        price_text: null,
+        latitude: null,
+        longitude: null,
+        google_maps_url: null,
+        image_url: 'https://media.vayaplan.com/places/palencia-museo-de-palencia.webp',
+        image_author: 'José Luis Filpo Cabana',
+        image_source_url: 'https://commons.wikimedia.org/wiki/File:Fachada_principal_de_la_Casa_de_Cord%C3%B3n,_Palencia.jpg',
+        image_license: 'CC BY 4.0',
+        image_license_url: 'https://creativecommons.org/licenses/by/4.0/',
+        image_modifications: 'Redimensionada y convertida a WebP',
+      };
+
+      const result = serializePlaceItem(row);
+      expect(result.id).toBe(2);
+      expect(result.image_attribution).toEqual({
+        author: 'José Luis Filpo Cabana',
+        source_url: 'https://commons.wikimedia.org/wiki/File:Fachada_principal_de_la_Casa_de_Cord%C3%B3n,_Palencia.jpg',
+        license: 'CC BY 4.0',
+        license_url: 'https://creativecommons.org/licenses/by/4.0/',
+        modifications: 'Redimensionada y convertida a WebP',
+      });
+    });
+
+    test('omite modificaciones como null si no están presentes', () => {
+      const row = {
+        id: 3,
+        name: 'Monumento Test',
+        slug: 'monumento-test',
+        category: 'monumento',
+        highlight_text: 'Test',
+        image_url: 'https://media.vayaplan.com/places/test.webp',
+        image_author: 'Autor Test',
+        image_source_url: 'https://example.com/source',
+        image_license: 'CC BY 4.0',
+        image_license_url: 'https://example.com/license',
+        image_modifications: null,
+      };
+
+      const result = serializePlaceItem(row);
+      expect(result.image_attribution?.modifications).toBeNull();
+    });
+
+    test('si image_author está vacío o solo espacios, image_attribution es null', () => {
+      const row = {
+        id: 4,
+        name: 'Test Espacios',
+        slug: 'test-espacios',
+        category: 'cultura',
+        highlight_text: 'Test',
+        image_author: '   ',
+      };
+
+      const result = serializePlaceItem(row);
+      expect(result.image_attribution).toBeNull();
     });
   });
