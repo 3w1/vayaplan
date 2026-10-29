@@ -4,7 +4,7 @@ import sharp from 'sharp';
 
 const rawTestDbUrl =
   process.env.TEST_DATABASE_URL ||
-  'postgres://vayaplan_user:vayaplan_dev_secret_2026@172.20.0.3:5432/vayaplan_test';
+  'postgres://vayaplan_user:vayaplan_dev_secret_2026@172.20.0.2:5432/vayaplan_test';
 
 process.env.DATABASE_URL = rawTestDbUrl.trim();
 process.env.MOCK_R2 = 'true';
@@ -879,5 +879,244 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     const preExistingHead = await headR2Object(preExistingKey);
     expect(preExistingHead).not.toBeNull();
     expect(preExistingHead!.size).toBe(validImageBuffer.length);
+  });
+
+  test('23. Contrato real Apify de post restringido (restricted_page): devuelve 422 access_restricted y habilita completar manualmente', async () => {
+    const shortcode = 'De_jb4yFX_T';
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    // Fixture fiel al dataset MdYbRqX1uboeCaeep de la ejecución real oIVsvQMdtfxaweZAT
+    setTestPostFetcherOverride(async () => [
+      {
+        error: 'restricted_page',
+        errorDescription:
+          'Restricted access, only partial data available. Reason: This content is age-restricted based on your age or account settings.',
+        url: canonicalUrl,
+        media_id: '4017085240661344211',
+        owner_id: '6617008040',
+      },
+    ]);
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(res.status).toBe(422);
+    const data = await res.json();
+    expect(data.error).toBe('access_restricted');
+    expect(data.message).toBe(
+      'Instagram restringe el acceso a esta publicación. No se ha podido importar automáticamente. Puedes completar la propuesta manualmente.'
+    );
+    expect(data.canCompleteManually).toBe(true);
+    expect(data.shortcode).toBe(shortcode);
+    expect(data.canonicalUrl).toBe(canonicalUrl);
+    expect(data.venueId).toBe(testVenueId);
+    expect(JSON.stringify(data)).not.toContain('undefined');
+  });
+
+  test('24. Objeto de scraper sin campos de identidad (incomplete_response): devuelve 422 y habilita completar manualmente', async () => {
+    const shortcode = 'TEST_NO_IDENTITY';
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    setTestPostFetcherOverride(async () => [
+      {
+        url: canonicalUrl,
+        displayUrl: 'https://cdn.instagram.com/v/test_missing_id.jpg',
+        caption: 'Publicación con datos incompletos sin shortCode ni code ni id',
+      },
+    ]);
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(res.status).toBe(422);
+    const data = await res.json();
+    expect(data.error).toBe('incomplete_response');
+    expect(data.message).toBe(
+      'El proveedor no ha devuelto una publicación válida. No se ha creado ninguna propuesta.'
+    );
+    expect(data.canCompleteManually).toBe(true);
+    expect(data.shortcode).toBe(shortcode);
+    expect(JSON.stringify(data)).not.toContain('undefined');
+  });
+
+  test('25. Discrepancia real de post (shortcode_mismatch): bloquea la importación por seguridad y NO ofrece completar automáticamente ese enlace', async () => {
+    const shortcode = 'TEST_WANTED_POST';
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    setTestPostFetcherOverride(async () => [
+      {
+        id: 'TEST_DIFFERENT_POST',
+        shortCode: 'TEST_DIFFERENT_POST',
+        url: 'https://www.instagram.com/p/TEST_DIFFERENT_POST/',
+        displayUrl: 'https://cdn.instagram.com/v/other.jpg',
+        caption: 'Publicación completamente diferente devuelta por error',
+      },
+    ]);
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(res.status).toBe(422);
+    const data = await res.json();
+    expect(data.error).toBe('shortcode_mismatch');
+    expect(data.message).toBe(
+      'La publicación recibida no coincide con el enlace solicitado. Importación cancelada por seguridad.'
+    );
+    expect(data.canCompleteManually).toBe(false);
+    expect(JSON.stringify(data)).not.toContain('undefined');
+  });
+
+  test('26. POST /api/v1/admin/proposals/manual: validación defensiva y control de acceso', async () => {
+    // 1. Sin autenticación -> 401
+    const unauthRes = await app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'https://www.instagram.com/p/De_jb4yFX_T/' }),
+    });
+    expect(unauthRes.status).toBe(401);
+
+    // 2. URL no válida de Instagram -> 400
+    const invalidUrlRes = await app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://facebook.com/post/12345',
+        title: 'Título válido',
+        image_url: 'https://images.vayaplan.com/test.jpg',
+      }),
+    });
+    expect(invalidUrlRes.status).toBe(400);
+
+    // 3. Título faltante o muy corto -> 400
+    const shortTitleRes = await app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://www.instagram.com/p/De_jb4yFX_T/',
+        title: 'A',
+        image_url: 'https://images.vayaplan.com/test.jpg',
+      }),
+    });
+    expect(shortTitleRes.status).toBe(400);
+
+    // 4. Imagen faltante -> 400
+    const noImageRes = await app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://www.instagram.com/p/De_jb4yFX_T/',
+        title: 'Título de Prueba Válido',
+      }),
+    });
+    expect(noImageRes.status).toBe(400);
+  });
+
+  test('27. POST /api/v1/admin/proposals/manual: registro exitoso como propuesta pendiente y prevención de duplicados', async () => {
+    const shortcode = `TEST_MANUAL_${Date.now()}`;
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    // 1. Alta exitosa
+    const createRes = await app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        title: 'Concierto Jazz en Palencia',
+        image_url: 'https://images.vayaplan.com/proposals/manual_jazz.jpg',
+        caption: 'Concierto en vivo con entrada gratuita a las 20:30h.',
+        venue_id: testVenueId,
+        classification: 'EVENTO_POSIBLE',
+        category: 'musica_directo',
+        proposed_date: '2026-11-15',
+        proposed_time: '20:30',
+        price_status: 'FREE',
+        price: 0,
+      }),
+    });
+
+    expect(createRes.status).toBe(201);
+    const createData = await createRes.json();
+    expect(createData.success).toBe(true);
+    expect(createData.proposal).toBeDefined();
+    createdProposalIds.push(createData.proposal.id);
+    expect(createData.proposal.review_status).toBe('pending');
+    expect(createData.proposal.requires_manual_review).toBe(true);
+    expect(createData.proposal.confidence).toBe('BAJA');
+    expect(createData.proposal.price_source).toBe('admin_manual');
+    expect(createData.proposal.reviewed_by).toBeNull();
+    expect(createData.proposal.dedupe_key).toBe(`instagram_${shortcode}`);
+
+    // Comprobar en base de datos
+    const dbRes = await testPool.query(
+      `SELECT * FROM curation_proposals WHERE id = $1;`,
+      [createData.proposal.id]
+    );
+    expect(dbRes.rows.length).toBe(1);
+    const row = dbRes.rows[0];
+    expect(row.title).toBe('Concierto Jazz en Palencia');
+    expect(row.review_status).toBe('pending');
+    expect(row.requires_manual_review).toBe(true);
+    expect(row.confidence).toBe('BAJA');
+    expect(row.price_source).toBe('admin_manual');
+    expect(row.reviewed_by).toBeNull();
+    expect(row.dedupe_key).toBe(`instagram_${shortcode}`);
+
+    // 2. Intento de duplicado con misma URL / shortcode -> 409
+    const dupRes = await app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        title: 'Intento de Duplicado de Propuesta',
+        image_url: 'https://images.vayaplan.com/proposals/manual_dup.jpg',
+      }),
+    });
+
+    expect(dupRes.status).toBe(409);
+    const dupData = await dupRes.json();
+    expect(dupData.error).toBe('duplicate_proposal');
+    expect(dupData.message).toContain('ya existe como propuesta');
   });
 });

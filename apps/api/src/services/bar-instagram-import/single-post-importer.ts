@@ -84,6 +84,9 @@ export interface ImportSingleInstagramPostResult {
   recordType?: 'proposal' | 'event';
   proposal?: any;
   event?: any;
+  canCompleteManually?: boolean;
+  canonicalUrl?: string;
+  shortcode?: string;
 }
 
 /**
@@ -752,7 +755,10 @@ export async function importSingleInstagramPost(
         status: 422,
         code: 'post_not_found',
         error:
-          'No se pudo recuperar la publicación desde Instagram. Puede pertenecer a una cuenta privada, haber sido eliminada o requerir inicio de sesión.',
+          'El proveedor no ha devuelto una publicación válida. No se ha creado ninguna propuesta.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
       };
     }
 
@@ -762,18 +768,138 @@ export async function importSingleInstagramPost(
         status: 422,
         code: 'unexpected_multiple_results',
         error: `El proveedor devolvió ${rawItems.length} publicaciones para una URL individual. Operación cancelada por seguridad.`,
+        canCompleteManually: false,
       };
     }
 
     const item = rawItems[0];
+    if (!item || typeof item !== 'object') {
+      return {
+        success: false,
+        status: 422,
+        code: 'incomplete_response',
+        error:
+          'El proveedor no ha devuelto una publicación válida. No se ha creado ninguna propuesta.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+      };
+    }
+
+    // 7.1 Evidencia de restricción de acceso (ej: contenido con restricciones de edad, login_required, restricted_page)
+    const isRestricted =
+      item.error === 'restricted_page' ||
+      item.isRestricted === true ||
+      item.isAgeRestricted === true ||
+      (typeof item.errorDescription === 'string' &&
+        /restricted|age-restricted|restricci/i.test(item.errorDescription)) ||
+      (typeof item.error === 'string' &&
+        /restricted|login_required|checkpoint_required/i.test(item.error)) ||
+      (typeof item.message === 'string' &&
+        /restricted|age-restricted|login required/i.test(item.message));
+
+    if (isRestricted) {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'bar_instagram_import',
+          action: 'single_post_import',
+          diagnosis: 'access_restricted',
+          shortcode,
+          canonicalUrl,
+          providerError: item.error,
+          providerErrorDescription: item.errorDescription || item.message,
+        })
+      );
+      return {
+        success: false,
+        status: 422,
+        code: 'access_restricted',
+        error:
+          'Instagram restringe el acceso a esta publicación. No se ha podido importar automáticamente. Puedes completar la propuesta manualmente.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+      };
+    }
+
+    // 7.2 Error explícito del proveedor sin restricción
+    if (item.error || item.errorMessage) {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'bar_instagram_import',
+          action: 'single_post_import',
+          diagnosis: 'provider_error',
+          shortcode,
+          canonicalUrl,
+          providerError: item.error || item.errorMessage,
+          providerErrorDescription: item.errorDescription,
+        })
+      );
+      return {
+        success: false,
+        status: 422,
+        code: 'incomplete_response',
+        error:
+          'El proveedor no ha devuelto una publicación válida. No se ha creado ninguna propuesta.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+      };
+    }
+
+    // 7.3 Identificar la publicación según el contrato real del Actor (item.shortCode, item.code, item.id)
     const returnedShortcode = item.shortCode || item.code || item.id;
 
+    if (!returnedShortcode || typeof returnedShortcode !== 'string') {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'bar_instagram_import',
+          action: 'single_post_import',
+          diagnosis: 'missing_identity',
+          shortcode,
+          canonicalUrl,
+          rawKeys: Object.keys(item),
+        })
+      );
+      return {
+        success: false,
+        status: 422,
+        code: 'incomplete_response',
+        error:
+          'El proveedor no ha devuelto una publicación válida. No se ha creado ninguna propuesta.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+      };
+    }
+
+    // 7.4 Comparación exacta del shortcode (sensible a mayúsculas, sin inventar identificadores)
     if (returnedShortcode !== shortcode) {
+      console.warn(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'warn',
+          service: 'bar_instagram_import',
+          action: 'single_post_import',
+          diagnosis: 'shortcode_mismatch',
+          requestedShortcode: shortcode,
+          returnedShortcode,
+          canonicalUrl,
+        })
+      );
       return {
         success: false,
         status: 422,
         code: 'shortcode_mismatch',
-        error: `El post devuelto por el scraper (${returnedShortcode}) no coincide con el solicitado (${shortcode}). Operación cancelada por seguridad.`,
+        error:
+          'La publicación recibida no coincide con el enlace solicitado. Importación cancelada por seguridad.',
+        canCompleteManually: false,
       };
     }
 
@@ -800,6 +926,9 @@ export async function importSingleInstagramPost(
         status: 422,
         code: 'missing_image',
         error: 'La publicación no contiene una imagen o miniatura utilizable como cartel.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
       };
     }
 

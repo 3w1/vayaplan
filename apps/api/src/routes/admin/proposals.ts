@@ -14,6 +14,7 @@ import {
   type TaquillaEventMetadata,
 } from '../../services/bar-instagram-import/taquilla-contrast';
 import { importSingleInstagramPost } from '../../services/bar-instagram-import/single-post-importer';
+import { validateInstagramPostUrl } from '../../services/bar-instagram-import/url-validator';
 
 let cachedTaquillaEvents: TaquillaEventMetadata[] | null = null;
 let lastTaquillaFetch = 0;
@@ -1218,7 +1219,17 @@ adminProposalsRoutes.post('/proposals/import-instagram-post', async (c) => {
   }
 
   if (!result.success) {
-    return c.json({ error: result.code || 'import_failed', message: result.error }, result.status as any);
+    return c.json(
+      {
+        error: result.code || 'import_failed',
+        message: result.error,
+        canCompleteManually: Boolean(result.canCompleteManually),
+        canonicalUrl: result.canonicalUrl || null,
+        shortcode: result.shortcode || null,
+        venueId: venueId || null,
+      },
+      result.status as any
+    );
   }
 
   if (result.alreadyExisted) {
@@ -1257,6 +1268,250 @@ adminProposalsRoutes.post('/proposals/import-instagram-post', async (c) => {
       alreadyExisted: false,
       message: 'Publicación importada exitosamente como propuesta pendiente.',
       proposal: result.proposal,
+    },
+    201
+  );
+});
+
+/**
+ * POST /api/v1/admin/proposals/manual
+ *
+ * Alta manual de una propuesta de Instagram cuando el extractor automático
+ * no puede acceder (p. ej. por restricción de edad, login_required o fallo del proveedor).
+ * Conserva la URL canónica y shortcode de Instagram, asocia el local seleccionado,
+ * sube o asigna el cartel mediante el pipeline existente de R2/Uploads y guarda
+ * como propuesta pendiente de revisión sin simular extracción automática ni
+ * marcarla como verificada.
+ */
+adminProposalsRoutes.post('/proposals/manual', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid_json', message: 'Cuerpo JSON inválido' }, 400);
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ error: 'invalid_body', message: 'Cuerpo JSON inválido. Debe ser un objeto.' }, 400);
+  }
+
+  // 1. Validar URL de Instagram y extraer shortcode
+  if (!body.url || typeof body.url !== 'string') {
+    return c.json({ error: 'missing_url', message: 'La URL de Instagram es obligatoria.' }, 400);
+  }
+
+  const urlValidation = validateInstagramPostUrl(body.url);
+  if (!urlValidation.valid) {
+    return c.json({ error: urlValidation.code, message: urlValidation.error }, 400);
+  }
+
+  const canonicalUrl = urlValidation.canonicalUrl;
+  const shortcode = urlValidation.shortcode;
+
+  // 2. Validar Título
+  const title = (body.title || '').trim();
+  if (!title || title.length < 3) {
+    return c.json({ error: 'missing_title', message: 'El título de la propuesta es obligatorio (mínimo 3 caracteres).' }, 400);
+  }
+  if (title.length > 255) {
+    return c.json({ error: 'title_too_long', message: 'El título no debe superar 255 caracteres.' }, 400);
+  }
+
+  // 3. Validar Imagen
+  const imageUrl = (body.image_url || '').trim();
+  if (!imageUrl) {
+    return c.json({ error: 'missing_image', message: 'Es obligatorio subir un cartel o imagen para la propuesta.' }, 400);
+  }
+
+  // 4. Validar Venue (opcional)
+  let venueId: number | null = null;
+  if (body.venue_id !== undefined && body.venue_id !== null && body.venue_id !== '') {
+    const parsedVId = parseInt(String(body.venue_id), 10);
+    if (isNaN(parsedVId)) {
+      return c.json({ error: 'invalid_venue_id', message: 'El identificador de venue debe ser un número entero o null.' }, 400);
+    }
+    const venueCheck = await query(`SELECT id FROM venues WHERE id = $1 AND is_active = true;`, [parsedVId]);
+    if (venueCheck.rows.length === 0) {
+      return c.json({ error: 'venue_not_found', message: `El local con ID ${parsedVId} no existe o está inactivo.` }, 400);
+    }
+    venueId = parsedVId;
+  }
+
+  // 5. Validar fechas y horas (opcionales)
+  const proposedDate = body.proposed_date ? String(body.proposed_date).trim() : null;
+  if (proposedDate && !isValidDateString(proposedDate)) {
+    return c.json({ error: 'invalid_date', message: 'El formato de fecha propuesta debe ser YYYY-MM-DD.' }, 400);
+  }
+
+  const proposedEndDate = body.proposed_end_date ? String(body.proposed_end_date).trim() : null;
+  if (proposedEndDate && !isValidDateString(proposedEndDate)) {
+    return c.json({ error: 'invalid_end_date', message: 'El formato de fecha de fin debe ser YYYY-MM-DD.' }, 400);
+  }
+
+  const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const proposedTime = body.proposed_time ? String(body.proposed_time).trim() : null;
+  if (proposedTime && !timeRegex.test(proposedTime)) {
+    return c.json({ error: 'invalid_time', message: 'El formato de hora propuesta debe ser HH:mm (ej: 20:30).' }, 400);
+  }
+
+  const proposedEndTime = body.proposed_end_time ? String(body.proposed_end_time).trim() : null;
+  if (proposedEndTime && !timeRegex.test(proposedEndTime)) {
+    return c.json({ error: 'invalid_end_time', message: 'El formato de hora de fin debe ser HH:mm (ej: 23:00).' }, 400);
+  }
+
+  // 6. Validar categoría
+  let category = body.category ? String(body.category).trim() : 'cultura';
+  if (!VALID_EVENT_CATEGORIES.includes(category as any)) {
+    category = 'otros';
+  }
+
+  // 7. Validar clasificación
+  let classification = body.classification ? String(body.classification).trim() : 'REQUIERE_REVISION';
+  if (!VALID_PROPOSAL_CLASSIFICATIONS.includes(classification)) {
+    classification = 'REQUIERE_REVISION';
+  }
+
+  // 8. Validar precio
+  const priceStatus = body.price_status || 'NOT_INFORMED';
+  const validPriceStatuses = ['UNKNOWN', 'FREE', 'NOT_INFORMED', 'CHECK_BOX_OFFICE', 'CONFIRMED'];
+  if (!validPriceStatuses.includes(priceStatus)) {
+    return c.json({ error: 'invalid_price_status', message: 'Estado de precio inválido.' }, 400);
+  }
+
+  let price: number | null = null;
+  if (priceStatus === 'FREE') {
+    price = 0;
+  } else if (priceStatus === 'CONFIRMED' && body.price !== undefined && body.price !== null) {
+    const numPrice = Number(body.price);
+    if (isNaN(numPrice) || numPrice < 0) {
+      return c.json({ error: 'invalid_price', message: 'El precio confirmado debe ser un número positivo.' }, 400);
+    }
+    price = numPrice;
+  }
+
+  const priceNote = body.price_note ? String(body.price_note).trim().slice(0, 255) : null;
+  const caption = body.caption ? String(body.caption).trim() : '';
+
+  // 9. Comprobar duplicados por shortcode y URL en curation_proposals y events
+  const dupProp = await query(
+    `SELECT id, review_status FROM curation_proposals WHERE instagram_post_shortcode = $1 OR source_url = $2 LIMIT 1;`,
+    [shortcode, canonicalUrl]
+  );
+  if (dupProp.rows.length > 0) {
+    return c.json(
+      {
+        error: 'duplicate_proposal',
+        message: `Esta publicación ya existe como propuesta (#${dupProp.rows[0].id}, estado: ${dupProp.rows[0].review_status}).`,
+        proposal: dupProp.rows[0],
+      },
+      409
+    );
+  }
+
+  const dupEvent = await query(
+    `SELECT id FROM events WHERE source_url = $1 OR source_url = $2 LIMIT 1;`,
+    [canonicalUrl, canonicalUrl.replace(/\/$/, '')]
+  );
+  if (dupEvent.rows.length > 0) {
+    return c.json(
+      {
+        error: 'event_already_exists',
+        message: `Esta publicación ya tiene un evento en catálogo (#${dupEvent.rows[0].id}).`,
+        event: dupEvent.rows[0],
+      },
+      409
+    );
+  }
+
+  // 10. Inserción como propuesta pendiente
+  const r2Key = extractR2Key(imageUrl);
+  const dedupeKey = 'instagram_' + shortcode;
+
+  const insertSql = `
+    INSERT INTO curation_proposals (
+      title,
+      proposed_date,
+      proposed_time,
+      proposed_end_date,
+      proposed_end_time,
+      venue_id,
+      category,
+      price,
+      caption,
+      source_url,
+      source_type,
+      instagram_username,
+      instagram_post_shortcode,
+      r2_key,
+      image_url,
+      image_width,
+      image_height,
+      confidence,
+      dedupe_key,
+      classification,
+      review_status,
+      requires_manual_review,
+      price_status,
+      price_note,
+      price_source,
+      price_checked_at,
+      created_at,
+      updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+      'instagram', null, $11, $12, $13, 1080, 1080,
+      'BAJA', $14, $15, 'pending', true,
+      $16, $17, 'admin_manual', NOW(), NOW(), NOW()
+    )
+    RETURNING *;
+  `;
+
+  const insertParams = [
+    title,
+    proposedDate,
+    proposedTime,
+    proposedEndDate,
+    proposedEndTime,
+    venueId,
+    category,
+    price,
+    caption,
+    canonicalUrl,
+    shortcode,
+    r2Key,
+    imageUrl,
+    dedupeKey,
+    classification,
+    priceStatus,
+    priceNote,
+  ];
+
+  const insertRes = await query(insertSql, insertParams);
+  const createdProposal = insertRes.rows[0];
+
+  console.log(
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'admin_proposals',
+      action: 'manual_proposal_created',
+      proposalId: createdProposal.id,
+      shortcode,
+      venueId,
+      user: user.email,
+    })
+  );
+
+  return c.json(
+    {
+      success: true,
+      message: 'Propuesta manual guardada como pendiente de revisión.',
+      proposal: createdProposal,
     },
     201
   );
