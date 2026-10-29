@@ -438,4 +438,133 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
     // Comprobar que en la lista editorial se muestra "⚠️ Local sin asignar"
     expect(cardsHtml).toContain('⚠️ Local sin asignar');
   });
+
+  test('9. Error 422 access_restricted muestra mensaje claro sin undefined y ofrece completar manualmente preservando URL y local', async () => {
+    const { sandbox, domElements, closedModals, openedModals } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/import-instagram-post': {
+          ok: false,
+          status: 422,
+          body: {
+            error: 'access_restricted',
+            message: 'Instagram restringe el acceso a esta publicación. No se ha podido importar automáticamente. Puedes completar la propuesta manualmente.',
+            canCompleteManually: true,
+            canonicalUrl: 'https://www.instagram.com/p/De_jb4yFX_T/',
+            shortcode: 'De_jb4yFX_T',
+            venueId: 10,
+          },
+        },
+      },
+    });
+
+    domElements['import-ig-url-input'].value = 'https://www.instagram.com/p/De_jb4yFX_T/';
+    domElements['import-ig-venue-select'].value = '10';
+
+    await sandbox.window.submitImportInstagramPost();
+
+    const feedbackHtml = domElements['import-ig-feedback'].innerHTML;
+    const feedbackText = domElements['import-ig-feedback'].innerText;
+
+    // Comprobar mensaje claro sin undefined ni objetos crudos
+    expect(feedbackText).toContain('Instagram restringe el acceso a esta publicación');
+    expect(feedbackText).not.toContain('undefined');
+    expect(feedbackHtml).toContain('btn-import-ig-manual');
+    expect(feedbackHtml).toContain('Completar manualmente');
+
+    // Al hacer clic en completar manualmente
+    sandbox.window.openManualProposalFromImport('https://www.instagram.com/p/De_jb4yFX_T/', 10);
+
+    expect(closedModals).toContain('modal-import-instagram-post');
+    expect(openedModals).toContain('modal-edit-proposal');
+
+    // Comprobar que modal-edit-proposal está en modo creación manual
+    expect(domElements['edit-prop-id'].value).toBe('');
+    expect(domElements['modal-edit-prop-title'].innerText).toBe('Completar Propuesta Manualmente');
+    expect(domElements['btn-submit-edit-prop'].innerText).toBe('💾 Guardar como Propuesta Pendiente');
+    expect(domElements['edit-prop-source-url'].value).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
+    expect(domElements['edit-prop-venue-select'].value).toBe('10');
+    expect(domElements['edit-prop-classification-select'].value).toBe('REQUIERE_REVISION');
+    expect(domElements['edit-prop-meta-conf'].innerText).toBe('BAJA');
+  });
+
+  test('10. Creación manual de propuesta valida campos obligatorios (título e imagen) en cliente', async () => {
+    const { sandbox, domElements, apiCalls } = setupTestContext();
+
+    sandbox.window.openManualProposalModal({
+      url: 'https://www.instagram.com/p/De_jb4yFX_T/',
+      venue_id: 2,
+    });
+
+    // Intentar guardar sin título ni imagen
+    domElements['edit-prop-title-input'].value = '';
+    domElements['edit-prop-image-url'].value = '';
+
+    await sandbox.window.submitEditProposal();
+    expect(apiCalls.length).toBe(0);
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('El título de la propuesta es obligatorio');
+
+    // Intentar guardar con título pero sin imagen
+    domElements['edit-prop-title-input'].value = 'Concierto Acústico Palencia';
+    await sandbox.window.submitEditProposal();
+    expect(apiCalls.length).toBe(0);
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('La imagen o cartel es obligatoria');
+  });
+
+  test('11. Creación manual con datos completos envía POST /api/v1/admin/proposals/manual y recarga propuestas', async () => {
+    let manualCallPayload: any = null;
+    const { sandbox, domElements, closedModals, getLoadedProposalsCalls } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/manual': {
+          ok: true,
+          status: 201,
+          body: {
+            success: true,
+            message: 'Propuesta registrada con éxito como pendiente.',
+            proposal: {
+              id: 888,
+              title: 'Jam Session Palencia',
+              review_status: 'pending',
+              confidence: 'BAJA',
+            },
+          },
+        },
+      },
+    });
+
+    // Interceptar fetch para capturar body enviado
+    const originalFetch = sandbox.fetch;
+    sandbox.fetch = async (url: string, opts: any) => {
+      if (url.includes('/api/v1/admin/proposals/manual')) {
+        manualCallPayload = JSON.parse(opts.body);
+      }
+      return originalFetch(url, opts);
+    };
+
+    sandbox.window.openManualProposalModal({
+      url: 'https://www.instagram.com/p/De_jb4yFX_T/',
+      venue_id: 10,
+    });
+
+    domElements['edit-prop-title-input'].value = 'Jam Session Palencia';
+    domElements['edit-prop-image-url'].value = 'https://images.vayaplan.com/proposals/manual_jam.jpg';
+    domElements['edit-prop-caption-input'].value = 'Ven a disfrutar de la mejor música en directo este viernes.';
+    domElements['edit-prop-date-input'].value = '2026-11-06';
+    domElements['edit-prop-time-input'].value = '21:00';
+
+    await sandbox.window.submitEditProposal();
+
+    expect(manualCallPayload).toBeDefined();
+    expect(manualCallPayload.url).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
+    expect(manualCallPayload.title).toBe('Jam Session Palencia');
+    expect(manualCallPayload.image_url).toBe('https://images.vayaplan.com/proposals/manual_jam.jpg');
+    expect(manualCallPayload.caption).toBe('Ven a disfrutar de la mejor música en directo este viernes.');
+    expect(manualCallPayload.venue_id).toBe(10);
+    expect(manualCallPayload.proposed_date).toBe('2026-11-06');
+    expect(manualCallPayload.proposed_time).toBe('21:00');
+
+    expect(closedModals).toContain('modal-edit-proposal');
+    expect(getLoadedProposalsCalls()).toBe(1);
+  });
 });

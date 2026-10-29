@@ -4712,12 +4712,14 @@ export function renderAdminHtml(): string {
 
       <div class="modal-body" style="flex:1; overflow-y:auto; padding:1.5rem; background:#f8fafc;">
         <input type="hidden" id="edit-prop-id" value="">
+        <input type="hidden" id="edit-prop-image-url" value="">
+        <input type="hidden" id="edit-prop-source-url" value="">
         <div id="edit-prop-error" class="editor-alert-error" style="display:none; margin-bottom:1rem;"></div>
 
         <!-- Banner de advertencia: Esta acción NO crea eventos ni publica -->
         <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.25rem; font-size:0.85rem; color:#1e40af; display:flex; align-items:center; gap:0.5rem;">
           <span>ℹ️</span>
-          <span><strong>Edición previa:</strong> Modificar esta propuesta guarda los cambios en el buzón editorial (estado <strong>PENDIENTE</strong>). <strong>No crea eventos en la agenda ni los aprueba ni publica</strong>.</span>
+          <span id="edit-prop-banner-text"><strong>Edición previa:</strong> Modificar esta propuesta guarda los cambios en el buzón editorial (estado <strong>PENDIENTE</strong>). <strong>No crea eventos en la agenda ni los aprueba ni publica</strong>.</span>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 220px; gap:1.25rem;">
@@ -4833,6 +4835,13 @@ export function renderAdminHtml(): string {
               <img id="edit-prop-img-preview" src="" alt="Previsualización" style="width:100%; height:100%; object-fit:cover; display:none;">
               <span id="edit-prop-img-placeholder" style="color:var(--text-muted); font-size:0.8rem;">Sin imagen</span>
             </div>
+            <div style="margin-top:0.25rem;">
+              <input type="file" id="edit-prop-image-file" accept="image/jpeg,image/png,image/webp" style="display:none;" onchange="handleProposalImageFileSelect(event)">
+              <button type="button" id="btn-edit-prop-upload-img" class="btn-secondary" onclick="document.getElementById('edit-prop-image-file').click()" style="width:100%; font-size:0.75rem; padding:0.4rem 0.5rem; display:flex; align-items:center; justify-content:center; gap:0.35rem; cursor:pointer;">
+                📁 Subir imagen / cartel
+              </button>
+              <div id="edit-prop-image-upload-status" style="font-size:0.7rem; color:var(--text-muted); margin-top:0.25rem; display:none;"></div>
+            </div>
 
             <div style="border-top:1px solid var(--border); padding-top:0.5rem; font-size:0.75rem; color:var(--text-dim); display:flex; flex-direction:column; gap:0.25rem;">
               <div><strong>Origen:</strong> <span id="edit-prop-meta-source">Instagram</span></div>
@@ -4846,9 +4855,10 @@ export function renderAdminHtml(): string {
               </div>
             </div>
 
-            <div style="border-top:1px solid var(--border); padding-top:0.5rem; flex:1; display:flex; flex-direction:column;">
-              <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.25rem;">Texto del Post (Caption)</div>
-              <div id="edit-prop-original-caption" style="white-space:pre-wrap; font-size:0.75rem; color:var(--text-main); line-height:1.4; max-height:140px; overflow-y:auto; background:#f8fafc; padding:0.5rem; border-radius:4px; border:1px solid var(--border);">
+            <div style="border-top:1px solid var(--border); padding-top:0.5rem; flex:1; display:flex; flex-direction:column; gap:0.35rem;">
+              <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Texto del Post (Caption)</div>
+              <textarea id="edit-prop-caption-input" style="width:100%; font-size:0.75rem; color:var(--text-main); line-height:1.4; min-height:75px; max-height:120px; resize:vertical; padding:0.5rem; border-radius:4px; border:1px solid var(--border); box-sizing:border-box;" placeholder="Pegar aquí el texto o descripción del post..."></textarea>
+              <div id="edit-prop-original-caption" style="white-space:pre-wrap; font-size:0.72rem; color:var(--text-muted); line-height:1.3; max-height:80px; overflow-y:auto; background:#f8fafc; padding:0.4rem; border-radius:4px; border:1px solid var(--border);">
               </div>
             </div>
           </div>
@@ -12133,18 +12143,259 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (captionEl) {
         captionEl.innerText = prop.caption || '(Sin texto disponible en el post original)';
       }
+      const captionInput = document.getElementById('edit-prop-caption-input');
+      if (captionInput) {
+        captionInput.value = prop.caption || '';
+      }
+
+      const titleModalEl = document.getElementById('modal-edit-prop-title');
+      if (titleModalEl) titleModalEl.innerText = 'Editar Propuesta';
+
+      const bannerText = document.getElementById('edit-prop-banner-text');
+      if (bannerText) {
+        bannerText.innerHTML = '<strong>Edición previa:</strong> Modificar esta propuesta guarda los cambios en el buzón editorial (estado <strong>PENDIENTE</strong>). <strong>No crea eventos en la agenda ni los aprueba ni publica</strong>.';
+      }
+
+      const btnSubmit = document.getElementById('btn-submit-edit-prop');
+      if (btnSubmit) btnSubmit.innerText = '💾 Guardar Cambios';
+
+      const sourceUrlHidden = document.getElementById('edit-prop-source-url');
+      if (sourceUrlHidden) sourceUrlHidden.value = prop.source_url || '';
+
+      const imgUrlHidden = document.getElementById('edit-prop-image-url');
+      if (imgUrlHidden) imgUrlHidden.value = prop.image_url || '';
+
+      const statusEl = document.getElementById('edit-prop-image-upload-status');
+      if (statusEl) {
+        statusEl.style.display = 'none';
+        statusEl.innerText = '';
+      }
 
       openModal('modal-edit-proposal');
+    };
+
+    window.openManualProposalModal = function(initialData) {
+      initialData = initialData || {};
+
+      const idInput = document.getElementById('edit-prop-id');
+      if (idInput) idInput.value = '';
+
+      const titleModalEl = document.getElementById('modal-edit-prop-title');
+      if (titleModalEl) titleModalEl.innerText = 'Completar Propuesta Manualmente';
+
+      const bannerText = document.getElementById('edit-prop-banner-text');
+      if (bannerText) {
+        bannerText.innerHTML = '<strong>Alta manual:</strong> Completar esta propuesta guarda el borrador en el buzón editorial (estado <strong>PENDIENTE</strong>). <strong>No crea eventos en la agenda ni los aprueba ni publica</strong>.';
+      }
+
+      const btnSubmit = document.getElementById('btn-submit-edit-prop');
+      if (btnSubmit) btnSubmit.innerText = '💾 Guardar como Propuesta Pendiente';
+
+      const errBox = document.getElementById('edit-prop-error');
+      if (errBox) {
+        errBox.style.display = 'none';
+        errBox.innerText = '';
+      }
+
+      const titleInput = document.getElementById('edit-prop-title-input');
+      if (titleInput) titleInput.value = initialData.title || '';
+
+      const classSelect = document.getElementById('edit-prop-classification-select');
+      if (classSelect) classSelect.value = initialData.classification || 'REQUIERE_REVISION';
+
+      const dateInput = document.getElementById('edit-prop-date-input');
+      if (dateInput) dateInput.value = initialData.proposed_date || '';
+
+      const endDateInput = document.getElementById('edit-prop-end-date-input');
+      if (endDateInput) endDateInput.value = initialData.proposed_end_date || '';
+
+      const timeInput = document.getElementById('edit-prop-time-input');
+      if (timeInput) timeInput.value = initialData.proposed_time || '';
+
+      const endTimeInput = document.getElementById('edit-prop-end-time-input');
+      if (endTimeInput) endTimeInput.value = initialData.proposed_end_time || '';
+
+      const venueSelect = document.getElementById('edit-prop-venue-select');
+      if (venueSelect) {
+        if (!venueSelect.options || venueSelect.options.length <= 1) {
+          const venuesList = (typeof cachedVenues !== 'undefined' && cachedVenues.length > 0) ? cachedVenues : (window.cachedVenues || []);
+          if (Array.isArray(venuesList) && venuesList.length > 0) {
+            venueSelect.innerHTML = '<option value="">— Sin local asignado —</option>' +
+              venuesList.map(v => '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>').join('');
+          }
+        }
+        venueSelect.value = initialData.venue_id ? String(initialData.venue_id) : '';
+      }
+
+      const catSelect = document.getElementById('edit-prop-category-select');
+      if (catSelect) catSelect.value = initialData.category || 'ocio';
+
+      const priceStatusSelect = document.getElementById('edit-prop-price-status-select');
+      if (priceStatusSelect) priceStatusSelect.value = initialData.price_status || 'NOT_INFORMED';
+      if (typeof onEditPriceStatusChange === 'function') onEditPriceStatusChange();
+
+      const priceInput = document.getElementById('edit-prop-price-input');
+      if (priceInput) priceInput.value = (initialData.price !== null && initialData.price !== undefined) ? String(initialData.price).replace('.', ',') : '0,00';
+
+      const priceNoteInput = document.getElementById('edit-prop-price-note-input');
+      if (priceNoteInput) priceNoteInput.value = initialData.price_note || '';
+
+      const sourceUrlHidden = document.getElementById('edit-prop-source-url');
+      if (sourceUrlHidden) sourceUrlHidden.value = initialData.url || '';
+
+      const imgUrlHidden = document.getElementById('edit-prop-image-url');
+      if (imgUrlHidden) imgUrlHidden.value = initialData.image_url || '';
+
+      const metaSource = document.getElementById('edit-prop-meta-source');
+      if (metaSource) metaSource.innerText = 'Instagram (Manual)';
+
+      const metaUser = document.getElementById('edit-prop-meta-user');
+      if (metaUser) metaUser.innerText = 'Entrada manual';
+
+      const metaConf = document.getElementById('edit-prop-meta-conf');
+      if (metaConf) {
+        metaConf.innerText = 'BAJA';
+        metaConf.className = 'badge-tag badge-danger';
+      }
+
+      const metaReasons = document.getElementById('edit-prop-meta-reasons');
+      if (metaReasons) metaReasons.innerText = 'Completado manual por restricción o error de extracción';
+
+      const metaLink = document.getElementById('edit-prop-meta-link');
+      if (metaLink) {
+        metaLink.href = '#';
+        metaLink.style.display = 'none';
+        if (initialData.url) {
+          try {
+            const parsedUrl = new URL(initialData.url);
+            if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+              metaLink.href = parsedUrl.href;
+              metaLink.target = '_blank';
+              metaLink.rel = 'noopener noreferrer';
+              metaLink.style.display = 'inline-block';
+            }
+          } catch {}
+        }
+      }
+
+      const img = document.getElementById('edit-prop-img-preview');
+      const placeholder = document.getElementById('edit-prop-img-placeholder');
+      const statusEl = document.getElementById('edit-prop-image-upload-status');
+      if (statusEl) {
+        statusEl.style.display = 'none';
+        statusEl.innerText = '';
+      }
+
+      if (initialData.image_url) {
+        if (img) {
+          img.src = initialData.image_url;
+          img.style.display = 'block';
+        }
+        if (placeholder) placeholder.style.display = 'none';
+      } else {
+        if (img) {
+          img.src = '';
+          img.style.display = 'none';
+        }
+        if (placeholder) {
+          placeholder.style.display = 'block';
+          placeholder.innerText = 'Sin imagen (sube una con el botón abajo)';
+        }
+      }
+
+      const captionEl = document.getElementById('edit-prop-original-caption');
+      if (captionEl) {
+        captionEl.innerText = initialData.caption || '(Completar texto abajo)';
+      }
+      const captionInput = document.getElementById('edit-prop-caption-input');
+      if (captionInput) {
+        captionInput.value = initialData.caption || '';
+      }
+
+      openModal('modal-edit-proposal');
+    };
+
+    window.openManualProposalFromImport = function(url, venueId) {
+      closeModal('modal-import-instagram-post');
+      window.openManualProposalModal({
+        url: url,
+        venue_id: venueId ? parseInt(venueId, 10) : undefined,
+        classification: 'REQUIERE_REVISION',
+      });
+    };
+
+    window.handleProposalImageFileSelect = async function(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const statusEl = document.getElementById('edit-prop-image-upload-status');
+      const previewImg = document.getElementById('edit-prop-img-preview');
+      const placeholder = document.getElementById('edit-prop-img-placeholder');
+      const urlHidden = document.getElementById('edit-prop-image-url');
+      const errBox = document.getElementById('edit-prop-error');
+
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#2563eb';
+        statusEl.innerText = 'Subiendo ' + file.name + '...';
+      }
+
+      try {
+        const token = getToken() || localStorage.getItem('token') || localStorage.getItem('adminToken') || '';
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch('/api/v1/admin/uploads', {
+          method: 'POST',
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+          body: formData,
+          signal: AbortSignal.timeout(30000),
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || 'Error al subir la imagen.');
+        }
+
+        const uploadedUrl = data.url || data.variants?.medium?.url || data.variants?.original?.url || '';
+        if (!uploadedUrl) {
+          throw new Error('El servidor no devolvió una URL de imagen válida.');
+        }
+
+        if (urlHidden) urlHidden.value = uploadedUrl;
+        if (previewImg) {
+          previewImg.src = uploadedUrl;
+          previewImg.style.display = 'block';
+        }
+        if (placeholder) placeholder.style.display = 'none';
+        if (statusEl) {
+          statusEl.style.color = '#16a34a';
+          statusEl.innerText = '✓ Cartel subido (' + (data.size_bytes ? (data.size_bytes / 1024).toFixed(1) + ' KB' : file.name) + ')';
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.style.color = '#dc2626';
+          statusEl.innerText = 'Error: ' + (err.message || 'Fallo de subida');
+        }
+        if (errBox) {
+          errBox.innerText = 'Error al subir imagen: ' + (err.message || 'Inténtelo de nuevo.');
+          errBox.style.display = 'block';
+        }
+      } finally {
+        event.target.value = '';
+      }
     };
 
     window.submitEditProposal = async function() {
       if (isSavingProposal) return;
 
-      const id = parseInt(document.getElementById('edit-prop-id')?.value, 10);
-      const prop = cachedProposals.find(p => p.id === id);
-      if (!id || !prop) {
-        alert('Propuesta no encontrada.');
-        return;
+      const idVal = document.getElementById('edit-prop-id')?.value;
+      const isManual = !idVal;
+
+      const errBox = document.getElementById('edit-prop-error');
+      if (errBox) {
+        errBox.style.display = 'none';
+        errBox.innerText = '';
       }
 
       const title = (document.getElementById('edit-prop-title-input')?.value || '').trim();
@@ -12158,12 +12409,6 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const priceStatus = document.getElementById('edit-prop-price-status-select')?.value || 'NOT_INFORMED';
       const priceNote = (document.getElementById('edit-prop-price-note-input')?.value || '').trim();
       const priceRaw = (document.getElementById('edit-prop-price-input')?.value || '').trim();
-
-      const errBox = document.getElementById('edit-prop-error');
-      if (errBox) {
-        errBox.style.display = 'none';
-        errBox.innerText = '';
-      }
 
       if (!title) {
         if (errBox) {
@@ -12204,6 +12449,96 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           return;
         }
         priceToSend = num;
+      }
+
+      if (isManual) {
+        const imageUrl = (document.getElementById('edit-prop-image-url')?.value || '').trim();
+        const sourceUrl = (document.getElementById('edit-prop-source-url')?.value || '').trim();
+        const caption = (document.getElementById('edit-prop-caption-input')?.value || '').trim();
+
+        if (!imageUrl) {
+          if (errBox) {
+            errBox.innerText = 'La imagen o cartel es obligatoria. Por favor sube una imagen con el botón correspondiente.';
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+
+        if (!sourceUrl) {
+          if (errBox) {
+            errBox.innerText = 'La URL de origen de Instagram es obligatoria.';
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+
+        const manualPayload = {
+          url: sourceUrl,
+          title: title,
+          image_url: imageUrl,
+          caption: caption || undefined,
+          venue_id: venueVal ? parseInt(venueVal, 10) : undefined,
+          classification: classification,
+          category: category,
+          proposed_date: dateVal ? dateVal : undefined,
+          proposed_end_date: endDateVal ? endDateVal : undefined,
+          proposed_time: timeVal ? timeVal : undefined,
+          proposed_end_time: endTimeVal ? endTimeVal : undefined,
+          price_status: priceStatus,
+          price_note: priceNote ? priceNote : undefined,
+          price: priceToSend !== null ? priceToSend : undefined,
+        };
+
+        isSavingProposal = true;
+        const btn = document.getElementById('btn-submit-edit-prop');
+        if (btn) {
+          btn.disabled = true;
+          btn.innerText = 'Guardando propuesta...';
+        }
+
+        try {
+          const res = await apiFetch('/api/v1/admin/proposals/manual', {
+            method: 'POST',
+            body: JSON.stringify(manualPayload),
+          });
+
+          const data = await res.json().catch(function() { return {}; });
+          if (!res.ok) {
+            if (errBox) {
+              errBox.innerText = data.message || 'Error al registrar la propuesta manual.';
+              errBox.style.display = 'block';
+            }
+            return;
+          }
+
+          closeModal('modal-edit-proposal');
+          alert('✓ ' + (data.message || 'Propuesta creada con éxito en el buzón editorial.'));
+          const savedScrollY = (typeof window !== 'undefined' && window.scrollY !== undefined) ? window.scrollY : 0;
+          await loadAdminProposals();
+          if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+            window.scrollTo(0, savedScrollY);
+          }
+        } catch (err) {
+          if (errBox) {
+            errBox.innerText = 'Error de conexión: ' + (err.message || 'Inténtelo de nuevo.');
+            errBox.style.display = 'block';
+          }
+        } finally {
+          isSavingProposal = false;
+          if (btn) {
+            btn.disabled = false;
+            btn.innerText = '💾 Guardar como Propuesta Pendiente';
+          }
+        }
+        return;
+      }
+
+      // Modo edición de propuesta existente
+      const id = parseInt(idVal, 10);
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!id || !prop) {
+        alert('Propuesta no encontrada.');
+        return;
       }
 
       const payload = {
@@ -12349,7 +12684,25 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             feedback.style.background = '#fef2f2';
             feedback.style.color = '#991b1b';
             feedback.style.border = '1px solid #fecaca';
-            feedback.innerText = '❌ ' + (data.message || 'Error al importar la publicación.');
+
+            const errMessage = data.message || 'Error al importar la publicación.';
+            feedback.innerText = '❌ ' + errMessage;
+
+            if (data.canCompleteManually || data.error === 'access_restricted' || data.error === 'incomplete_response') {
+              const canonicalUrl = data.canonicalUrl || rawUrl;
+              const vId = data.venueId || (venueSelect ? venueSelect.value : '');
+              feedback.innerHTML = '<div style="margin-bottom:0.5rem;">❌ ' + escapeHtml(errMessage) + '</div>' +
+                '<div style="margin-top:0.75rem; padding-top:0.5rem; border-top:1px dashed #fca5a5; display:flex; justify-content:flex-end;">' +
+                '<button type="button" id="btn-import-ig-manual" class="btn-primary" style="background:#2563eb; border-color:#2563eb; font-size:0.8125rem; padding:0.4rem 0.8rem; font-weight:700; cursor:pointer;">' +
+                '✍️ Completar manualmente</button>' +
+                '</div>';
+              const manualBtn = document.getElementById('btn-import-ig-manual');
+              if (manualBtn) {
+                manualBtn.onclick = function() {
+                  openManualProposalFromImport(canonicalUrl, vId);
+                };
+              }
+            }
           }
           return;
         }
