@@ -37,6 +37,7 @@ export function renderRoutesHtml(
 ): string {
   const city = data.city;
   const routes: PublicRouteSummary[] = data.routes || [];
+  const backUrl = city.slug === 'palencia' ? '/?cat=gastronomia' : `/?city=${encodeURIComponent(city.slug)}&cat=gastronomia`;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -201,7 +202,7 @@ export function renderRoutesHtml(
 <body>
   <header class="header-bar">
     <div class="header-content">
-      <a href="/?cat=gastronomia" class="back-link" aria-label="Volver a la agenda gastronómica">
+      <a href="${escapeHtml(backUrl)}" class="back-link" aria-label="Volver a la agenda gastronómica">
         ← Volver a la agenda
       </a>
       <span class="brand-logo">VayaPlan</span>
@@ -216,7 +217,7 @@ export function renderRoutesHtml(
       <div class="empty-state">
         <h3>No hay rutas gastronómicas activas</h3>
         <p>En este momento no hay rutas gastronómicas publicadas en ${escapeHtml(city.name)}.</p>
-        <p style="margin-top: 1rem;"><a href="/?cat=gastronomia" class="back-link">Consultar eventos gastronómicos en la agenda →</a></p>
+        <p style="margin-top: 1rem;"><a href="${escapeHtml(backUrl)}" class="back-link">Consultar eventos gastronómicos en la agenda →</a></p>
       </div>
     ` : `
       <div class="routes-grid">

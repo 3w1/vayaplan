@@ -443,6 +443,49 @@ describe('apps/web — Filtro «Gastronomía» en Agenda Pública (public-page.t
       expect(routesPageHtml).toContain('6 locales participantes');
       expect(routesPageHtml).toContain('← Volver a la agenda');
       expect(routesPageHtml).toContain('href="/?cat=gastronomia"');
+
+      // Verificación con otra ciudad (ej: Valladolid): preserva city slug
+      const valladolidHtml = renderRoutesHtml({
+        city: { slug: 'valladolid', name: 'Valladolid' },
+        routes: [],
+      }, 'https://vayaplan.com/rutas?city=valladolid');
+      expect(valladolidHtml).toContain('href="/?city=valladolid&amp;cat=gastronomia"');
+      expect(valladolidHtml).toContain('No hay rutas gastronómicas activas');
+    });
+
+    test('casos límite de fechas: límites abiertos, permanente y fuera de rango', () => {
+      const edgeRoutes = [
+        {
+          id: 10,
+          title: 'Ruta con solo start_date (desde 2026-10-28 en adelante)',
+          slug: 'ruta-start-only',
+          start_date: '2026-10-28',
+          end_date: null,
+          is_permanent: false,
+        },
+        {
+          id: 11,
+          title: 'Ruta con solo end_date (hasta 2026-10-30)',
+          slug: 'ruta-end-only',
+          start_date: null,
+          end_date: '2026-10-30',
+          is_permanent: false,
+        },
+      ];
+
+      // El 2026-10-29 ambas rutas con límites abiertos están activas
+      const active29 = evaluateActiveRoutes(edgeRoutes, ['2026-10-29']);
+      expect(active29!.length).toBe(2);
+
+      // El 2026-10-27: ruta-start-only aún no ha empezado, ruta-end-only sí está activa
+      const active27 = evaluateActiveRoutes(edgeRoutes, ['2026-10-27']);
+      expect(active27!.length).toBe(1);
+      expect(active27![0].slug).toBe('ruta-end-only');
+
+      // El 2026-10-31: ruta-end-only ya venció, ruta-start-only continúa activa
+      const active31 = evaluateActiveRoutes(edgeRoutes, ['2026-10-31']);
+      expect(active31!.length).toBe(1);
+      expect(active31![0].slug).toBe('ruta-start-only');
     });
   });
 });

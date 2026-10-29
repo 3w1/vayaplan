@@ -381,9 +381,9 @@ describe('Administración — Integración de Categoría Gastronomía (API y Cur
   });
 
   // ----------------------------------------------------------------------------
-  // 11. Script SQL de Corrección Protegido: Preserva status published y altera solo category
+  // 11. Script SQL de Corrección Protegido con operation_id, Respaldo Duradero e Idempotencia
   // ----------------------------------------------------------------------------
-  test('11. Script de corrección SQL preserva status published y solo altera category y updated_at', async () => {
+  test('11. Script de corrección SQL preserva status published, usa operation_id y es idempotente', async () => {
     // 1. Crear evento fixture con status 'published' y category 'dj_tardeo'
     const evInsert = await query(`
       INSERT INTO events (
@@ -396,7 +396,6 @@ describe('Administración — Integración de Categoría Gastronomía (API y Cur
       ) RETURNING id, updated_at, status, category, title, description, price_cents;
     `, [venueId]);
     const simEvId = evInsert.rows[0].id;
-    const simEvInitialUpdated = evInsert.rows[0].updated_at;
     createdEventIds.push(simEvId);
 
     // 2. Crear propuesta fixture con category 'ocio' vinculada a este evento
@@ -411,169 +410,249 @@ describe('Administración — Integración de Categoría Gastronomía (API y Cur
       ) RETURNING id, updated_at, category, title, review_status;
     `, [venueId, simEvId]);
     const simPropId = propInsert.rows[0].id;
-    const simPropInitialUpdated = propInsert.rows[0].updated_at;
     createdProposalIds.push(simPropId);
 
-    // 3. Ejecutar bloque de corrección con respaldos y comprobación jsonb
+    // 3. Crear tablas duraderas de auditoría y respaldo (limpiando ejecuciones previas de test)
     await query(`
-      CREATE TABLE IF NOT EXISTS _test_fix_audit (
+      DROP TABLE IF EXISTS _test_fix_gastronomia_audit CASCADE;
+      DROP TABLE IF EXISTS _test_backup_curation_prop_history CASCADE;
+      DROP TABLE IF EXISTS _test_backup_events_history CASCADE;
+
+      CREATE TABLE _test_fix_gastronomia_audit (
         id SERIAL PRIMARY KEY,
+        operation_id TEXT NOT NULL,
         entity_type VARCHAR(50) NOT NULL,
         entity_id INT NOT NULL,
         pre_category VARCHAR(50),
         pre_updated_at TIMESTAMPTZ,
         post_category VARCHAR(50),
         post_updated_at TIMESTAMPTZ,
-        was_modified BOOLEAN NOT NULL
+        was_modified BOOLEAN NOT NULL,
+        executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS _test_backup_curation_prop_history (
+        operation_id TEXT NOT NULL,
+        proposal_id INT NOT NULL,
+        row_data JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS _test_backup_events_history (
+        operation_id TEXT NOT NULL,
+        event_id INT NOT NULL,
+        row_data JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
 
-    // Bloque PL/pgSQL parametrizado para los IDs simulados
-    await query(`
-      DO $$
-      DECLARE
-        v_prop_pre curation_proposals%ROWTYPE;
-        v_ev_pre   events%ROWTYPE;
-        v_prop_post curation_proposals%ROWTYPE;
-        v_ev_post   events%ROWTYPE;
-        v_prop_rows INT;
-        v_ev_rows   INT;
-      BEGIN
-        -- Verificar existencia y asociación
-        SELECT * INTO v_prop_pre FROM curation_proposals WHERE id = ${simPropId};
-        SELECT * INTO v_ev_pre FROM events WHERE id = ${simEvId};
-        IF v_prop_pre.created_event_id <> ${simEvId} THEN
-          RAISE EXCEPTION 'Asociación rota';
-        END IF;
+    // Función auxiliar para simular la ejecución del script PL/pgSQL
+    const runCorrection = async (opId: string) => {
+      await query(`
+        DO $$
+        DECLARE
+          v_op_id TEXT := '${opId}';
+          v_prop_pre curation_proposals%ROWTYPE;
+          v_ev_pre   events%ROWTYPE;
+          v_prop_post curation_proposals%ROWTYPE;
+          v_ev_post   events%ROWTYPE;
+          v_prop_rows INT;
+          v_ev_rows   INT;
+        BEGIN
+          -- 1. Consultar y verificar estado actual
+          SELECT * INTO v_prop_pre FROM curation_proposals WHERE id = ${simPropId};
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'ABORT: Propuesta #% no encontrada', ${simPropId};
+          END IF;
 
-        -- Actualizar propuesta con bloqueo optimista
-        UPDATE curation_proposals
-        SET category = 'gastronomia', updated_at = NOW()
-        WHERE id = ${simPropId} AND updated_at = v_prop_pre.updated_at
-        RETURNING * INTO v_prop_post;
-        GET DIAGNOSTICS v_prop_rows = ROW_COUNT;
-        IF v_prop_rows <> 1 THEN
-          RAISE EXCEPTION 'Bloqueo optimista falló en propuesta';
-        END IF;
+          SELECT * INTO v_ev_pre FROM events WHERE id = ${simEvId};
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'ABORT: Evento #% no encontrado', ${simEvId};
+          END IF;
 
-        -- Actualizar evento con bloqueo optimista
-        UPDATE events
-        SET category = 'gastronomia', updated_at = NOW()
-        WHERE id = ${simEvId} AND updated_at = v_ev_pre.updated_at
-        RETURNING * INTO v_ev_post;
-        GET DIAGNOSTICS v_ev_rows = ROW_COUNT;
-        IF v_ev_rows <> 1 THEN
-          RAISE EXCEPTION 'Bloqueo optimista falló en evento';
-        END IF;
+          -- 2. Verificar vinculación de forma segura ante NULL
+          IF (v_prop_pre.created_event_id IS DISTINCT FROM ${simEvId}) AND (v_prop_pre.matched_event_id IS DISTINCT FROM ${simEvId}) THEN
+            RAISE EXCEPTION 'ABORT: Propuesta #% no vinculada al evento #%', ${simPropId}, ${simEvId};
+          END IF;
 
-        -- Comparar todos los campos contra el estado previo exceptuando category y updated_at
-        IF (to_jsonb(v_prop_post) - 'category' - 'updated_at') IS DISTINCT FROM (to_jsonb(v_prop_pre) - 'category' - 'updated_at') THEN
-          RAISE EXCEPTION 'Campos ajenos alterados en propuesta';
-        END IF;
+          -- 3. Caso Idempotente: Si ambos ya son 'gastronomia'
+          IF v_prop_pre.category = 'gastronomia' AND v_ev_pre.category = 'gastronomia' THEN
+            INSERT INTO _test_fix_gastronomia_audit (operation_id, entity_type, entity_id, pre_category, pre_updated_at, post_category, post_updated_at, was_modified)
+            VALUES 
+              (v_op_id, 'proposal', ${simPropId}, v_prop_pre.category, v_prop_pre.updated_at, v_prop_pre.category, v_prop_pre.updated_at, false),
+              (v_op_id, 'event', ${simEvId}, v_ev_pre.category, v_ev_pre.updated_at, v_ev_pre.category, v_ev_pre.updated_at, false);
+            RETURN;
+          END IF;
 
-        IF (to_jsonb(v_ev_post) - 'category' - 'updated_at') IS DISTINCT FROM (to_jsonb(v_ev_pre) - 'category' - 'updated_at') THEN
-          RAISE EXCEPTION 'Campos ajenos alterados en evento';
-        END IF;
+          -- 4. Respaldo duradero asociado al operation_id
+          INSERT INTO _test_backup_curation_prop_history (operation_id, proposal_id, row_data)
+          VALUES (v_op_id, ${simPropId}, to_jsonb(v_prop_pre));
 
-        -- Registrar auditoría
-        INSERT INTO _test_fix_audit (entity_type, entity_id, pre_category, pre_updated_at, post_category, post_updated_at, was_modified)
-        VALUES 
-          ('proposal', ${simPropId}, v_prop_pre.category, v_prop_pre.updated_at, v_prop_post.category, v_prop_post.updated_at, true),
-          ('event', ${simEvId}, v_ev_pre.category, v_ev_pre.updated_at, v_ev_post.category, v_ev_post.updated_at, true);
-      END $$;
-    `);
+          INSERT INTO _test_backup_events_history (operation_id, event_id, row_data)
+          VALUES (v_op_id, ${simEvId}, to_jsonb(v_ev_pre));
 
-    // 4. Verificaciones
-    const updatedEv = (await query('SELECT * FROM events WHERE id = $1;', [simEvId])).rows[0];
-    const updatedProp = (await query('SELECT * FROM curation_proposals WHERE id = $1;', [simPropId])).rows[0];
+          -- 5. Actualizar propuesta con bloqueo optimista
+          UPDATE curation_proposals
+          SET category = 'gastronomia', updated_at = NOW()
+          WHERE id = ${simPropId} AND updated_at = v_prop_pre.updated_at
+          RETURNING * INTO v_prop_post;
+          GET DIAGNOSTICS v_prop_rows = ROW_COUNT;
+          IF v_prop_rows <> 1 THEN
+            RAISE EXCEPTION 'ABORT: Bloqueo optimista falló en propuesta';
+          END IF;
 
-    // Status DEBE seguir siendo 'published'
-    expect(updatedEv.status).toBe('published');
-    expect(updatedEv.category).toBe('gastronomia');
-    expect(updatedEv.price_cents).toBe(4500);
-    expect(updatedEv.title).toBe('Cata Exclusiva Fixture Test');
-    expect(updatedEv.description).toBe('Descripción detallada intacta');
+          -- 6. Actualizar evento con bloqueo optimista
+          UPDATE events
+          SET category = 'gastronomia', updated_at = NOW()
+          WHERE id = ${simEvId} AND updated_at = v_ev_pre.updated_at
+          RETURNING * INTO v_ev_post;
+          GET DIAGNOSTICS v_ev_rows = ROW_COUNT;
+          IF v_ev_rows <> 1 THEN
+            RAISE EXCEPTION 'ABORT: Bloqueo optimista falló en evento';
+          END IF;
 
-    expect(updatedProp.category).toBe('gastronomia');
-    expect(updatedProp.title).toBe('Cata Exclusiva Fixture Test');
-    expect(updatedProp.review_status).toBe('approved_draft');
+          -- 7. Comparar todos los campos contra el estado previo exceptuando category y updated_at
+          IF (to_jsonb(v_prop_post) - 'category' - 'updated_at') IS DISTINCT FROM (to_jsonb(v_prop_pre) - 'category' - 'updated_at') THEN
+            RAISE EXCEPTION 'ABORT: Campos ajenos alterados en propuesta';
+          END IF;
+
+          IF (to_jsonb(v_ev_post) - 'category' - 'updated_at') IS DISTINCT FROM (to_jsonb(v_ev_pre) - 'category' - 'updated_at') THEN
+            RAISE EXCEPTION 'ABORT: Campos ajenos alterados en evento';
+          END IF;
+
+          -- 8. Registrar auditoría con was_modified = true
+          INSERT INTO _test_fix_gastronomia_audit (operation_id, entity_type, entity_id, pre_category, pre_updated_at, post_category, post_updated_at, was_modified)
+          VALUES 
+            (v_op_id, 'proposal', ${simPropId}, v_prop_pre.category, v_prop_pre.updated_at, v_prop_post.category, v_prop_post.updated_at, true),
+            (v_op_id, 'event', ${simEvId}, v_ev_pre.category, v_ev_pre.updated_at, v_ev_post.category, v_ev_post.updated_at, true);
+        END $$;
+      `);
+    };
+
+    // A. Ejecución inicial: modifica ambos registros
+    await runCorrection('op_test_run_1');
+
+    const evAfter1 = (await query('SELECT * FROM events WHERE id = $1;', [simEvId])).rows[0];
+    const propAfter1 = (await query('SELECT * FROM curation_proposals WHERE id = $1;', [simPropId])).rows[0];
+
+    expect(evAfter1.status).toBe('published');
+    expect(evAfter1.category).toBe('gastronomia');
+    expect(evAfter1.price_cents).toBe(4500);
+    expect(evAfter1.title).toBe('Cata Exclusiva Fixture Test');
+    expect(propAfter1.category).toBe('gastronomia');
+    expect(propAfter1.review_status).toBe('approved_draft');
+
+    const audit1 = (await query('SELECT * FROM _test_fix_gastronomia_audit WHERE operation_id = $1;', ['op_test_run_1'])).rows;
+    expect(audit1.length).toBe(2);
+    expect(audit1.every((r: any) => r.was_modified === true)).toBe(true);
+
+    // B. Ejecución repetida (Idempotencia): no debe volver a mutar ni alterar timestamps
+    await runCorrection('op_test_run_2');
+
+    const evAfter2 = (await query('SELECT * FROM events WHERE id = $1;', [simEvId])).rows[0];
+    expect(evAfter2.updated_at.toISOString()).toBe(evAfter1.updated_at.toISOString());
+
+    const audit2 = (await query('SELECT * FROM _test_fix_gastronomia_audit WHERE operation_id = $1;', ['op_test_run_2'])).rows;
+    expect(audit2.length).toBe(2);
+    expect(audit2.every((r: any) => r.was_modified === false)).toBe(true);
   });
 
   // ----------------------------------------------------------------------------
-  // 12. Script SQL de Reversión: Restaura solo filas modificadas y aborta ante mutación posterior
+  // 12. Script SQL de Reversión por operation_id: Restaura solo was_modified=true y aborta ante mutación
   // ----------------------------------------------------------------------------
-  test('12. Script de reversión restaura versión previa y aborta ante mutación posterior', async () => {
-    // Consultar registro de auditoría de la prueba 11
-    const auditRes = await query('SELECT * FROM _test_fix_audit ORDER BY id DESC LIMIT 2;');
+  test('12. Script de reversión por operation_id restaura versión previa y aborta ante mutación posterior', async () => {
+    // 1. Obtener los IDs del test anterior
+    const auditRes = await query(`
+      SELECT * FROM _test_fix_gastronomia_audit 
+      WHERE operation_id = 'op_test_run_1'
+      ORDER BY id ASC;
+    `);
     expect(auditRes.rows.length).toBe(2);
 
     const propAudit = auditRes.rows.find((r: any) => r.entity_type === 'proposal');
     const evAudit = auditRes.rows.find((r: any) => r.entity_type === 'event');
 
-    // 1. Revertir limpiamente cuando no ha habido mutaciones posteriores
-    await query(`
-      DO $$
-      DECLARE
-        v_curr_prop curation_proposals%ROWTYPE;
-        v_curr_ev   events%ROWTYPE;
-        v_prop_audit _test_fix_audit%ROWTYPE;
-        v_ev_audit   _test_fix_audit%ROWTYPE;
-      BEGIN
-        SELECT * INTO v_prop_audit FROM _test_fix_audit WHERE entity_type = 'proposal' AND entity_id = ${propAudit.entity_id};
-        SELECT * INTO v_ev_audit FROM _test_fix_audit WHERE entity_type = 'event' AND entity_id = ${evAudit.entity_id};
+    // Reversión parametrizada por operation_id
+    const runReversal = async (opId: string) => {
+      await query(`
+        DO $$
+        DECLARE
+          v_op_id TEXT := '${opId}';
+          v_curr_prop curation_proposals%ROWTYPE;
+          v_curr_ev   events%ROWTYPE;
+          v_prop_audit _test_fix_gastronomia_audit%ROWTYPE;
+          v_ev_audit   _test_fix_gastronomia_audit%ROWTYPE;
+        BEGIN
+          -- Comprobación independiente para propuesta
+          SELECT * INTO v_prop_audit FROM _test_fix_gastronomia_audit 
+          WHERE operation_id = v_op_id AND entity_type = 'proposal' AND entity_id = ${propAudit.entity_id};
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'ABORT REVERSAL: Auditoría de propuesta #% no encontrada para %', ${propAudit.entity_id}, v_op_id;
+          END IF;
 
-        SELECT * INTO v_curr_prop FROM curation_proposals WHERE id = ${propAudit.entity_id};
-        SELECT * INTO v_curr_ev FROM events WHERE id = ${evAudit.entity_id};
+          -- Comprobación independiente para evento
+          SELECT * INTO v_ev_audit FROM _test_fix_gastronomia_audit 
+          WHERE operation_id = v_op_id AND entity_type = 'event' AND entity_id = ${evAudit.entity_id};
+          IF NOT FOUND THEN
+            RAISE EXCEPTION 'ABORT REVERSAL: Auditoría de evento #% no encontrada para %', ${evAudit.entity_id}, v_op_id;
+          END IF;
 
-        IF v_curr_prop.updated_at <> v_prop_audit.post_updated_at THEN
-          RAISE EXCEPTION 'Mutación posterior detectada en propuesta';
-        END IF;
+          SELECT * INTO v_curr_prop FROM curation_proposals WHERE id = ${propAudit.entity_id};
+          SELECT * INTO v_curr_ev FROM events WHERE id = ${evAudit.entity_id};
 
-        IF v_curr_ev.updated_at <> v_ev_audit.post_updated_at THEN
-          RAISE EXCEPTION 'Mutación posterior detectada en evento';
-        END IF;
+          -- Revertir solo si was_modified es true
+          IF v_prop_audit.was_modified THEN
+            IF v_curr_prop.updated_at IS DISTINCT FROM v_prop_audit.post_updated_at THEN
+              RAISE EXCEPTION 'ABORT REVERSAL: Mutación posterior detectada en propuesta #%', ${propAudit.entity_id};
+            END IF;
 
-        UPDATE curation_proposals
-        SET category = v_prop_audit.pre_category, updated_at = NOW()
-        WHERE id = ${propAudit.entity_id};
+            UPDATE curation_proposals
+            SET category = v_prop_audit.pre_category, updated_at = NOW()
+            WHERE id = ${propAudit.entity_id};
+          END IF;
 
-        UPDATE events
-        SET category = v_ev_audit.pre_category, updated_at = NOW()
-        WHERE id = ${evAudit.entity_id};
-      END $$;
-    `);
+          IF v_ev_audit.was_modified THEN
+            IF v_curr_ev.updated_at IS DISTINCT FROM v_ev_audit.post_updated_at THEN
+              RAISE EXCEPTION 'ABORT REVERSAL: Mutación posterior detectada en evento #%', ${evAudit.entity_id};
+            END IF;
 
+            UPDATE events
+            SET category = v_ev_audit.pre_category, updated_at = NOW()
+            WHERE id = ${evAudit.entity_id};
+          END IF;
+        END $$;
+      `);
+    };
+
+    // A. Revertir op_test_run_2 (donde was_modified = false): Cero cambios
+    await runReversal('op_test_run_2');
+    const stillGastro = (await query('SELECT category FROM events WHERE id = $1;', [evAudit.entity_id])).rows[0];
+    expect(stillGastro.category).toBe('gastronomia');
+
+    // B. Revertir op_test_run_1 (donde was_modified = true): Restaura categorías originales
+    await runReversal('op_test_run_1');
     const revertedEv = (await query('SELECT category, status FROM events WHERE id = $1;', [evAudit.entity_id])).rows[0];
     const revertedProp = (await query('SELECT category FROM curation_proposals WHERE id = $1;', [propAudit.entity_id])).rows[0];
 
     expect(revertedEv.category).toBe('dj_tardeo');
-    expect(revertedEv.status).toBe('published'); // Estado publicado preservado intacto
+    expect(revertedEv.status).toBe('published'); // Estado published preservado
     expect(revertedProp.category).toBe('ocio');
 
-    // 2. Comprobar que si updated_at posterior difiere, aborta con excepción
-    // Simulamos mutación posterior:
-    await query(`UPDATE events SET updated_at = NOW() WHERE id = $1;`, [evAudit.entity_id]);
-
+    // C. Detección de mutación posterior con IS NOT DISTINCT FROM
+    // Al haber sufrido ya mutación de timestamp (por la reversión previa o ediciones concurrentes),
+    // un intento posterior de reversión aborta con excepción
     let threw = false;
     try {
-      await query(`
-        DO $$
-        DECLARE
-          v_curr_ev events%ROWTYPE;
-        BEGIN
-          SELECT * INTO v_curr_ev FROM events WHERE id = ${evAudit.entity_id};
-          IF v_curr_ev.updated_at <> '${evAudit.post_updated_at.toISOString()}'::timestamptz THEN
-            RAISE EXCEPTION 'ABORT ROLLBACK: El registro sufrió modificaciones posteriores';
-          END IF;
-        END $$;
-      `);
+      await runReversal('op_test_run_1');
     } catch (err: any) {
       threw = true;
-      expect(err.message).toContain('ABORT ROLLBACK: El registro sufrió modificaciones posteriores');
+      expect(err.message).toContain('ABORT REVERSAL: Mutación posterior detectada');
     }
     expect(threw).toBe(true);
 
-    // Limpieza de tabla de prueba
-    await query('DROP TABLE IF EXISTS _test_fix_audit;');
+    // Limpieza de tablas de prueba
+    await query('DROP TABLE IF EXISTS _test_fix_gastronomia_audit;');
+    await query('DROP TABLE IF EXISTS _test_backup_curation_prop_history;');
+    await query('DROP TABLE IF EXISTS _test_backup_events_history;');
   });
 });
