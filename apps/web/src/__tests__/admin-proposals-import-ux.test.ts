@@ -588,7 +588,11 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
     expect(html).toContain('id="modal-paid-fallback-confirm"');
     expect(html).toContain('intropix/instagram-posts-reels-scraper');
     expect(html).toContain('0,015 USD');
-    expect(html).toContain('0,005 USD');
+    expect(html).toContain('0,005');
+    expect(html).toContain('profile-scan');
+    expect(html).toContain('result-item');
+    expect(html).toContain('actor-start');
+    expect(html).toContain('0,0089 USD');
     expect(html).toContain('id="btn-confirm-paid-fallback"');
     expect(html).toContain('id="btn-cancel-paid-fallback"');
     expect(html).toContain('id="paid-fallback-feedback"');

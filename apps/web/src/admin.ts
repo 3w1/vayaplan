@@ -4942,22 +4942,30 @@ export function renderAdminHtml(): string {
         <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:1rem; font-size:0.825rem; color:#4c1d95; display:flex; flex-direction:column; gap:0.5rem;">
           <div><strong>Proveedor:</strong> <code style="background:#ffffff; padding:0.15rem 0.35rem; border-radius:4px; font-weight:700; color:#6d28d9;">intropix/instagram-posts-reels-scraper</code></div>
           <div><strong>URL de la publicación:</strong> <span id="paid-fallback-url-display" style="word-break:break-all; font-family:monospace; color:#1e1b4b;">-</span></div>
-          <div><strong>Alcance:</strong> 1 publicación específica (sin recorrer perfiles)</div>
+          <div><strong>Alcance:</strong> 1 publicación puntual (sin recorrer el feed de la cuenta)</div>
+          
+          <div style="background:#ffffff; border:1px solid #ede9fe; border-radius:6px; padding:0.6rem; font-size:0.775rem; color:#5b21b6; display:flex; flex-direction:column; gap:0.25rem;">
+            <div style="display:flex; justify-content:space-between;"><span>• Inicio de run (<code>actor-start</code>):</span><span>0,0050 USD</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Resolución de cuenta (<code>profile-scan</code>):</span><span>0,0020 USD</span></div>
+            <div style="display:flex; justify-content:space-between;"><span>• Post entregado (<code>result-item</code>):</span><span>0,0019 USD</span></div>
+          </div>
+
           <div style="display:flex; justify-content:space-between; border-top:1px dashed #c4b5fd; padding-top:0.5rem; margin-top:0.25rem;">
-            <span><strong>Coste estimado:</strong> ~0,009 USD</span>
-            <span><strong>Límite máximo efectivo:</strong> <span style="font-weight:800; color:#7c3aed;">0,015 USD</span></span>
+            <span><strong>Coste estimado en éxito:</strong> ~0,0089 USD</span>
+            <span><strong>Límite máximo autorizado:</strong> <span style="font-weight:800; color:#7c3aed;">0,015 USD</span></span>
           </div>
         </div>
 
         <!-- Aviso transparente de cargos y condiciones -->
         <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:0.85rem; font-size:0.8rem; color:#92400e; line-height:1.4;">
           <div style="font-weight:700; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.35rem;">
-            <span>⚠️</span> Condiciones y Cargos Aplicables:
+            <span>⚠️</span> Desglose de Facturación y Condiciones:
           </div>
           <ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">
-            <li>El proveedor aplica una tarifa de inicio de run (<strong>0,005 USD</strong>) con independencia del resultado.</li>
-            <li><strong>El éxito no está garantizado:</strong> el extractor alternativo puede fallar si la publicación fue eliminada o Instagram bloquea el acceso.</li>
-            <li><strong>Sin reintentos automáticos:</strong> esta autorización cubre un único intento puntual para este enlace.</li>
+            <li>El proveedor factura <strong>0,005 USD</strong> al iniciar el contenedor, incluso si el post no existe o está bloqueado.</li>
+            <li>El evento <code>profile-scan</code> (<strong>0,002 USD</strong>) se devenga para identificar la cuenta de procedencia, sin recorrer su histórico.</li>
+            <li><strong>El éxito no está garantizado:</strong> si Instagram restringe el acceso al post, el proveedor puede fallar.</li>
+            <li><strong>Sin reintentos automáticos:</strong> esta autorización puntual cubre un único intento facturable.</li>
           </ul>
         </div>
 

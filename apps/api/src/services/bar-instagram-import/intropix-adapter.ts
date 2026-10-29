@@ -4,17 +4,17 @@ export const INTROPIX_ACTOR_ID = 'intropix/instagram-posts-reels-scraper';
 export const INTROPIX_ACTOR_SLUG = 'intropix~instagram-posts-reels-scraper';
 
 // Tarifas del Actor comprobadas en el catálogo de Apify (modelo PAY_PER_EVENT):
-// - actor-start: 0.005 USD (se aplica una vez al iniciar el run, incluso si el post no se entrega)
-// - profile-scan: 0.002 USD (se aplica por perfil consultado si existe)
+// - actor-start: 0.005 USD (se aplica una vez al iniciar el contenedor, incluso si el post no se entrega)
+// - profile-scan: 0.002 USD (se aplica por cada cuenta distinta del autor a la que pertenece el enlace)
 // - result-item: 0.0019 USD (se aplica únicamente por item entregado al dataset)
 export const INTROPIX_START_CHARGE_USD = 0.005;
 export const INTROPIX_PROFILE_SCAN_CHARGE_USD = 0.002;
 export const INTROPIX_RESULT_ITEM_CHARGE_USD = 0.0019;
 
-// Coste estimado en caso de éxito para 1 enlace individual: 0.005 + 0.002 + 0.0019 = 0.0089 USD (~0.009 USD)
-export const INTROPIX_ESTIMATED_COST_USD = 0.009;
+// Coste estimado en caso de éxito para 1 enlace individual: 0.005 (inicio) + 0.002 (cuenta) + 0.0019 (post) = 0.0089 USD (~0.009 USD)
+export const INTROPIX_ESTIMATED_COST_USD = 0.0089;
 
-// Límite máximo efectivo de gasto impuesto al proveedor en el parámetro maxTotalChargeUsd: 0.015 USD
+// Límite máximo efectivo de gasto impuesto al proveedor en el parámetro maxTotalChargeUsd de la URL: 0.015 USD
 export const INTROPIX_MAX_CHARGE_LIMIT_USD = 0.015;
 
 export interface IntropixMediaSlide {
@@ -124,6 +124,7 @@ export async function scrapeSinglePostWithIntropix(params: {
         mediaType: 'any',
         includeViews: true,
         includeOffGridReels: false,
+        customRunId: params.customRunId,
       });
 
       if (mockResult.error) {
@@ -135,13 +136,15 @@ export async function scrapeSinglePostWithIntropix(params: {
           canCompleteManually: true,
           canonicalUrl,
           shortcode,
+          runId: mockResult.run?.id || params.customRunId,
+          reportedCostUsd: mockResult.error.code === 'apify_start_timeout' ? null : (mockResult.run?.usageTotalUsd ?? null),
         };
       }
 
       return processIntropixResponse({
         canonicalUrl,
         requestedShortcode: shortcode,
-        run: mockResult.run || { id: 'mock_run_' + Date.now(), status: 'SUCCEEDED', usageTotalUsd: INTROPIX_ESTIMATED_COST_USD },
+        run: mockResult.run || { id: params.customRunId || ('mock_run_' + Date.now()), status: 'SUCCEEDED', usageTotalUsd: INTROPIX_ESTIMATED_COST_USD },
         outputRecord: mockResult.output,
         items: mockResult.items || [],
       });
@@ -175,57 +178,93 @@ export async function scrapeSinglePostWithIntropix(params: {
     };
   }
 
-  // 1. Iniciar run en Apify con maxTotalChargeUsd impuesto
-  const runEndpoint = `https://api.apify.com/v2/acts/${INTROPIX_ACTOR_SLUG}/runs?token=${encodeURIComponent(
-    apifyToken
-  )}&maxTotalChargeUsd=${INTROPIX_MAX_CHARGE_LIMIT_USD}`;
-
-  const requestPayload = {
-    postUrls: [canonicalUrl],
-    mediaType: 'any',
-    includeViews: true,
-    includeOffGridReels: false,
-  };
-
   let runData: any;
-  try {
-    const runRes = await fetch(runEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestPayload),
-      signal: AbortSignal.timeout(15000), // 15s para crear el run
-    });
+  let runId = params.customRunId;
+  let defaultDatasetId: string | undefined;
+  let defaultKeyValueStoreId: string | undefined;
 
-    if (!runRes.ok) {
-      const errText = await runRes.text().catch(() => '');
+  if (runId) {
+    // Si ya existe un runId conocido, recuperamos su estado sin iniciar un run nuevo
+    try {
+      const getRunRes = await fetch(
+        `https://api.apify.com/v2/actor-runs/${encodeURIComponent(runId)}?token=${encodeURIComponent(apifyToken)}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (getRunRes.ok) {
+        const getRunJson = (await getRunRes.json()) as any;
+        runData = getRunJson.data;
+        defaultDatasetId = runData.defaultDatasetId;
+        defaultKeyValueStoreId = runData.defaultKeyValueStoreId;
+      }
+    } catch {
+      // Si falla la consulta inicial de recuperación, el bucle de sondeo continuará
+    }
+  } else {
+    // 1. Iniciar run en Apify con maxTotalChargeUsd impuesto en la URL query string
+    const runEndpoint = `https://api.apify.com/v2/acts/${INTROPIX_ACTOR_SLUG}/runs?token=${encodeURIComponent(
+      apifyToken
+    )}&maxTotalChargeUsd=${INTROPIX_MAX_CHARGE_LIMIT_USD}`;
+
+    const requestPayload = {
+      postUrls: [canonicalUrl],
+      mediaType: 'any',
+      includeViews: true,
+      includeOffGridReels: false,
+    };
+
+    try {
+      const runRes = await fetch(runEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestPayload),
+        signal: AbortSignal.timeout(15000), // 15s para crear el run
+      });
+
+      if (!runRes.ok) {
+        const errText = await runRes.text().catch(() => '');
+        return {
+          success: false,
+          status: runRes.status === 429 ? 429 : 502,
+          code: 'apify_run_start_failed',
+          error: `No se pudo iniciar la tarea en el proveedor (${runRes.status}): ${errText.slice(0, 120)}`,
+          canCompleteManually: true,
+          canonicalUrl,
+          shortcode,
+        };
+      }
+
+      const runJson = (await runRes.json()) as any;
+      runData = runJson.data;
+      runId = runData.id;
+      defaultDatasetId = runData.defaultDatasetId;
+      defaultKeyValueStoreId = runData.defaultKeyValueStoreId;
+    } catch (err: any) {
+      // Ante timeout al iniciar el run, no sabemos si Apify lo aceptó:
+      // reportedCostUsd es null (indeterminado, NUNCA 0)
       return {
         success: false,
-        status: runRes.status === 429 ? 429 : 502,
-        code: 'apify_run_start_failed',
-        error: `No se pudo iniciar la tarea en el proveedor (${runRes.status}): ${errText.slice(0, 120)}`,
+        status: 504,
+        code: 'apify_start_timeout',
+        error: `Tiempo de espera al solicitar inicio de tarea en el proveedor: ${err.message}. El estado en Apify es indeterminado.`,
         canCompleteManually: true,
         canonicalUrl,
         shortcode,
+        reportedCostUsd: null,
       };
     }
+  }
 
-    const runJson = (await runRes.json()) as any;
-    runData = runJson.data;
-  } catch (err: any) {
+  if (!runId) {
     return {
       success: false,
-      status: 504,
-      code: 'apify_start_timeout',
-      error: `Tiempo de espera al solicitar inicio de tarea en el proveedor: ${err.message}`,
+      status: 502,
+      code: 'missing_run_id',
+      error: 'No se obtuvo un identificador de tarea válido del proveedor.',
       canCompleteManually: true,
       canonicalUrl,
       shortcode,
     };
   }
-
-  const runId = runData.id;
-  const defaultDatasetId = runData.defaultDatasetId;
-  const defaultKeyValueStoreId = runData.defaultKeyValueStoreId;
 
   // 2. Esperar finalización del run (polling con timeout de 60s)
   const pollStart = Date.now();

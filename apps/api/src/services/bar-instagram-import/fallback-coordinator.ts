@@ -5,6 +5,8 @@ import {
   INTROPIX_ESTIMATED_COST_USD,
   INTROPIX_MAX_CHARGE_LIMIT_USD,
   INTROPIX_START_CHARGE_USD,
+  INTROPIX_PROFILE_SCAN_CHARGE_USD,
+  INTROPIX_RESULT_ITEM_CHARGE_USD,
   scrapeSinglePostWithIntropix,
   type IntropixScrapeResult,
 } from './intropix-adapter';
@@ -173,6 +175,18 @@ export async function preparePaidImportAuthorization(
       const isReleased = existing.released_at !== null;
       const existingStatus = existing.execution_details?.status;
 
+      // Si existe una operación previa con estado incierto (timeout de inicio sin respuesta del proveedor),
+      // no permitir sobreescribirla ni reintentar automáticamente al vencer el TTL
+      if (existingStatus === 'uncertain') {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          status: 409,
+          code: 'operation_uncertain',
+          error: `Existe una operación previa con estado indeterminado en el proveedor para ${shortcode}. Por precaución financiera no se iniciará otro run automático; completa la propuesta manualmente.`,
+        };
+      }
+
       // Si hay una ejecución en curso activa y no expirada, no permitir sobreescribirla
       if (!isReleased && !isExpired && existingStatus === 'running') {
         await client.query('ROLLBACK');
@@ -215,21 +229,6 @@ export async function preparePaidImportAuthorization(
       ]);
     }
 
-    // Si la tabla de autorizaciones dedicada existe en este entorno, registrar auditoría
-    await logFallbackAuthorizationAudit(client, {
-      operationId,
-      shortcode,
-      canonicalUrl,
-      actorId: INTROPIX_ACTOR_ID,
-      userEmail,
-      venueId,
-      maxBudgetUsd: INTROPIX_MAX_CHARGE_LIMIT_USD,
-      estimatedCostUsd: INTROPIX_ESTIMATED_COST_USD,
-      status: 'authorized',
-      authorizedAt: now,
-      expiresAt,
-    }).catch(() => {});
-
     await client.query('COMMIT');
   } catch (err: any) {
     await client.query('ROLLBACK').catch(() => {});
@@ -250,10 +249,12 @@ export async function preparePaidImportAuthorization(
       estimatedCostUsd: INTROPIX_ESTIMATED_COST_USD,
       maxChargeLimitUsd: INTROPIX_MAX_CHARGE_LIMIT_USD,
       startFeeUsd: INTROPIX_START_CHARGE_USD,
+      profileScanFeeUsd: INTROPIX_PROFILE_SCAN_CHARGE_USD,
+      resultItemFeeUsd: INTROPIX_RESULT_ITEM_CHARGE_USD,
       currency: 'USD',
       expiresAt: expiresAt.toISOString(),
       notice:
-        'El proveedor cobra una tarifa de inicio de run (0,005 USD) con independencia del resultado. El éxito no está garantizado. No habrá reintentos automáticos.',
+        'El proveedor cobra una tarifa de inicio de run (0,005 USD), resolución de cuenta de autor (0,002 USD) y entrega de post (0,0019 USD). Coste estimado: 0,0089 USD. Sin reintentos automáticos.',
     },
   };
 }
@@ -344,6 +345,36 @@ export async function executeAuthorizedPaidImport(
       };
     }
 
+    // Comprobar que el usuario ejecutor coincide con el administrador que autorizó
+    if (executionDetails.userEmail && executionDetails.userEmail !== userEmail) {
+      await client.query('ROLLBACK');
+      return {
+        success: false,
+        status: 403,
+        code: 'unauthorized_user',
+        error: 'Esta autorización fue concedida a otro administrador. Cada operador debe autorizar su propia extracción.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+        venueId,
+      };
+    }
+
+    // Una operación con resultado incierto (timeout al iniciar) nunca vuelve a un estado ejecutable
+    if (executionDetails.status === 'uncertain') {
+      await client.query('ROLLBACK');
+      return {
+        success: false,
+        status: 409,
+        code: 'operation_uncertain',
+        error: 'El estado del run en el proveedor es indeterminado (timeout de inicio). Por seguridad presupuestaria no se reintenta automáticamente.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+        venueId,
+      };
+    }
+
     if (new Date(row.expires_at).getTime() <= now.getTime()) {
       await client.query('ROLLBACK');
       return {
@@ -358,52 +389,82 @@ export async function executeAuthorizedPaidImport(
       };
     }
 
-    if (executionDetails.status === 'running') {
-      await client.query('ROLLBACK');
-      return {
-        success: false,
-        status: 409,
-        code: 'run_already_in_progress',
-        error: 'La extracción ya se encuentra en curso en el proveedor. No se iniciará otro run.',
-        canCompleteManually: true,
-        canonicalUrl,
-        shortcode,
-        venueId,
-      };
-    }
+    let isResumeRecovery = false;
 
-    if (executionDetails.status === 'succeeded' && executionDetails.proposalId) {
-      await client.query('ROLLBACK');
-      const propRes = await query(`SELECT * FROM curation_proposals WHERE id = $1;`, [executionDetails.proposalId]);
-      return {
-        success: true,
-        status: 200,
-        code: 'already_completed',
-        proposal: propRes.rows[0] || null,
-        operation: executionDetails,
-        canonicalUrl,
-        shortcode,
-        venueId,
-      };
+    // Validación de autorización de un solo uso y gestión de estados
+    if (executionDetails.status !== 'authorized') {
+      if (executionDetails.status === 'running') {
+        if (executionDetails.runId) {
+          // Si ya existe runId conocido, recuperamos el mismo run en lugar de fallar o lanzar otro
+          isResumeRecovery = true;
+        } else {
+          await client.query('ROLLBACK');
+          return {
+            success: false,
+            status: 409,
+            code: 'run_already_in_progress',
+            error: 'La extracción ya se encuentra en curso en el proveedor. No se iniciará otro run.',
+            canCompleteManually: true,
+            canonicalUrl,
+            shortcode,
+            venueId,
+          };
+        }
+      } else if (executionDetails.status === 'succeeded' && executionDetails.proposalId) {
+        await client.query('ROLLBACK');
+        const propRes = await query(`SELECT * FROM curation_proposals WHERE id = $1;`, [executionDetails.proposalId]);
+        return {
+          success: true,
+          status: 200,
+          code: 'already_completed',
+          proposal: propRes.rows[0] || null,
+          operation: executionDetails,
+          canonicalUrl,
+          shortcode,
+          venueId,
+        };
+      } else if (executionDetails.status === 'uncertain') {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          status: 409,
+          code: 'operation_uncertain',
+          error: 'El estado del run en el proveedor es indeterminado (timeout de inicio). Por seguridad presupuestaria no se reintenta automáticamente.',
+          canCompleteManually: true,
+          canonicalUrl,
+          shortcode,
+          venueId,
+        };
+      } else {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          status: 409,
+          code: 'authorization_already_consumed',
+          error: 'Esta autorización ya fue consumida o finalizó previamente. Solicita una nueva autorización si deseas volver a intentar.',
+          canCompleteManually: true,
+          canonicalUrl,
+          shortcode,
+          venueId,
+        };
+      }
     }
 
     venueId = executionDetails.venueId ?? venueId;
 
-    // Transicionar a 'running'
-    executionDetails.status = 'running';
-    executionDetails.startedAt = now.toISOString();
+    if (!isResumeRecovery) {
+      // Transicionar a 'running'
+      executionDetails.status = 'running';
+      executionDetails.startedAt = now.toISOString();
 
-    const updateSql = `
-      UPDATE instagram_ingestion_locks
-      SET execution_details = $1,
-          locked_at = $2
-      WHERE lock_key = $3;
-    `;
-    await client.query(updateSql, [JSON.stringify(executionDetails), now.toISOString(), lockKey]);
-
-    await updateFallbackAuthorizationStatus(client, operationId, 'running', {
-      startedAt: now,
-    }).catch(() => {});
+      const updateSql = `
+        UPDATE instagram_ingestion_locks
+        SET execution_details = $1,
+            locked_at = $2
+        WHERE lock_key = $3;
+      `;
+      await client.query(updateSql, [JSON.stringify(executionDetails), now.toISOString(), lockKey]);
+    }
 
     await client.query('COMMIT');
   } catch (err: any) {
@@ -420,6 +481,7 @@ export async function executeAuthorizedPaidImport(
     scrapeResult = await scrapeSinglePostWithIntropix({
       canonicalUrl,
       shortcode,
+      customRunId: executionDetails.runId || undefined,
     });
   } catch (err: any) {
     scrapeResult = {
@@ -439,11 +501,16 @@ export async function executeAuthorizedPaidImport(
     await updateClient.query('BEGIN');
 
     const completedAt = new Date();
-    executionDetails.runId = scrapeResult.runId || null;
-    executionDetails.reportedCostUsd = scrapeResult.reportedCostUsd ?? null;
+    executionDetails.runId = scrapeResult.runId || executionDetails.runId || null;
+    executionDetails.reportedCostUsd = scrapeResult.reportedCostUsd !== undefined ? scrapeResult.reportedCostUsd : null;
 
     if (!scrapeResult.success || !scrapeResult.item) {
-      executionDetails.status = 'failed';
+      if (scrapeResult.code === 'apify_start_timeout') {
+        executionDetails.status = 'uncertain';
+        executionDetails.reportedCostUsd = null; // No presentar coste como cero ante resultado incierto
+      } else {
+        executionDetails.status = 'failed';
+      }
       executionDetails.completedAt = completedAt.toISOString();
       executionDetails.failureReason = scrapeResult.code;
       executionDetails.failureMessage = scrapeResult.error || 'Fallo desconocido en proveedor alternativo';
@@ -455,14 +522,6 @@ export async function executeAuthorizedPaidImport(
          WHERE lock_key = $2;`,
         [JSON.stringify(executionDetails), lockKey]
       );
-
-      await updateFallbackAuthorizationStatus(updateClient, operationId, 'failed', {
-        completedAt,
-        apifyRunId: scrapeResult.runId,
-        reportedCostUsd: scrapeResult.reportedCostUsd,
-        failureReason: scrapeResult.code,
-        failureMessage: scrapeResult.error,
-      }).catch(() => {});
 
       await updateClient.query('COMMIT');
 
@@ -672,12 +731,6 @@ export async function executeAuthorizedPaidImport(
       [JSON.stringify(executionDetails), lockKey]
     );
 
-    await updateFallbackAuthorizationStatus(updateClient, operationId, 'succeeded', {
-      completedAt,
-      apifyRunId: scrapeResult.runId,
-      reportedCostUsd: scrapeResult.reportedCostUsd,
-    }).catch(() => {});
-
     await updateClient.query('COMMIT');
 
     console.log(
@@ -729,52 +782,4 @@ export async function getPaidImportStatus(operationId: string): Promise<any> {
   }
 
   return res.rows[0].execution_details;
-}
-
-// Helpers defensivos para tabla opcional instagram_fallback_authorizations
-async function logFallbackAuthorizationAudit(client: any, data: any) {
-  const insertSql = `
-    INSERT INTO instagram_fallback_authorizations (
-      operation_id, shortcode, canonical_url, actor_id, user_email,
-      venue_id, max_budget_usd, estimated_cost_usd, status,
-      authorized_at, expires_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
-  `;
-  await client.query(insertSql, [
-    data.operationId,
-    data.shortcode,
-    data.canonicalUrl,
-    data.actorId,
-    data.userEmail,
-    data.venueId,
-    data.maxBudgetUsd,
-    data.estimatedCostUsd,
-    data.status,
-    data.authorizedAt,
-    data.expiresAt,
-  ]);
-}
-
-async function updateFallbackAuthorizationStatus(client: any, operationId: string, status: string, details: any = {}) {
-  const updateSql = `
-    UPDATE instagram_fallback_authorizations
-    SET status = $1,
-        started_at = COALESCE($2, started_at),
-        completed_at = COALESCE($3, completed_at),
-        apify_run_id = COALESCE($4, apify_run_id),
-        reported_cost_usd = COALESCE($5, reported_cost_usd),
-        failure_reason = COALESCE($6, failure_reason),
-        failure_message = COALESCE($7, failure_message)
-    WHERE operation_id = $8;
-  `;
-  await client.query(updateSql, [
-    status,
-    details.startedAt || null,
-    details.completedAt || null,
-    details.apifyRunId || null,
-    details.reportedCostUsd || null,
-    details.failureReason || null,
-    details.failureMessage || null,
-    operationId,
-  ]);
 }

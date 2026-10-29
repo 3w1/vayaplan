@@ -1641,11 +1641,15 @@ adminProposalsRoutes.post('/proposals/execute-paid-fallback', async (c) => {
   return c.json(
     {
       success: true,
-      message: 'Propuesta extraída con proveedor alternativo y registrada como pendiente.',
+      message:
+        result.status === 200
+          ? 'Esta extracción ya se había completado previamente.'
+          : 'Propuesta extraída con proveedor alternativo y registrada como pendiente.',
+      alreadyCompleted: result.status === 200,
       proposal: result.proposal,
       operation: result.operation,
     },
-    201
+    result.status as any
   );
 });
 

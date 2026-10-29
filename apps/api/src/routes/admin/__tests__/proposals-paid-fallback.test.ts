@@ -18,6 +18,8 @@ const {
 } = await import('../../../services/bar-instagram-import/single-post-importer');
 const {
   setIntropixFetcherOverride,
+  scrapeSinglePostWithIntropix,
+  processIntropixResponse,
   INTROPIX_ACTOR_ID,
   INTROPIX_ESTIMATED_COST_USD,
   INTROPIX_MAX_CHARGE_LIMIT_USD,
@@ -72,7 +74,6 @@ afterAll(async () => {
   await testPool.query(`DELETE FROM curation_proposals WHERE instagram_post_shortcode LIKE 'TEST_FALLBACK_%';`);
   await testPool.query(`DELETE FROM venues WHERE id = $1;`, [testVenueId]);
   await testPool.query(`DELETE FROM instagram_ingestion_locks WHERE lock_key LIKE 'ig_paid:%';`);
-  await testPool.query(`DELETE FROM instagram_fallback_authorizations WHERE shortcode LIKE 'TEST_FALLBACK_%';`).catch(() => {});
   await testPool.end();
 });
 
@@ -771,5 +772,416 @@ describe('Importación Escalonada: Actor Habitual → Alternativo con Autorizaci
     expect(statusData.success).toBe(true);
     expect(statusData.operation.operationId).toBe(prepData.operationId);
     expect(statusData.operation.status).toBe('authorized');
+  });
+
+  // ============================================================================
+  // 4. REVISIÓN FINAL: COSTES, GARANTÍA DE LÍMITE, AUTORIZACIÓN E IDENTIDAD
+  // ============================================================================
+
+  test('18. maxTotalChargeUsd=0.015 se envía como query parameter a la API de Apify y no como campo de input del Actor', async () => {
+    let capturedUrl: string | null = null;
+    let capturedBody: any = null;
+
+    const originalFetch = globalThis.fetch;
+    const originalToken = process.env.APIFY_TOKEN;
+    const originalSafety = process.env.ALLOW_REAL_APIFY_IN_TESTS;
+
+    try {
+      process.env.APIFY_TOKEN = 'apify_test_token_12345';
+      process.env.ALLOW_REAL_APIFY_IN_TESTS = 'true';
+      setIntropixFetcherOverride(null); // Desactivar override para probar la ruta real de fetch
+
+      globalThis.fetch = (async (input: any, init?: any) => {
+        capturedUrl = typeof input === 'string' ? input : input.url;
+        if (init?.body) {
+          capturedBody = JSON.parse(init.body);
+        }
+        // Simular respuesta inmediata de inicio de run
+        return new Response(
+          JSON.stringify({
+            data: {
+              id: 'run_intercept_test_999',
+              status: 'RUNNING',
+              defaultDatasetId: 'ds_123',
+              defaultKeyValueStoreId: 'kvs_123',
+            },
+          }),
+          { status: 201, headers: { 'Content-Type': 'application/json' } }
+        );
+      }) as any;
+
+      // Invocamos scrapeSinglePostWithIntropix
+      scrapeSinglePostWithIntropix({
+        canonicalUrl: 'https://www.instagram.com/p/TEST_INTERCEPT/',
+        shortcode: 'TEST_INTERCEPT',
+      }).catch(() => {});
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(capturedUrl).not.toBeNull();
+      const parsedUrl = new URL(capturedUrl!);
+
+      // 1. Debe ser un parámetro de consulta (query string) admitido por Apify API v2
+      expect(parsedUrl.searchParams.get('maxTotalChargeUsd')).toBe('0.015');
+      expect(parsedUrl.pathname).toBe('/v2/acts/intropix~instagram-posts-reels-scraper/runs');
+
+      // 2. NO debe formar parte del payload JSON enviado al Actor
+      expect(capturedBody).not.toBeNull();
+      expect(capturedBody.maxTotalChargeUsd).toBeUndefined();
+      expect(capturedBody.postUrls).toEqual(['https://www.instagram.com/p/TEST_INTERCEPT/']);
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.env.APIFY_TOKEN = originalToken;
+      process.env.ALLOW_REAL_APIFY_IN_TESTS = originalSafety;
+      setIntropixFetcherOverride(null);
+    }
+  });
+
+  test('19. Control de autorización por administrador: otro administrador no puede consumir una autorización ajena (403)', async () => {
+    const otherAdminToken = await sign(
+      { email: 'other_operator@vayaplan.com', role: 'admin' },
+      JWT_SECRET,
+      'HS256'
+    );
+
+    const shortcode = `TEST_FALLBACK_OTHER_ADMIN_${Date.now()}`;
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    // Administrador 1 autoriza
+    const prepRes = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalUrl, venue_id: testVenueId }),
+    });
+    expect(prepRes.status).toBe(200);
+    const prepData = await prepRes.json();
+
+    // Administrador 2 intenta ejecutar la autorización del Administrador 1
+    const execRes = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${otherAdminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        canonicalUrl: canonicalUrl,
+        shortcode: shortcode,
+      }),
+    });
+
+    expect(execRes.status).toBe(403);
+    const execData = await execRes.json();
+    expect(execData.error).toBe('unauthorized_user');
+    expect(execData.message).toContain('Esta autorización fue concedida a otro administrador');
+  });
+
+  test('20. Autorización de un solo uso: una autorización ya finalizada no permite un segundo run (409)', async () => {
+    const shortcode = `TEST_FALLBACK_SINGLE_USE_${Date.now()}`;
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    const prepRes = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalUrl, venue_id: testVenueId }),
+    });
+    const prepData = await prepRes.json();
+
+    let runsCount = 0;
+    setIntropixFetcherOverride(async () => {
+      runsCount++;
+      return {
+        run: { id: `run_single_use_${runsCount}`, status: 'SUCCEEDED', usageTotalUsd: 0.0089 },
+        items: [
+          {
+            shortcode,
+            permalink: canonicalUrl,
+            media: [{ slide_index: 0, media_type: 'image', media_url: 'https://cdn.instagram.com/v/test.jpg' }],
+          },
+        ],
+      };
+    });
+
+    // Primera ejecución: exitosa (201)
+    const exec1 = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        canonicalUrl: canonicalUrl,
+        shortcode: shortcode,
+        venue_id: testVenueId,
+      }),
+    });
+    expect(exec1.status).toBe(201);
+    expect(runsCount).toBe(1);
+
+    // Segunda ejecución con la misma autorización: ya completada, no inicia nuevo run
+    const exec2 = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        canonicalUrl: canonicalUrl,
+        shortcode: shortcode,
+        venue_id: testVenueId,
+      }),
+    });
+    expect(exec2.status).toBe(200);
+    const data2 = await exec2.json();
+    expect(data2.alreadyCompleted).toBe(true);
+    expect(data2.message).toContain('ya se había completado previamente');
+    expect(runsCount).toBe(1); // Cero llamadas adicionales al scraper
+  });
+
+  test('21. Recuperación tras reinicio: si ya existe un runId conocido, recupera ese run sin iniciar uno nuevo', async () => {
+    const shortcode = `TEST_FALLBACK_RECOVERY_${Date.now()}`;
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    const prepRes = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalUrl, venue_id: testVenueId }),
+    });
+    const prepData = await prepRes.json();
+
+    // Simular que el proceso se reinició y la BD ya tiene un runId guardado en estado 'running'
+    const knownRunId = 'run_crash_recovery_777';
+    await testPool.query(`
+      UPDATE instagram_ingestion_locks
+      SET execution_details = jsonb_set(
+        jsonb_set(execution_details, '{status}', '"running"'),
+        '{runId}', '"${knownRunId}"'
+      )
+      WHERE lock_key = $1;
+    `, [`ig_paid:${shortcode}`]);
+
+    let receivedRunId: string | undefined;
+    setIntropixFetcherOverride(async (_url, payload) => {
+      receivedRunId = payload.customRunId;
+      return {
+        run: { id: knownRunId, status: 'SUCCEEDED', usageTotalUsd: 0.0089 },
+        items: [
+          {
+            shortcode,
+            permalink: canonicalUrl,
+            media: [{ slide_index: 0, media_type: 'image', media_url: 'https://cdn.instagram.com/v/test.jpg' }],
+          },
+        ],
+      };
+    });
+
+    const recoverRes = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        canonicalUrl: canonicalUrl,
+        shortcode: shortcode,
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(recoverRes.status).toBe(201);
+    expect(receivedRunId).toBe(knownRunId); // Reanudó el run conocido
+  });
+
+  test('22. Timeout durante el inicio del run: no inicia otro run ni presenta el coste como cero (status: uncertain, reportedCost: null)', async () => {
+    const shortcode = `TEST_FALLBACK_TIMEOUT_${Date.now()}`;
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    const prepRes = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalUrl, venue_id: testVenueId }),
+    });
+    const prepData = await prepRes.json();
+
+    // Simular timeout al iniciar la llamada en Apify
+    setIntropixFetcherOverride(async () => {
+      return {
+        error: {
+          status: 504,
+          code: 'apify_start_timeout',
+          message: 'Tiempo de espera agotado al conectar con Apify para arrancar el contenedor.',
+        },
+      };
+    });
+
+    const execRes = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        canonicalUrl: canonicalUrl,
+        shortcode: shortcode,
+      }),
+    });
+
+    expect(execRes.status).toBe(504);
+    const execData = await execRes.json();
+    expect(execData.error).toBe('apify_start_timeout');
+    expect(execData.canCompleteManually).toBe(true);
+
+    // Verificar en BD que el estado quedó como 'uncertain' y reportedCostUsd es NULL (NUNCA 0)
+    const lockRes = await testPool.query(`
+      SELECT execution_details FROM instagram_ingestion_locks WHERE lock_key = $1;
+    `, [`ig_paid:${shortcode}`]);
+    const details = lockRes.rows[0].execution_details;
+    expect(details.status).toBe('uncertain');
+    expect(details.reportedCostUsd).toBeNull();
+  });
+
+  test('23. Una operación incierta no vuelve automáticamente a un estado ejecutable al vencer el lock o TTL (409)', async () => {
+    const shortcode = `TEST_FALLBACK_UNCERTAIN_${Date.now()}`;
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    // 1. Crear autorización y simular que quedó en estado 'uncertain'
+    const prepRes = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalUrl, venue_id: testVenueId }),
+    });
+    const prepData = await prepRes.json();
+
+    // Marcar como 'uncertain' y forzar expiración del lock
+    await testPool.query(`
+      UPDATE instagram_ingestion_locks
+      SET execution_details = jsonb_set(execution_details, '{status}', '"uncertain"'),
+          expires_at = NOW() - INTERVAL '2 hours'
+      WHERE lock_key = $1;
+    `, [`ig_paid:${shortcode}`]);
+
+    // 2. Intentar preparar una nueva autorización para el mismo enlace
+    const retryPrep = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalUrl, venue_id: testVenueId }),
+    });
+    expect(retryPrep.status).toBe(409);
+    const retryData = await retryPrep.json();
+    expect(retryData.error).toBe('operation_uncertain');
+    expect(retryData.message).toContain('estado indeterminado en el proveedor');
+
+    // 3. Intentar ejecutar la operación incierta directamente
+    const retryExec = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        canonicalUrl: canonicalUrl,
+        shortcode: shortcode,
+      }),
+    });
+    expect(retryExec.status).toBe(409);
+    const retryExecData = await retryExec.json();
+    expect(retryExecData.error).toBe('operation_uncertain');
+    expect(retryExecData.canCompleteManually).toBe(true);
+  });
+
+  test('24. Identidad con fixture real De_jb4yFX_T: coincidencia exacta aceptada, cambio de capitalización rechazado', async () => {
+    const realShortcode = 'De_jb4yFX_T';
+    const canonicalUrl = `https://www.instagram.com/p/${realShortcode}/`;
+
+    // 1. Coincidencia exacta (De_jb4yFX_T === De_jb4yFX_T): ACEPTADA
+    const prepRes = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalUrl, venue_id: testVenueId }),
+    });
+    const prepData = await prepRes.json();
+
+    setIntropixFetcherOverride(async () => ({
+      run: { id: 'run_identity_exact', status: 'SUCCEEDED', usageTotalUsd: 0.0089 },
+      items: [
+        {
+          shortcode: 'De_jb4yFX_T', // Valor exacto preservado
+          permalink: canonicalUrl,
+          media: [{ slide_index: 0, media_type: 'image', media_url: 'https://cdn.instagram.com/v/exact.jpg' }],
+        },
+      ],
+    }));
+
+    const execExact = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        canonicalUrl: canonicalUrl,
+        shortcode: realShortcode,
+        venue_id: testVenueId,
+      }),
+    });
+    expect(execExact.status).toBe(201);
+    const dataExact = await execExact.json();
+    expect(dataExact.proposal.instagram_post_shortcode).toBe('De_jb4yFX_T');
+    createdProposalIds.push(dataExact.proposal.id);
+
+    // 2. Cambio a minúsculas ('de_jb4yfx_t'): RECHAZADO por shortcode_mismatch
+    const mismatchLower = processIntropixResponse({
+      canonicalUrl,
+      requestedShortcode: 'De_jb4yFX_T',
+      run: { id: 'run_identity_lower', status: 'SUCCEEDED', usageTotalUsd: 0.0089 },
+      items: [{ shortcode: 'de_jb4yfx_t', permalink: canonicalUrl, media: [] }],
+    });
+    expect(mismatchLower.success).toBe(false);
+    expect(mismatchLower.code).toBe('shortcode_mismatch');
+
+    // 3. Cambio a mayúsculas ('DE_JB4YFX_T'): RECHAZADO por shortcode_mismatch
+    const mismatchUpper = processIntropixResponse({
+      canonicalUrl,
+      requestedShortcode: 'De_jb4yFX_T',
+      run: { id: 'run_identity_upper', status: 'SUCCEEDED', usageTotalUsd: 0.0089 },
+      items: [{ shortcode: 'DE_JB4YFX_T', permalink: canonicalUrl, media: [] }],
+    });
+    expect(mismatchUpper.success).toBe(false);
+    expect(mismatchUpper.code).toBe('shortcode_mismatch');
+  });
+
+  test('25. Cero dependencia de migración 021: comprobación explícita de que la tabla instagram_fallback_authorizations no existe', async () => {
+    // Comprobar que en PostgreSQL la tabla 021 NO existe y no es consultada
+    const checkTable = await testPool.query(`
+      SELECT to_regclass('public.instagram_fallback_authorizations') as table_ref;
+    `);
+    expect(checkTable.rows[0].table_ref).toBeNull();
   });
 });
