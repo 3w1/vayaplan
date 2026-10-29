@@ -228,7 +228,7 @@ describe('Importación Escalonada: Actor Habitual → Alternativo con Autorizaci
     });
     expect(badUrl.status).toBe(400);
     const badUrlData = await badUrl.json();
-    expect(badUrlData.error).toBe('stories_not_supported');
+    expect(['stories_not_supported', 'invalid_story_id', 'story_id_missing']).toContain(badUrlData.error);
   });
 
   test('6. prepare-paid-fallback: previene preparación si ya existe propuesta o evento (409)', async () => {

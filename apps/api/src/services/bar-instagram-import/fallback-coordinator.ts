@@ -10,6 +10,15 @@ import {
   scrapeSinglePostWithIntropix,
   type IntropixScrapeResult,
 } from './intropix-adapter';
+import {
+  INTROPIX_STORY_ACTOR_ID,
+  INTROPIX_STORY_ESTIMATED_COST_USD,
+  INTROPIX_STORY_MAX_CHARGE_LIMIT_USD,
+  INTROPIX_STORY_START_CHARGE_USD,
+  INTROPIX_STORY_ITEM_CHARGE_USD,
+  scrapeStoryWithIntropix,
+  type IntropixStoryScrapeResult,
+} from './intropix-story-adapter';
 import { downloadAndUploadPostImageToR2 } from './single-post-importer';
 import { classifyBarPost } from './bar-classifier';
 import type { ApifyInstagramRawPost } from './bar-types';
@@ -36,9 +45,14 @@ export interface PrepareAuthorizationResult {
     estimatedCostUsd: number;
     maxChargeLimitUsd: number;
     startFeeUsd: number;
+    profileScanFeeUsd?: number;
+    resultItemFeeUsd?: number;
     currency: string;
     expiresAt: string;
     notice: string;
+    contentType?: 'post' | 'reel' | 'story';
+    username?: string;
+    storyId?: string;
   };
 }
 
@@ -103,7 +117,8 @@ export async function preparePaidImportAuthorization(
   }
 
   // 3. Comprobar duplicados existentes en propuestas y catálogo
-  const dedupeKey = 'instagram_' + shortcode;
+  const isStory = urlValidation.contentType === 'story';
+  const dedupeKey = isStory ? 'instagram_story_' + shortcode : 'instagram_' + shortcode;
   const dupProp = await query(
     `SELECT id, review_status FROM curation_proposals 
      WHERE dedupe_key = $1 OR instagram_post_shortcode = $2 OR source_url = $3 OR source_url = $4 
@@ -116,7 +131,9 @@ export async function preparePaidImportAuthorization(
       success: false,
       status: 409,
       code: 'duplicate_proposal',
-      error: `Esta publicación ya existe como propuesta (#${dupProp.rows[0].id}, estado: ${dupProp.rows[0].review_status}).`,
+      error: isStory
+        ? `Esta historia ya existe como propuesta (#${dupProp.rows[0].id}, estado: ${dupProp.rows[0].review_status}).`
+        : `Esta publicación ya existe como propuesta (#${dupProp.rows[0].id}, estado: ${dupProp.rows[0].review_status}).`,
     };
   }
 
@@ -130,7 +147,9 @@ export async function preparePaidImportAuthorization(
       success: false,
       status: 409,
       code: 'event_already_exists',
-      error: `Esta publicación ya tiene un evento en catálogo (#${dupEvent.rows[0].id}).`,
+      error: isStory
+        ? `Esta historia ya tiene un evento en catálogo (#${dupEvent.rows[0].id}).`
+        : `Esta publicación ya tiene un evento en catálogo (#${dupEvent.rows[0].id}).`,
     };
   }
 
@@ -138,17 +157,25 @@ export async function preparePaidImportAuthorization(
   const operationId = 'op_' + crypto.randomUUID().replace(/-/g, '').slice(0, 24);
   const now = new Date();
   const expiresAt = new Date(now.getTime() + AUTHORIZATION_TTL_MINUTES * 60 * 1000);
-  const lockKey = `ig_paid:${shortcode}`;
+  const lockKey = isStory ? `ig_paid_story:${shortcode}` : `ig_paid:${shortcode}`;
+
+  const actorId = isStory ? INTROPIX_STORY_ACTOR_ID : INTROPIX_ACTOR_ID;
+  const maxBudgetUsd = isStory ? INTROPIX_STORY_MAX_CHARGE_LIMIT_USD : INTROPIX_MAX_CHARGE_LIMIT_USD;
+  const estimatedCostUsd = isStory ? INTROPIX_STORY_ESTIMATED_COST_USD : INTROPIX_ESTIMATED_COST_USD;
+  const startFeeUsd = isStory ? INTROPIX_STORY_START_CHARGE_USD : INTROPIX_START_CHARGE_USD;
 
   const executionDetails = {
     operationId,
     shortcode,
     canonicalUrl,
-    actorId: INTROPIX_ACTOR_ID,
+    contentType: urlValidation.contentType,
+    username: urlValidation.username || null,
+    storyId: urlValidation.storyId || null,
+    actorId,
     venueId,
-    maxBudgetUsd: INTROPIX_MAX_CHARGE_LIMIT_USD,
-    estimatedCostUsd: INTROPIX_ESTIMATED_COST_USD,
-    startFeeUsd: INTROPIX_START_CHARGE_USD,
+    maxBudgetUsd,
+    estimatedCostUsd,
+    startFeeUsd,
     userEmail,
     status: 'authorized',
     authorizedAt: now.toISOString(),
@@ -237,24 +264,30 @@ export async function preparePaidImportAuthorization(
     client.release();
   }
 
+  const notice = isStory
+    ? `El proveedor consulta las historias activas de la cuenta (@${urlValidation.username}). Cobra 0,005 USD de inicio y 0,0025 USD por historia entregada (máx. 15 historias / 0,045 USD). Coste estimado: ~0,0125 USD. Sin reintentos automáticos.`
+    : 'El proveedor cobra una tarifa de inicio de run (0,005 USD), resolución de cuenta de autor (0,002 USD) y entrega de post (0,0019 USD). Coste estimado: ~0,0089 USD. Sin reintentos automáticos.';
+
   return {
     success: true,
     status: 200,
     data: {
       operationId,
-      actorId: INTROPIX_ACTOR_ID,
+      actorId,
+      contentType: urlValidation.contentType,
+      username: urlValidation.username,
+      storyId: urlValidation.storyId,
       canonicalUrl,
       shortcode,
       venueId,
-      estimatedCostUsd: INTROPIX_ESTIMATED_COST_USD,
-      maxChargeLimitUsd: INTROPIX_MAX_CHARGE_LIMIT_USD,
-      startFeeUsd: INTROPIX_START_CHARGE_USD,
-      profileScanFeeUsd: INTROPIX_PROFILE_SCAN_CHARGE_USD,
-      resultItemFeeUsd: INTROPIX_RESULT_ITEM_CHARGE_USD,
+      estimatedCostUsd,
+      maxChargeLimitUsd: maxBudgetUsd,
+      startFeeUsd,
+      profileScanFeeUsd: isStory ? undefined : INTROPIX_PROFILE_SCAN_CHARGE_USD,
+      resultItemFeeUsd: isStory ? INTROPIX_STORY_ITEM_CHARGE_USD : INTROPIX_RESULT_ITEM_CHARGE_USD,
       currency: 'USD',
       expiresAt: expiresAt.toISOString(),
-      notice:
-        'El proveedor cobra una tarifa de inicio de run (0,005 USD), resolución de cuenta de autor (0,002 USD) y entrega de post (0,0019 USD). Coste estimado: 0,0089 USD. Sin reintentos automáticos.',
+      notice,
     },
   };
 }
@@ -280,7 +313,9 @@ export async function executeAuthorizedPaidImport(
   venueId?: number | null;
 }> {
   const { operationId, canonicalUrl, shortcode, userEmail } = params;
-  const lockKey = `ig_paid:${shortcode}`;
+  const urlCheck = validateInstagramPostUrl(canonicalUrl);
+  const isStory = urlCheck.valid && urlCheck.contentType === 'story';
+  const lockKey = isStory ? `ig_paid_story:${shortcode}` : `ig_paid:${shortcode}`;
   const now = new Date();
 
   // 1. Validar autorización atómica en BD y transicionar a 'running'
@@ -476,44 +511,70 @@ export async function executeAuthorizedPaidImport(
   }
 
   // 2. Invocar proveedor alternativo (intropix) SIN mantener conexión de BD abierta
-  let scrapeResult: IntropixScrapeResult;
-  try {
-    scrapeResult = await scrapeSinglePostWithIntropix({
-      canonicalUrl,
-      shortcode,
-      customRunId: executionDetails.runId || undefined,
-    });
-  } catch (err: any) {
-    scrapeResult = {
-      success: false,
-      status: 502,
-      code: 'intropix_execution_error',
-      error: `Error durante la extracción: ${err.message}`,
-      canCompleteManually: true,
-      canonicalUrl,
-      shortcode,
-    };
+  let scrapeResult: IntropixScrapeResult | undefined;
+  let storyScrapeResult: IntropixStoryScrapeResult | undefined;
+
+  if (isStory) {
+    try {
+      storyScrapeResult = await scrapeStoryWithIntropix({
+        username: urlCheck.username || executionDetails.username || '',
+        storyId: urlCheck.storyId || shortcode,
+        canonicalUrl,
+        customRunId: executionDetails.runId || undefined,
+      });
+    } catch (err: any) {
+      storyScrapeResult = {
+        success: false,
+        status: 502,
+        code: 'intropix_story_execution_error',
+        error: `Error durante la extracción de la historia: ${err.message}`,
+        canCompleteManually: true,
+        canonicalUrl,
+        username: urlCheck.username,
+        storyId: shortcode,
+      };
+    }
+  } else {
+    try {
+      scrapeResult = await scrapeSinglePostWithIntropix({
+        canonicalUrl,
+        shortcode,
+        customRunId: executionDetails.runId || undefined,
+      });
+    } catch (err: any) {
+      scrapeResult = {
+        success: false,
+        status: 502,
+        code: 'intropix_execution_error',
+        error: `Error durante la extracción: ${err.message}`,
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+      };
+    }
   }
 
   // 3. Procesar resultado y actualizar persistencia de forma atómica
+  const activeResult = isStory ? storyScrapeResult! : scrapeResult!;
+
   const updateClient = await getClient();
   try {
     await updateClient.query('BEGIN');
 
     const completedAt = new Date();
-    executionDetails.runId = scrapeResult.runId || executionDetails.runId || null;
-    executionDetails.reportedCostUsd = scrapeResult.reportedCostUsd !== undefined ? scrapeResult.reportedCostUsd : null;
+    executionDetails.runId = activeResult.runId || executionDetails.runId || null;
+    executionDetails.reportedCostUsd = activeResult.reportedCostUsd !== undefined ? activeResult.reportedCostUsd : null;
 
-    if (!scrapeResult.success || !scrapeResult.item) {
-      if (scrapeResult.code === 'apify_start_timeout') {
+    if (!activeResult.success || !activeResult.item) {
+      if (activeResult.code === 'apify_start_timeout') {
         executionDetails.status = 'uncertain';
         executionDetails.reportedCostUsd = null; // No presentar coste como cero ante resultado incierto
       } else {
         executionDetails.status = 'failed';
       }
       executionDetails.completedAt = completedAt.toISOString();
-      executionDetails.failureReason = scrapeResult.code;
-      executionDetails.failureMessage = scrapeResult.error || 'Fallo desconocido en proveedor alternativo';
+      executionDetails.failureReason = activeResult.code;
+      executionDetails.failureMessage = activeResult.error || 'Fallo desconocido en proveedor alternativo';
 
       await updateClient.query(
         `UPDATE instagram_ingestion_locks
@@ -533,20 +594,20 @@ export async function executeAuthorizedPaidImport(
           action: 'paid_fallback_failed',
           operationId,
           shortcode,
-          code: scrapeResult.code,
-          error: scrapeResult.error,
-          runId: scrapeResult.runId,
-          reportedCostUsd: scrapeResult.reportedCostUsd,
+          code: activeResult.code,
+          error: activeResult.error,
+          runId: activeResult.runId,
+          reportedCostUsd: activeResult.reportedCostUsd,
           user: userEmail,
         })
       );
 
       return {
         success: false,
-        status: scrapeResult.status,
-        code: scrapeResult.code,
-        error: scrapeResult.error || 'No se pudo extraer la publicación con el proveedor alternativo.',
-        canCompleteManually: Boolean(scrapeResult.canCompleteManually),
+        status: activeResult.status,
+        code: activeResult.code,
+        error: activeResult.error || 'No se pudo extraer la publicación con el proveedor alternativo.',
+        canCompleteManually: Boolean(activeResult.canCompleteManually),
         canonicalUrl,
         shortcode,
         venueId,
@@ -554,64 +615,83 @@ export async function executeAuthorizedPaidImport(
       };
     }
 
-    // 4. Éxito: descargar imagen de portada y almacenar en Cloudflare R2
-    const item = scrapeResult.item;
-
-    // Obtener la mejor URL de portada: primera imagen o cover del reel/video
+    // 4. Éxito: preparar datos del medio y almacenar en Cloudflare R2
     let primaryMediaUrl = '';
-    if (item.media && item.media.length > 0) {
-      const firstSlide = item.media[0];
-      primaryMediaUrl = firstSlide.media_type === 'video' && firstSlide.cover_url
-        ? firstSlide.cover_url
-        : firstSlide.media_url;
-    }
+    let rawPostForR2: ApifyInstagramRawPost;
 
-    if (!primaryMediaUrl && item.profile_pic_url) {
-      primaryMediaUrl = item.profile_pic_url;
-    }
+    if (isStory) {
+      const storyItem = storyScrapeResult!.item!;
+      primaryMediaUrl = storyItem.media_url;
 
-    if (!primaryMediaUrl) {
-      executionDetails.status = 'failed';
-      executionDetails.failureReason = 'missing_image';
-      executionDetails.failureMessage = 'La publicación no contiene una imagen o miniatura utilizable como cartel.';
+      rawPostForR2 = {
+        id: storyItem.story_pk || shortcode,
+        shortCode: shortcode,
+        type: storyItem.media_type === 'video' ? 'Video' : 'Image',
+        url: canonicalUrl,
+        displayUrl: primaryMediaUrl,
+        caption: storyItem.caption || '',
+        timestamp: storyItem.taken_at || new Date().toISOString(),
+        dimensionsWidth: storyItem.width || 1080,
+        dimensionsHeight: storyItem.height || 1920,
+        ownerUsername: storyItem.username || 'unknown',
+        taggedUsers: [],
+      };
+    } else {
+      const item = scrapeResult!.item!;
+      if (item.media && item.media.length > 0) {
+        const firstSlide = item.media[0];
+        primaryMediaUrl = firstSlide.media_type === 'video' && firstSlide.cover_url
+          ? firstSlide.cover_url
+          : firstSlide.media_url;
+      }
 
-      await updateClient.query(
-        `UPDATE instagram_ingestion_locks
-         SET released_at = NOW(),
-             execution_details = $1
-         WHERE lock_key = $2;`,
-        [JSON.stringify(executionDetails), lockKey]
-      );
+      if (!primaryMediaUrl && item.profile_pic_url) {
+        primaryMediaUrl = item.profile_pic_url;
+      }
 
-      await updateClient.query('COMMIT');
+      if (!primaryMediaUrl) {
+        executionDetails.status = 'failed';
+        executionDetails.failureReason = 'missing_image';
+        executionDetails.failureMessage = 'La publicación no contiene una imagen o miniatura utilizable como cartel.';
 
-      return {
-        success: false,
-        status: 422,
-        code: 'missing_image',
-        error: 'La publicación no contiene una imagen o miniatura utilizable como cartel.',
-        canCompleteManually: Boolean(scrapeResult.canCompleteManually),
-        canonicalUrl,
-        shortcode,
-        venueId,
+        await updateClient.query(
+          `UPDATE instagram_ingestion_locks
+           SET released_at = NOW(),
+               execution_details = $1
+           WHERE lock_key = $2;`,
+          [JSON.stringify(executionDetails), lockKey]
+        );
+
+        await updateClient.query('COMMIT');
+
+        return {
+          success: false,
+          status: 422,
+          code: 'missing_image',
+          error: 'La publicación no contiene una imagen o miniatura utilizable como cartel.',
+          canCompleteManually: Boolean(activeResult.canCompleteManually),
+          canonicalUrl,
+          shortcode,
+          venueId,
+        };
+      }
+
+      rawPostForR2 = {
+        id: item.post_pk || shortcode,
+        shortCode: shortcode,
+        type: item.post_type === 'video' || item.post_type === 'reel' ? 'Video' : 'Image',
+        url: canonicalUrl,
+        displayUrl: primaryMediaUrl,
+        caption: item.caption || '',
+        timestamp: item.taken_at,
+        likesCount: item.like_count || 0,
+        commentsCount: item.comment_count || 0,
+        dimensionsWidth: item.media?.[0]?.width || 1080,
+        dimensionsHeight: item.media?.[0]?.height || 1080,
+        ownerUsername: item.username || 'unknown',
+        taggedUsers: [],
       };
     }
-
-    const rawPostForR2: ApifyInstagramRawPost = {
-      id: item.post_pk || shortcode,
-      shortCode: shortcode,
-      type: item.post_type === 'video' || item.post_type === 'reel' ? 'Video' : 'Image',
-      url: canonicalUrl,
-      displayUrl: primaryMediaUrl,
-      caption: item.caption || '',
-      timestamp: item.taken_at,
-      likesCount: item.like_count || 0,
-      commentsCount: item.comment_count || 0,
-      dimensionsWidth: item.media?.[0]?.width || 1080,
-      dimensionsHeight: item.media?.[0]?.height || 1080,
-      ownerUsername: item.username || 'unknown',
-      taggedUsers: [],
-    };
 
     let r2Image: any;
     try {
@@ -636,7 +716,7 @@ export async function executeAuthorizedPaidImport(
         status: 502,
         code: 'image_upload_failed',
         error: `Error al procesar la imagen del post: ${r2Err.message}`,
-        canCompleteManually: Boolean(scrapeResult.canCompleteManually),
+        canCompleteManually: Boolean(activeResult.canCompleteManually),
         canonicalUrl,
         shortcode,
         venueId,
@@ -652,8 +732,11 @@ export async function executeAuthorizedPaidImport(
 
     const classificationResult = classifyBarPost(rawPostForR2, venueName || '');
 
-    const dedupeKey = 'instagram_' + shortcode;
-    const title = (classificationResult.candidateTitle || `Publicación de @${item.username || 'instagram'}`).slice(0, 255);
+    const dedupeKey = isStory ? `instagram_story_${shortcode}` : `instagram_${shortcode}`;
+    const defaultTitle = isStory
+      ? `Historia de @${rawPostForR2.ownerUsername || 'instagram'}`
+      : `Publicación de @${rawPostForR2.ownerUsername || 'instagram'}`;
+    const title = (classificationResult.candidateTitle || defaultTitle).slice(0, 255);
     const category = classificationResult.candidateCategory || classificationResult.provisionalCategory || classificationResult.category || null;
     const classification = classificationResult.classification || 'REQUIERE_REVISION';
     const proposedDate = classificationResult.detectedDate || null;
@@ -702,9 +785,9 @@ export async function executeAuthorizedPaidImport(
       proposedTime,
       venueId,
       category,
-      item.caption || '',
+      rawPostForR2.caption || '',
       canonicalUrl,
-      item.username || null,
+      rawPostForR2.ownerUsername || null,
       shortcode,
       r2Image.r2Key,
       r2Image.finalUrl,
@@ -743,7 +826,7 @@ export async function executeAuthorizedPaidImport(
         proposalId: createdProposal.id,
         shortcode,
         venueId,
-        reportedCostUsd: scrapeResult.reportedCostUsd,
+        reportedCostUsd: activeResult.reportedCostUsd,
         user: userEmail,
       })
     );

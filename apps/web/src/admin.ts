@@ -3143,7 +3143,7 @@ export function renderAdminHtml(): string {
               🔄 Actualizar
             </button>
             <button type="button" id="btn-open-import-ig" class="btn-primary" onclick="openImportInstagramModal()" style="display:inline-flex; align-items:center; gap:0.35rem; background:#7c3aed; border-color:#7c3aed; font-weight:700;">
-              📥 Importar Post de Instagram
+              📥 Importar de Instagram
             </button>
             <button type="button" id="prop-tab-ateneo" class="btn-secondary" onclick="filterAteneoProposals()" title="Filtrar propuestas del Ateneo Cultural" style="font-weight:600;">
               🏛️ Ateneo
@@ -4913,23 +4913,23 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
-  <!-- MODAL: IMPORTAR POST PUNTUAL DE INSTAGRAM -->
+  <!-- MODAL: IMPORTAR DE INSTAGRAM -->
   <div id="modal-import-instagram-post" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-import-instagram-post')">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-import-ig-title" style="max-width:560px;" onclick="event.stopPropagation()">
       <div class="modal-header">
         <h3 id="modal-import-ig-title" style="margin:0; font-size:1.15rem; font-weight:800; color:var(--text-main); display:flex; align-items:center; gap:0.5rem;">
-          <span>📥</span> Importar Publicación de Instagram
+          <span>📥</span> Importar de Instagram
         </h3>
         <button type="button" class="modal-close" onclick="closeModal('modal-import-instagram-post')" aria-label="Cerrar modal">✕</button>
       </div>
       <div class="modal-body" style="padding:1.25rem; display:flex; flex-direction:column; gap:1rem;">
         <div>
           <label for="import-ig-url-input" style="display:block; font-size:0.875rem; font-weight:700; color:var(--text-main); margin-bottom:0.35rem;">
-            Enlace de la publicación (Post o Reel) <span style="color:#ef4444;">*</span>
+            Enlace de Instagram (Post, Reel o Historia) <span style="color:#ef4444;">*</span>
           </label>
-          <input type="url" id="import-ig-url-input" placeholder="https://www.instagram.com/p/... o /reel/..." style="width:100%; padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:6px; font-size:0.875rem; box-sizing:border-box;">
+          <input type="url" id="import-ig-url-input" placeholder="https://www.instagram.com/p/... o /reel/... o /stories/usuario/id/" style="width:100%; padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:6px; font-size:0.875rem; box-sizing:border-box;">
           <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">
-            Admite enlaces individuales <code>/p/SHORTCODE/</code> y <code>/reel/SHORTCODE/</code>. No admite perfiles ni Stories efímeras.
+            Admite enlaces individuales <code>/p/SHORTCODE/</code>, <code>/reel/SHORTCODE/</code> e historias <code>/stories/USUARIO/ID/</code>. No admite perfiles generales sin ID de contenido.
           </div>
         </div>
 
@@ -4946,7 +4946,7 @@ export function renderAdminHtml(): string {
         </div>
 
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:0.75rem; font-size:0.75rem; color:#475569; line-height:1.4;">
-          <strong>ℹ️ Presupuesto y alcance:</strong> Esta acción ejecuta una consulta puntual en Apify con un presupuesto acotado (máx. 0.005 USD). No programa descargas periódicas ni altera el cron. Se extraerán el texto (caption) y la imagen de portada; cualquier dato que aparezca únicamente en vídeo o audio requerirá revisión manual.
+          <strong>ℹ️ Presupuesto y alcance:</strong> Las publicaciones y reels se consultan con un presupuesto acotado (máx. 0,005 USD). Las historias requieren autorización previa con confirmación de gasto puntual. No se programa monitorización continua ni cron. Se extraerán el texto (caption) y la imagen de portada; cualquier dato presente exclusivamente en vídeo o audio requerirá revisión manual.
         </div>
 
         <div id="import-ig-feedback" style="display:none; padding:0.75rem; border-radius:6px; font-size:0.8125rem;"></div>
@@ -4979,36 +4979,40 @@ export function renderAdminHtml(): string {
         <input type="hidden" id="paid-fallback-canonical-url" value="">
         <input type="hidden" id="paid-fallback-venue-id" value="">
 
-        <!-- Tarjeta de Especificaciones de la Operación -->
-        <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:1rem; font-size:0.825rem; color:#4c1d95; display:flex; flex-direction:column; gap:0.5rem;">
-          <div><strong>Proveedor:</strong> <code style="background:#ffffff; padding:0.15rem 0.35rem; border-radius:4px; font-weight:700; color:#6d28d9;">intropix/instagram-posts-reels-scraper</code></div>
-          <div><strong>URL de la publicación:</strong> <span id="paid-fallback-url-display" style="word-break:break-all; font-family:monospace; color:#1e1b4b;">-</span></div>
-          <div><strong>Alcance:</strong> 1 publicación puntual (sin recorrer el feed de la cuenta)</div>
-          
-          <div style="background:#ffffff; border:1px solid #ede9fe; border-radius:6px; padding:0.6rem; font-size:0.775rem; color:#5b21b6; display:flex; flex-direction:column; gap:0.25rem;">
-            <div style="display:flex; justify-content:space-between;"><span>• Inicio de run (<code>actor-start</code>):</span><span>0,0050 USD</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Resolución de cuenta (<code>profile-scan</code>):</span><span>0,0020 USD</span></div>
-            <div style="display:flex; justify-content:space-between;"><span>• Post entregado (<code>result-item</code>):</span><span>0,0019 USD</span></div>
-          </div>
+        <!-- Tarjeta de Especificaciones de la Operación (dinámica) -->
+        <div id="paid-fallback-specs-container">
+          <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:1rem; font-size:0.825rem; color:#4c1d95; display:flex; flex-direction:column; gap:0.5rem;">
+            <div><strong>Proveedor:</strong> <code style="background:#ffffff; padding:0.15rem 0.35rem; border-radius:4px; font-weight:700; color:#6d28d9;">intropix/instagram-posts-reels-scraper</code></div>
+            <div><strong>URL de la publicación:</strong> <span id="paid-fallback-url-display" style="word-break:break-all; font-family:monospace; color:#1e1b4b;">-</span></div>
+            <div><strong>Alcance:</strong> 1 publicación puntual (sin recorrer el feed de la cuenta)</div>
+            
+            <div style="background:#ffffff; border:1px solid #ede9fe; border-radius:6px; padding:0.6rem; font-size:0.775rem; color:#5b21b6; display:flex; flex-direction:column; gap:0.25rem;">
+              <div style="display:flex; justify-content:space-between;"><span>• Inicio de run (<code>actor-start</code>):</span><span>0,0050 USD</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>• Resolución de cuenta (<code>profile-scan</code>):</span><span>0,0020 USD</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>• Post entregado (<code>result-item</code>):</span><span>0,0019 USD</span></div>
+            </div>
 
-          <div style="display:flex; justify-content:space-between; border-top:1px dashed #c4b5fd; padding-top:0.5rem; margin-top:0.25rem;">
-            <span><strong>Coste estimado en éxito:</strong> ~0,0089 USD</span>
-            <span><strong>Límite máximo autorizado:</strong> <span style="font-weight:800; color:#7c3aed;">0,015 USD</span></span>
+            <div style="display:flex; justify-content:space-between; border-top:1px dashed #c4b5fd; padding-top:0.5rem; margin-top:0.25rem;">
+              <span><strong>Coste estimado en éxito:</strong> ~0,0089 USD</span>
+              <span><strong>Límite máximo autorizado:</strong> <span style="font-weight:800; color:#7c3aed;">0,015 USD</span></span>
+            </div>
           </div>
         </div>
 
-        <!-- Aviso transparente de cargos y condiciones -->
-        <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:0.85rem; font-size:0.8rem; color:#92400e; line-height:1.4;">
-          <div style="font-weight:700; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.35rem;">
-            <span>⚠️</span> Desglose de Facturación y Condiciones:
+        <!-- Aviso transparente de cargos y condiciones (dinámico) -->
+        <div id="paid-fallback-terms-container">
+          <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:0.85rem; font-size:0.8rem; color:#92400e; line-height:1.4;">
+            <div style="font-weight:700; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.35rem;">
+              <span>⚠️</span> Desglose de Facturación y Condiciones:
+            </div>
+            <ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">
+              <li>Cargo inicial garantizado de <strong>0,005 USD</strong> por arranque del contenedor (no reembolsable si la extracción falla).</li>
+              <li>Pueden devengarse cargos adicionales (como <code>profile-scan</code> a <strong>0,002 USD</strong>) si el scraper resuelve la cuenta antes de finalizar.</li>
+              <li>El parámetro <code>maxTotalChargeUsd=0.015</code> limita el importe total facturable por Apify en esta ejecución.</li>
+              <li><strong>El éxito no está garantizado:</strong> si Instagram restringe el acceso al post, el proveedor puede fallar.</li>
+              <li><strong>Sin reintentos automáticos:</strong> esta autorización puntual cubre un único intento facturable.</li>
+            </ul>
           </div>
-          <ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">
-            <li>Cargo inicial garantizado de <strong>0,005 USD</strong> por arranque del contenedor (no reembolsable si la extracción falla).</li>
-            <li>Pueden devengarse cargos adicionales (como <code>profile-scan</code> a <strong>0,002 USD</strong>) si el scraper resuelve la cuenta antes de finalizar.</li>
-            <li>El parámetro <code>maxTotalChargeUsd=0.015</code> limita el importe total facturable por Apify en esta ejecución.</li>
-            <li><strong>El éxito no está garantizado:</strong> si Instagram restringe el acceso al post, el proveedor puede fallar.</li>
-            <li><strong>Sin reintentos automáticos:</strong> esta autorización puntual cubre un único intento facturable.</li>
-          </ul>
         </div>
 
         <div id="paid-fallback-feedback" style="display:none; padding:0.75rem; border-radius:6px; font-size:0.8125rem;"></div>
@@ -12566,9 +12570,87 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (vIdInput) vIdInput.value = data.venueId ? String(data.venueId) : '';
         if (urlDisplay) urlDisplay.innerText = data.canonicalUrl;
 
+        const specsContainer = document.getElementById('paid-fallback-specs-container');
+        const termsContainer = document.getElementById('paid-fallback-terms-container');
+        const isStory = data.contentType === 'story';
+
+        if (specsContainer) {
+          if (isStory) {
+            const maxDisplay = data.maxChargeLimitUsd !== undefined ? String(data.maxChargeLimitUsd).replace('.', ',') : '0,045';
+            const estDisplay = data.estimatedCostUsd !== undefined ? String(data.estimatedCostUsd).replace('.', ',') : '0,0125';
+            specsContainer.innerHTML =
+              '<div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:1rem; font-size:0.825rem; color:#4c1d95; display:flex; flex-direction:column; gap:0.5rem;">' +
+              '<div><strong>Proveedor:</strong> <code style="background:#ffffff; padding:0.15rem 0.35rem; border-radius:4px; font-weight:700; color:#6d28d9;">' + escapeHtml(data.actorId || 'intropix/instagram-stories-scraper') + '</code></div>' +
+              '<div><strong>Cuenta:</strong> <span style="font-weight:700; color:#1e1b4b;">@' + escapeHtml(data.username || '-') + '</span></div>' +
+              '<div><strong>ID de historia:</strong> <code style="font-family:monospace; color:#1e1b4b;">' + escapeHtml(data.storyId || data.shortcode || '-') + '</code></div>' +
+              '<div><strong>URL canónica:</strong> <span id="paid-fallback-url-display" style="word-break:break-all; font-family:monospace; color:#1e1b4b;">' + escapeHtml(data.canonicalUrl || '-') + '</span></div>' +
+              '<div><strong>Alcance:</strong> Consulta historias activas de la cuenta e importa exclusivamente la que coincida con el ID</div>' +
+              '<div style="background:#ffffff; border:1px solid #ede9fe; border-radius:6px; padding:0.6rem; font-size:0.775rem; color:#5b21b6; display:flex; flex-direction:column; gap:0.25rem;">' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Inicio de run (<code>actor-start</code>):</span><span>0,0050 USD</span></div>' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Por historia entregada (<code>result-item</code>):</span><span>0,0025 USD</span></div>' +
+              '</div>' +
+              '<div style="display:flex; justify-content:space-between; border-top:1px dashed #c4b5fd; padding-top:0.5rem; margin-top:0.25rem;">' +
+              '<span><strong>Coste estimado en éxito:</strong> ~' + estDisplay + ' USD</span>' +
+              '<span><strong>Límite máximo autorizado:</strong> <span style="font-weight:800; color:#7c3aed;">' + maxDisplay + ' USD</span></span>' +
+              '</div>' +
+              '</div>';
+          } else {
+            const maxDisplay = data.maxChargeLimitUsd !== undefined ? String(data.maxChargeLimitUsd).replace('.', ',') : '0,015';
+            const estDisplay = data.estimatedCostUsd !== undefined ? String(data.estimatedCostUsd).replace('.', ',') : '0,0089';
+            specsContainer.innerHTML =
+              '<div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:1rem; font-size:0.825rem; color:#4c1d95; display:flex; flex-direction:column; gap:0.5rem;">' +
+              '<div><strong>Proveedor:</strong> <code style="background:#ffffff; padding:0.15rem 0.35rem; border-radius:4px; font-weight:700; color:#6d28d9;">' + escapeHtml(data.actorId || 'intropix/instagram-posts-reels-scraper') + '</code></div>' +
+              '<div><strong>URL de la publicación:</strong> <span id="paid-fallback-url-display" style="word-break:break-all; font-family:monospace; color:#1e1b4b;">' + escapeHtml(data.canonicalUrl || '-') + '</span></div>' +
+              '<div><strong>Alcance:</strong> 1 publicación puntual (sin recorrer el feed de la cuenta)</div>' +
+              '<div style="background:#ffffff; border:1px solid #ede9fe; border-radius:6px; padding:0.6rem; font-size:0.775rem; color:#5b21b6; display:flex; flex-direction:column; gap:0.25rem;">' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Inicio de run (<code>actor-start</code>):</span><span>0,0050 USD</span></div>' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Resolución de cuenta (<code>profile-scan</code>):</span><span>0,0020 USD</span></div>' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Post entregado (<code>result-item</code>):</span><span>0,0019 USD</span></div>' +
+              '</div>' +
+              '<div style="display:flex; justify-content:space-between; border-top:1px dashed #c4b5fd; padding-top:0.5rem; margin-top:0.25rem;">' +
+              '<span><strong>Coste estimado en éxito:</strong> ~' + estDisplay + ' USD</span>' +
+              '<span><strong>Límite máximo autorizado:</strong> <span style="font-weight:800; color:#7c3aed;">' + maxDisplay + ' USD</span></span>' +
+              '</div>' +
+              '</div>';
+          }
+        }
+
+        if (termsContainer) {
+          if (isStory) {
+            termsContainer.innerHTML =
+              '<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:0.85rem; font-size:0.8rem; color:#92400e; line-height:1.4;">' +
+              '<div style="font-weight:700; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.35rem;">' +
+              '<span>⚠️</span> Desglose de Facturación y Condiciones de Historias:' +
+              '</div>' +
+              '<ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">' +
+              '<li>Cargo inicial de <strong>0,005 USD</strong> por arranque del contenedor (no reembolsable si la cuenta no tiene historias o la extracción falla).</li>' +
+              '<li>El Actor consulta las historias activas de <strong>@' + escapeHtml(data.username || '') + '</strong> y devenga <strong>0,0025 USD</strong> por cada historia entregada (máx. 15 historias).</li>' +
+              '<li>El parámetro <code>maxTotalChargeUsd=0.045</code> impone un tope presupuestario infranqueable en Apify.</li>' +
+              '<li><strong>Identificación exacta:</strong> Solo se creará la propuesta si la historia coincide exactamente con el ID solicitado (<code>' + escapeHtml(data.storyId || data.shortcode || '') + '</code>).</li>' +
+              '<li><strong>El éxito no está garantizado:</strong> Las historias expiran a las 24h. Si caducó o fue eliminada, el proveedor indicará que no está activa.</li>' +
+              '<li><strong>Sin reintentos automáticos:</strong> Esta autorización puntual cubre un único intento facturable.</li>' +
+              '</ul>' +
+              '</div>';
+          } else {
+            termsContainer.innerHTML =
+              '<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:0.85rem; font-size:0.8rem; color:#92400e; line-height:1.4;">' +
+              '<div style="font-weight:700; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.35rem;">' +
+              '<span>⚠️</span> Desglose de Facturación y Condiciones:' +
+              '</div>' +
+              '<ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">' +
+              '<li>Cargo inicial garantizado de <strong>0,005 USD</strong> por arranque del contenedor (no reembolsable si la extracción falla).</li>' +
+              '<li>Pueden devengarse cargos adicionales (como <code>profile-scan</code> a <strong>0,002 USD</strong>) si el scraper resuelve la cuenta antes de finalizar.</li>' +
+              '<li>El parámetro <code>maxTotalChargeUsd=0.015</code> limita el importe total facturable por Apify en esta ejecución.</li>' +
+              '<li><strong>El éxito no está garantizado:</strong> si Instagram restringe el acceso al post, el proveedor puede fallar.</li>' +
+              '<li><strong>Sin reintentos automáticos:</strong> esta autorización puntual cubre un único intento facturable.</li>' +
+              '</ul>' +
+              '</div>';
+          }
+        }
+
         if (confirmBtn) {
           confirmBtn.disabled = false;
-          const maxDisplay = data.maxChargeLimitUsd !== undefined ? String(data.maxChargeLimitUsd).replace('.', ',') : '0,015';
+          const maxDisplay = data.maxChargeLimitUsd !== undefined ? String(data.maxChargeLimitUsd).replace('.', ',') : (isStory ? '0,045' : '0,015');
           confirmBtn.innerText = '⚡ Autorizar hasta ' + maxDisplay + ' ' + (data.currency || 'USD') + ' y extraer';
         }
       } catch (err) {
@@ -12611,7 +12693,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         feedback.style.background = '#eff6ff';
         feedback.style.color = '#1e40af';
         feedback.style.border = '1px solid #bfdbfe';
-        feedback.innerHTML = '⏳ Extrayendo publicación con proveedor alternativo (intropix). Esta operación puede demorar hasta 60 segundos...';
+        feedback.innerHTML = '⏳ Extrayendo con proveedor alternativo (intropix). Esta operación puede demorar hasta 60 segundos...';
       }
 
       try {
@@ -12638,9 +12720,9 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             feedback.style.color = '#991b1b';
             feedback.style.border = '1px solid #fecaca';
 
-            const errMessage = data.message || 'El proveedor alternativo no pudo extraer la publicación.';
+            const errMessage = data.message || 'El proveedor alternativo no pudo extraer el contenido.';
             feedback.innerHTML = '<div style="margin-bottom:0.5rem;">❌ ' + escapeHtml(errMessage) + '</div>' +
-              '<div style="font-size:0.75rem; color:#7f1d1d; margin-bottom:0.75rem;">El proveedor alternativo tampoco pudo obtener la publicación. Puedes registrar la propuesta introduciendo los datos manualmente.</div>' +
+              '<div style="font-size:0.75rem; color:#7f1d1d; margin-bottom:0.75rem;">El proveedor alternativo tampoco pudo obtener el contenido. Puedes registrar la propuesta introduciendo los datos manualmente.</div>' +
               '<div style="padding-top:0.5rem; border-top:1px dashed #fca5a5; display:flex; justify-content:flex-end;">' +
               '<button type="button" id="btn-paid-fallback-to-manual" class="btn-primary" style="background:#2563eb; border-color:#2563eb; font-size:0.8125rem; padding:0.4rem 0.8rem; font-weight:700; cursor:pointer;">' +
               '✍️ Completar manualmente</button>' +
@@ -12667,7 +12749,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           ? ' (coste: ' + data.operation.reportedCostUsd + ' USD)'
           : '';
 
-        alert('✅ Publicación extraída exitosamente con el proveedor alternativo' + costInfo + ' y registrada como propuesta pendiente.');
+        const itemType = canUrl.includes('/stories/') ? 'Historia' : 'Publicación';
+        alert('✅ ' + itemType + ' extraída exitosamente con el proveedor alternativo' + costInfo + ' y registrada como propuesta pendiente.');
 
         if (data.proposal && data.proposal.id) {
           openEditProposalModal(data.proposal.id);
@@ -13556,7 +13639,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       // Generar idempotencyKey UNA SOLA VEZ al abrir el modal para esta decisión intencional.
       // Usar UUID puro para garantizar unicidad y no superar VARCHAR(100):
       // formato => 'bib-{eventId}-{action}-{uuid}' ≤ ~50 chars, independiente de la longitud del r2Key.
-      const newIdemKey = 'bib-' + item.eventId + '-' + action + '-' + crypto.randomUUID();
+      const randomId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+      const newIdemKey = 'bib-' + item.eventId + '-' + action + '-' + randomId;
       document.getElementById('bib-decision-idempotency-key').value = newIdemKey;
 
       // Registrar estado previo esperado de la decisión para prevenir sobrescritura silenciosa
@@ -13620,8 +13704,9 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       if (btn) { btn.disabled = true; btn.innerText = 'Guardando...'; }
 
       try {
+        const fallbackUuid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2));
         const idempotencyKey = document.getElementById('bib-decision-idempotency-key').value ||
-          ('bib-' + eventId + '-' + action + '-' + crypto.randomUUID());
+          ('bib-' + eventId + '-' + action + '-' + fallbackUuid);
         const expectedPrevRaw = document.getElementById('bib-decision-expected-previous-id').value;
         const expectedPreviousDecisionId = expectedPrevRaw !== '' ? parseInt(expectedPrevRaw, 10) : null;
 

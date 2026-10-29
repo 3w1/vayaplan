@@ -12,11 +12,16 @@
  * 8. Rechaza explícitamente Stories, perfiles y rutas no soportadas con mensajes claros.
  */
 
+export type InstagramContentType = 'post' | 'reel' | 'story';
+
 export interface ValidInstagramPostUrlResult {
   valid: true;
   canonicalUrl: string;
   shortcode: string;
-  postType: 'p' | 'reel';
+  contentType: InstagramContentType;
+  postType: 'p' | 'reel' | 'story';
+  username?: string;
+  storyId?: string;
 }
 
 export interface InvalidInstagramPostUrlResult {
@@ -30,6 +35,8 @@ export interface InvalidInstagramPostUrlResult {
     | 'credentials_not_allowed'
     | 'port_not_allowed'
     | 'stories_not_supported'
+    | 'story_id_missing'
+    | 'invalid_story_id'
     | 'profile_url_not_supported'
     | 'unsupported_route'
     | 'invalid_shortcode';
@@ -40,6 +47,7 @@ export type InstagramPostUrlValidationResult =
   | InvalidInstagramPostUrlResult;
 
 const STRICT_PATH_REGEX = /^\/(p|reel)\/([A-Za-z0-9_-]{5,40})\/?$/;
+const STRICT_STORY_PATH_REGEX = /^\/stories\/([A-Za-z0-9_.]+)\/([0-9]{10,40})\/?$/;
 
 export function validateInstagramPostUrl(rawUrl: string): InstagramPostUrlValidationResult {
   if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
@@ -102,12 +110,51 @@ export function validateInstagramPostUrl(rawUrl: string): InstagramPostUrlValida
 
   const pathname = parsed.pathname;
 
-  // 5. Rechazos específicos tempranos para feedback claro
+  // 5. Manejo de historias (/stories/...)
   if (pathname.startsWith('/stories/')) {
+    // 5.1 Enlace a historia individual: /stories/USERNAME/STORY_ID/
+    // USERNAME: [A-Za-z0-9_.] (1 a 30 caracteres)
+    // STORY_ID: exclusivamente dígitos ([0-9]{10,40}) mantenido estrictamente como cadena (sin Number ni parseInt)
+    const storyMatch = pathname.match(STRICT_STORY_PATH_REGEX);
+    if (storyMatch) {
+      const username = storyMatch[1].toLowerCase();
+      const storyId = storyMatch[2]; // Preservado estrictamente como string
+      const canonicalUrl = `https://www.instagram.com/stories/${username}/${storyId}/`;
+      return {
+        valid: true,
+        canonicalUrl,
+        shortcode: storyId,
+        contentType: 'story',
+        postType: 'story',
+        username,
+        storyId,
+      };
+    }
+
+    // 5.2 Si tiene un ID pero no es puramente numérico
+    const invalidIdMatch = pathname.match(/^\/stories\/([A-Za-z0-9_.]+)\/([^/]+)\/?$/);
+    if (invalidIdMatch) {
+      return {
+        valid: false,
+        code: 'invalid_story_id',
+        error: 'El identificador de la historia debe ser numérico (ej: /stories/usuario/4018658867898287794/).',
+      };
+    }
+
+    // 5.3 Si es un enlace genérico a historias de una cuenta (/stories/USERNAME/) sin ID
+    const accountStoriesMatch = pathname.match(/^\/stories\/([A-Za-z0-9_.]+)\/?$/);
+    if (accountStoriesMatch) {
+      return {
+        valid: false,
+        code: 'story_id_missing',
+        error: `El enlace corresponde a las historias generales de la cuenta (@${accountStoriesMatch[1]}), no a una historia individual. Abra la historia concreta que anuncia el evento y pegue su enlace (/stories/USUARIO/ID/).`,
+      };
+    }
+
     return {
       valid: false,
-      code: 'stories_not_supported',
-      error: 'Los enlaces a Instagram Stories caducan en 24h y no son compatibles. Proporcione un enlace a un post o reel permanente.',
+      code: 'story_id_missing',
+      error: 'El enlace a la historia debe incluir la cuenta y el identificador de la historia individual (/stories/USUARIO/ID/).',
     };
   }
 
@@ -128,7 +175,7 @@ export function validateInstagramPostUrl(rawUrl: string): InstagramPostUrlValida
     return {
       valid: false,
       code: 'unsupported_route',
-      error: 'Ruta de Instagram no admitida. Solo se admiten publicaciones (/p/) o reels (/reel/).',
+      error: 'Ruta de Instagram no admitida. Solo se admiten publicaciones (/p/), reels (/reel/) o historias individuales (/stories/USUARIO/ID/).',
     };
   }
 
@@ -148,7 +195,7 @@ export function validateInstagramPostUrl(rawUrl: string): InstagramPostUrlValida
     return {
       valid: false,
       code: 'invalid_shortcode',
-      error: 'Ruta o identificador de publicación no válido. Formatos admitidos: /p/IDENTIFICADOR/ o /reel/IDENTIFICADOR/.',
+      error: 'Ruta o identificador de publicación no válido. Formatos admitidos: /p/IDENTIFICADOR/, /reel/IDENTIFICADOR/ o /stories/USUARIO/ID/.',
     };
   }
 
@@ -161,6 +208,7 @@ export function validateInstagramPostUrl(rawUrl: string): InstagramPostUrlValida
     valid: true,
     canonicalUrl,
     shortcode,
+    contentType: postType === 'reel' ? 'reel' : 'post',
     postType,
   };
 }

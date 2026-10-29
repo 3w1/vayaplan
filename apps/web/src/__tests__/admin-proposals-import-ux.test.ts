@@ -239,7 +239,9 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
     expect(html).toContain('id="import-ig-venue-select"');
     expect(html).toContain('id="btn-submit-import-ig"');
     expect(html).toContain('id="import-ig-feedback"');
-    expect(html).toContain('📥 Importar Post de Instagram');
+    expect(html).toContain('📥 Importar de Instagram');
+    expect(html).toContain('/stories/usuario/id/');
+    expect(html).toContain('/stories/USUARIO/ID/');
   });
 
   test('2. openImportInstagramModal limpia el formulario, feedback y puebla venues ordenados alfabéticamente con opción "sin asignar"', () => {

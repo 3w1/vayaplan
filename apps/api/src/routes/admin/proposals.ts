@@ -1497,7 +1497,7 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
   // Impide dos altas simultáneas con la misma dedupe_key (ej. doble clic o peticiones concurrentes)
   // sin bloquear altas de publicaciones diferentes y sin requerir cambios de esquema de BD.
   const r2Key = extractR2Key(imageUrl);
-  const dedupeKey = 'instagram_' + shortcode;
+  const dedupeKey = urlValidation.contentType === 'story' ? 'instagram_story_' + shortcode : 'instagram_' + shortcode;
 
   const insertSql = `
     INSERT INTO curation_proposals (
@@ -1531,9 +1531,9 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
       updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      'instagram', null, $11, $12, $13, 1080, 1080,
-      'BAJA', $14, $15, 'pending', true,
-      $16, $17, 'admin_manual', NOW(), NOW(), NOW()
+      'instagram', $11, $12, $13, $14, 1080, 1080,
+      'BAJA', $15, $16, 'pending', true,
+      $17, $18, 'admin_manual', NOW(), NOW(), NOW()
     )
     RETURNING *;
   `;
@@ -1549,6 +1549,7 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
     price,
     caption,
     canonicalUrl,
+    urlValidation.username || null,
     shortcode,
     r2Key,
     imageUrl,

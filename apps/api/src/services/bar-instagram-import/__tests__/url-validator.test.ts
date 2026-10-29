@@ -64,12 +64,37 @@ describe('validateInstagramPostUrl — Validación defensiva de URLs de Instagra
     }
   });
 
-  test('5. Rechaza enlaces de Instagram Stories con mensaje explícito', () => {
-    const res = validateInstagramPostUrl('https://www.instagram.com/stories/bar_salvaje/34857293847293847/');
+  test('5. Acepta historias individuales con ID numérico preservado como cadena y canonicaliza', () => {
+    const storyUrl = 'https://www.instagram.com/stories/elautenticobar/4018658867898287794/?igsh=abc123#frag';
+    const res = validateInstagramPostUrl(storyUrl);
+    expect(res.valid).toBe(true);
+    if (res.valid) {
+      expect(res.contentType).toBe('story');
+      expect(res.postType).toBe('story');
+      expect(res.username).toBe('elautenticobar');
+      // Identificador de 19 dígitos no debe sufrir truncamiento por conversión a Number
+      expect(res.storyId).toBe('4018658867898287794');
+      expect(typeof res.storyId).toBe('string');
+      expect(res.shortcode).toBe('4018658867898287794');
+      expect(res.canonicalUrl).toBe('https://www.instagram.com/stories/elautenticobar/4018658867898287794/');
+    }
+  });
+
+  test('5b. Rechaza enlaces genéricos a historias de una cuenta sin ID individual', () => {
+    const res = validateInstagramPostUrl('https://www.instagram.com/stories/elautenticobar/');
     expect(res.valid).toBe(false);
     if (!res.valid) {
-      expect(res.code).toBe('stories_not_supported');
-      expect(res.error).toContain('Stories');
+      expect(res.code).toBe('story_id_missing');
+      expect(res.error).toContain('@elautenticobar');
+    }
+  });
+
+  test('5c. Rechaza historias con identificador no numérico', () => {
+    const res = validateInstagramPostUrl('https://www.instagram.com/stories/elautenticobar/abc-invalido/');
+    expect(res.valid).toBe(false);
+    if (!res.valid) {
+      expect(res.code).toBe('invalid_story_id');
+      expect(res.error).toContain('numérico');
     }
   });
 
