@@ -407,6 +407,33 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
   }
   const proposal = propRes.rows[0];
 
+  // Regla editorial: Una propuesta ya aprobada no debe generar un segundo evento
+  if (proposal.created_event_id || proposal.review_status === 'approved_draft') {
+    const existingEvRes = await query(
+      `SELECT id, title, status, editorial_date, start_time, time_status, venue_id, category, image_url
+       FROM events WHERE id = $1;`,
+      [proposal.created_event_id]
+    );
+    return c.json({
+      error: 'proposal_already_approved',
+      message: `Esta propuesta ya fue aprobada previamente (Evento ID #${proposal.created_event_id}).`,
+      existingEvent: existingEvRes.rows[0] || { id: proposal.created_event_id },
+    }, 409);
+  }
+
+  // Regla editorial: No se crea un nuevo evento si ya hay uno vinculado
+  if (proposal.matched_event_id) {
+    const matchedEvRes = await query(
+      `SELECT id, title, status, editorial_date, venue_id FROM events WHERE id = $1;`,
+      [proposal.matched_event_id]
+    );
+    return c.json({
+      error: 'proposal_already_linked',
+      message: `Esta propuesta ya está vinculada al evento #${proposal.matched_event_id}. Utiliza la vinculación existente para evitar duplicados.`,
+      existingEvent: matchedEvRes.rows[0] || { id: proposal.matched_event_id },
+    }, 409);
+  }
+
   let body: any = {};
   try {
     body = await c.req.json();
@@ -632,6 +659,47 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
   const client = await getClient();
   try {
     await client.query('BEGIN');
+
+    // Bloqueo pesimista a nivel de fila para serializar aprobaciones concurrentes de la misma propuesta
+    const lockRes = await client.query(
+      `SELECT id, review_status, created_event_id, matched_event_id
+       FROM curation_proposals
+       WHERE id = $1
+       FOR UPDATE;`,
+      [id]
+    );
+    if (lockRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
+    }
+
+    const lockedProp = lockRes.rows[0];
+    if (lockedProp.created_event_id || lockedProp.review_status === 'approved_draft') {
+      await client.query('ROLLBACK');
+      const existingEvRes = await query(
+        `SELECT id, title, status, editorial_date, start_time, time_status, venue_id, category, image_url
+         FROM events WHERE id = $1;`,
+        [lockedProp.created_event_id]
+      );
+      return c.json({
+        error: 'proposal_already_approved',
+        message: `Esta propuesta ya fue aprobada previamente (Evento ID #${lockedProp.created_event_id}).`,
+        existingEvent: existingEvRes.rows[0] || { id: lockedProp.created_event_id },
+      }, 409);
+    }
+
+    if (lockedProp.matched_event_id) {
+      await client.query('ROLLBACK');
+      const matchedEvRes = await query(
+        `SELECT id, title, status, editorial_date, venue_id FROM events WHERE id = $1;`,
+        [lockedProp.matched_event_id]
+      );
+      return c.json({
+        error: 'proposal_already_linked',
+        message: `Esta propuesta ya está vinculada al evento #${lockedProp.matched_event_id}. Utiliza la vinculación existente para evitar duplicados.`,
+        existingEvent: matchedEvRes.rows[0] || { id: lockedProp.matched_event_id },
+      }, 409);
+    }
 
     // Crear evento en estado STRICTLY DRAFT
     const insertEventSql = `

@@ -107,6 +107,26 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
       'edit-prop-caption-input': { value: '', style: { display: 'none' } },
       'edit-prop-caption-label': { innerText: '' },
       'btn-submit-edit-prop': { disabled: false, innerText: '' },
+      'btn-approve-edit-prop': { disabled: false, innerText: '', style: {} },
+
+      // Modal de éxito tras aprobar
+      'modal-proposal-approved-success': { style: {} },
+      'modal-prop-approved-msg': { innerText: '' },
+      'modal-prop-approved-event-id': { innerText: '' },
+      'modal-prop-approved-event-title': { innerText: '' },
+      'modal-prop-approved-event-datetime': { innerText: '' },
+      'btn-modal-prop-approved-view-event': { onclick: null },
+
+      // Modal de evento
+      'modal-event': { style: {} },
+      'modal-event-secondary-status-btns': { innerHTML: '' },
+      'modal-event-create-actions': { style: {} },
+      'modal-event-edit-actions': { style: {} },
+      'ev-id': { value: '' },
+      'ev-venue-id': { value: '' },
+      'ev-time-status': { value: '' },
+      'ev-end-date': { value: '' },
+      'ev-time-local': { value: '' },
 
       // Modal de ver caption
       'modal-proposal-caption': { style: {} },
@@ -797,5 +817,358 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     expect(html).toContain('overflow-wrap:break-word');
     expect(html).toContain('overflow-x:hidden');
     expect(html).toContain('overflow-y:auto');
+  });
+
+  test('17. HTML: footer de modal-edit-proposal incluye acciones diferenciadas y modal de éxito', () => {
+    const html = renderAdminHtml();
+
+    // Acciones claramente diferenciadas en el footer del modal de edición
+    expect(html).toContain('id="btn-submit-edit-prop"');
+    expect(html).toContain('💾 Guardar Cambios');
+    expect(html).toContain('id="btn-approve-edit-prop"');
+    expect(html).toContain('✓ Aprobar y Crear Borrador');
+
+    // Modal de éxito tras aprobar y crear borrador
+    expect(html).toContain('id="modal-proposal-approved-success"');
+    expect(html).toContain('id="modal-prop-approved-msg"');
+    expect(html).toContain('id="modal-prop-approved-event-id"');
+    expect(html).toContain('id="btn-modal-prop-approved-view-event"');
+    expect(html).toContain('🎯 Ver y Publicar Evento');
+
+    // Banner explicativo del modal de edición
+    expect(html).toContain('id="edit-prop-banner-text"');
+    expect(html).toContain('Guardar cambios conserva la propuesta en el buzón');
+  });
+
+  test('18. Visibilidad dinámica de botón aprobar: visible para propuestas pendientes elegibles y oculto en manual o CONTENIDO_VENUE', async () => {
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10119,
+        title: 'Cata en Restaurante La Traserilla',
+        proposed_date: '2026-10-29',
+        proposed_time: '20:00',
+        classification: 'EVENTO_POSIBLE',
+        review_status: 'pending',
+      },
+      {
+        id: 63,
+        venue_id: 10119,
+        title: 'Ambiente y Carta La Traserilla',
+        classification: 'CONTENIDO_VENUE',
+        review_status: 'pending',
+      },
+      {
+        id: 50,
+        venue_id: 10119,
+        title: 'Evento Ya Aprobado',
+        classification: 'EVENTO_POSIBLE',
+        review_status: 'approved_draft',
+        created_event_id: 101,
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    // 1. Abrir propuesta elegible (ID 76): botón de aprobar visible
+    ctx.window.openEditProposalModal(76);
+    expect(domElements['btn-approve-edit-prop'].style.display).toBe('inline-flex');
+    expect(domElements['btn-approve-edit-prop'].disabled).toBe(false);
+
+    // 2. Abrir CONTENIDO_VENUE (ID 63): botón de aprobar oculto
+    ctx.window.openEditProposalModal(63);
+    expect(domElements['btn-approve-edit-prop'].style.display).toBe('none');
+
+    // 3. Abrir propuesta ya aprobada (ID 50): botón de aprobar oculto
+    ctx.window.openEditProposalModal(50);
+    expect(domElements['btn-approve-edit-prop'].style.display).toBe('none');
+
+    // 4. Abrir creación manual: botón de aprobar oculto
+    ctx.window.openManualProposalModal({ title: 'Nueva manual' });
+    expect(domElements['btn-approve-edit-prop'].style.display).toBe('none');
+  });
+
+  test('19. submitEditAndApproveProposal valida campos obligatorios en cliente sin enviar peticiones erróneas', async () => {
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10119,
+        title: 'Cata en Restaurante La Traserilla',
+        proposed_date: '2026-10-29',
+        proposed_time: '20:00',
+        classification: 'EVENTO_POSIBLE',
+        review_status: 'pending',
+      },
+    ];
+
+    const { ctx, domElements, apiCalls } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+    ctx.window.openEditProposalModal(76);
+
+    // Caso A: Título vacío
+    domElements['edit-prop-title-input'].value = '  ';
+    await ctx.window.submitEditAndApproveProposal();
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('título');
+    expect(apiCalls.length).toBe(1); // Solo la carga inicial de loadAdminProposals
+
+    // Caso B: Fecha vacía
+    domElements['edit-prop-title-input'].value = 'Cata en La Traserilla';
+    domElements['edit-prop-date-input'].value = '';
+    await ctx.window.submitEditAndApproveProposal();
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('fecha');
+    expect(apiCalls.length).toBe(1);
+
+    // Caso C: Hora vacía para evento puntual
+    domElements['edit-prop-date-input'].value = '2026-10-29';
+    domElements['edit-prop-time-input'].value = '';
+    await ctx.window.submitEditAndApproveProposal();
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('hora');
+    expect(apiCalls.length).toBe(1);
+
+    // Caso D: Local no seleccionado
+    domElements['edit-prop-time-input'].value = '20:00';
+    domElements['edit-prop-venue-select'].value = '';
+    await ctx.window.submitEditAndApproveProposal();
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('local');
+    expect(apiCalls.length).toBe(1);
+
+    // Caso E: Precio de confirmación no numérico
+    domElements['edit-prop-venue-select'].value = '10119';
+    domElements['edit-prop-price-status-select'].value = 'CONFIRMED';
+    domElements['edit-prop-price-input'].value = 'invalido';
+    await ctx.window.submitEditAndApproveProposal();
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('precio');
+    expect(apiCalls.length).toBe(1);
+  });
+
+  test('20. Flujo completo: propuesta pendiente -> revisión -> guardar/aprobar -> borrador creado -> modal éxito con enlace directo', async () => {
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10119,
+        venue_name: 'Restaurante La Traserilla',
+        title: 'Cata en Restaurante La Traserilla',
+        proposed_date: '2026-10-29',
+        proposed_time: '20:00',
+        classification: 'EVENTO_POSIBLE',
+        category: 'ocio',
+        price_status: 'CONFIRMED',
+        price: 45.0,
+        image_url: 'https://media.vayaplan.com/instagram-imports/De_jb4yFX_T/5a2e1f5aa4e78ed2.jpg',
+        r2_key: 'instagram-imports/De_jb4yFX_T/5a2e1f5aa4e78ed2.jpg',
+        source_type: 'instagram_intropix',
+        confidence: 'BAJA',
+        review_status: 'pending',
+      },
+    ];
+
+    let patchCalled = false;
+    let approveCalled = false;
+    let eventCreatedId = 104;
+
+    const apiResponses: Record<string, any> = {
+      '/api/v1/admin/proposals/76': (opts: any) => {
+        if (opts.method === 'PATCH') {
+          patchCalled = true;
+          const body = JSON.parse(opts.body);
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              message: 'Propuesta editada con éxito.',
+              proposal: { ...mockProposals[0], ...body },
+            }),
+          };
+        }
+      },
+      '/api/v1/admin/proposals/76/approve': (opts: any) => {
+        if (opts.method === 'POST') {
+          approveCalled = true;
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              message: `Propuesta aprobada con éxito. Se ha creado el evento borrador ID ${eventCreatedId}.`,
+              createdEvent: {
+                id: eventCreatedId,
+                title: 'Cata Exclusiva en Restaurante La Traserilla',
+                status: 'draft',
+                editorial_date: '2026-10-29',
+                start_time: '2026-10-29T20:00:00+02:00',
+                venue_id: 10119,
+                category: 'ocio',
+              },
+            }),
+          };
+        }
+      },
+    };
+
+    const { ctx, domElements, closedModals, openedModals } = setupTestContext(mockProposals, apiResponses);
+    await ctx.window.loadAdminProposals();
+
+    // 1. Abrir en modo revisión
+    ctx.window.openEditProposalModal(76);
+    expect(domElements['edit-prop-title-input'].value).toBe('Cata en Restaurante La Traserilla');
+
+    // 2. Operador modifica el título en el modal
+    domElements['edit-prop-title-input'].value = 'Cata Exclusiva en Restaurante La Traserilla';
+    domElements['edit-prop-date-input'].value = '2026-10-29';
+    domElements['edit-prop-time-input'].value = '20:00';
+    domElements['edit-prop-venue-select'].value = '10119';
+    domElements['edit-prop-category-select'].value = 'ocio';
+    domElements['edit-prop-price-status-select'].value = 'CONFIRMED';
+    domElements['edit-prop-price-input'].value = '45,00';
+
+    // 3. Operador pulsa "✓ Aprobar y Crear Borrador"
+    await ctx.window.submitEditAndApproveProposal();
+
+    // Verifica que se ejecutó PATCH antes de POST /approve
+    expect(patchCalled).toBe(true);
+    expect(approveCalled).toBe(true);
+
+    // Modal de edición se cerró
+    expect(closedModals).toContain('modal-edit-proposal');
+
+    // Modal de éxito se abrió mostrando el evento creado
+    expect(openedModals).toContain('modal-proposal-approved-success');
+    expect(domElements['modal-prop-approved-event-id'].innerText).toBe('#104');
+    expect(domElements['modal-prop-approved-event-title'].innerText).toBe('Cata Exclusiva en Restaurante La Traserilla');
+
+    // La propuesta local transicionó a approved_draft con created_event_id vinculado
+    expect(mockProposals[0].review_status).toBe('approved_draft');
+    expect(mockProposals[0].created_event_id).toBe(104);
+  });
+
+  test('21. Fixture de Propuesta #76: preserva confianza BAJA sin alteración y fuente instagram_intropix', async () => {
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10119,
+        venue_name: 'Restaurante La Traserilla',
+        title: 'Cata en Restaurante La Traserilla',
+        proposed_date: '2026-10-29',
+        proposed_time: '20:00',
+        classification: 'EVENTO_POSIBLE',
+        category: 'ocio',
+        price_status: 'CONFIRMED',
+        price: 45.0,
+        source_type: 'instagram_intropix',
+        confidence: 'BAJA',
+        review_status: 'pending',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    const cardsHtml = domElements['proposals-cards-container'].innerHTML;
+
+    // Verificar que la insignia de confianza BAJA se renderiza sin mutación
+    expect(cardsHtml).toContain('>BAJA<');
+    expect(cardsHtml).not.toContain('>ALTA<');
+
+    // Abrir modal de revisión y verificar metadatos
+    ctx.window.openEditProposalModal(76);
+    expect(domElements['edit-prop-meta-conf'].innerText).toBe('BAJA');
+  });
+
+  test('22. Prevención de doble envío: bloquea clics concurrentes en submitEditAndApproveProposal', async () => {
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10119,
+        title: 'Cata en Restaurante La Traserilla',
+        proposed_date: '2026-10-29',
+        proposed_time: '20:00',
+        classification: 'EVENTO_POSIBLE',
+        review_status: 'pending',
+      },
+    ];
+
+    let patchCount = 0;
+    const apiResponses: Record<string, any> = {
+      '/api/v1/admin/proposals/76': async () => {
+        patchCount++;
+        // Retardo simulado
+        await new Promise(r => setTimeout(r, 20));
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+        };
+      },
+      '/api/v1/admin/proposals/76/approve': async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, createdEvent: { id: 104 } }),
+      }),
+    };
+
+    const { ctx, domElements } = setupTestContext(mockProposals, apiResponses);
+    await ctx.window.loadAdminProposals();
+    ctx.window.openEditProposalModal(76);
+
+    domElements['edit-prop-venue-select'].value = '10119';
+
+    // Lanzar dos llamadas simultáneas
+    const call1 = ctx.window.submitEditAndApproveProposal();
+    const call2 = ctx.window.submitEditAndApproveProposal();
+
+    await Promise.all([call1, call2]);
+
+    // Solo se debe haber procesado una única vez
+    expect(patchCount).toBe(1);
+    expect(domElements['btn-approve-edit-prop'].disabled).toBe(false);
+  });
+
+  test('23. renderEditStatusActions en modal-event: muestra "🚀 Publicar ahora" para eventos draft y tentative', () => {
+    const { ctx, domElements } = setupTestContext([]);
+
+    // 1. Estado 'draft' (procedente de aprobación de propuesta)
+    ctx.renderEditStatusActions('draft');
+    expect(domElements['modal-event-secondary-status-btns'].innerHTML).toContain('🚀 Publicar ahora');
+    expect(domElements['modal-event-secondary-status-btns'].innerHTML).toContain("submitEventStatusChange('published')");
+
+    // 2. Estado 'tentative' (borrador creado manualmente)
+    ctx.renderEditStatusActions('tentative');
+    expect(domElements['modal-event-secondary-status-btns'].innerHTML).toContain('🚀 Publicar ahora');
+
+    // 3. Estado 'published' (evento ya público)
+    ctx.renderEditStatusActions('published');
+    expect(domElements['modal-event-secondary-status-btns'].innerHTML).toContain('🚫 Cancelar evento');
+  });
+
+  test('24. Renderizado de tarjeta: botones "✏️ Revisar" y "✓ Aprobar Borrador" visibles simultáneamente en la lista', async () => {
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10119,
+        title: 'Cata en Restaurante La Traserilla',
+        proposed_date: '2026-10-29',
+        proposed_time: '20:00',
+        classification: 'EVENTO_POSIBLE',
+        review_status: 'pending',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    const cardsHtml = domElements['proposals-cards-container'].innerHTML;
+
+    // Ambos botones están disponibles directamente en la tarjeta
+    expect(cardsHtml).toContain('openEditProposalModal(76)');
+    expect(cardsHtml).toContain('✏️ Revisar');
+    expect(cardsHtml).toContain('openApproveProposalModal(76)');
+    expect(cardsHtml).toContain('✓ Aprobar Borrador');
   });
 });

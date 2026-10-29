@@ -4636,6 +4636,42 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
+  <!-- MODAL: ÉXITO TRAS APROBAR PROPUESTA Y CREAR BORRADOR -->
+  <div id="modal-proposal-approved-success" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-proposal-approved-success')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-prop-approved-title" style="max-width:540px; width:92%; display:flex; flex-direction:column; overflow:hidden;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="flex-shrink:0; background:linear-gradient(135deg, #059669, #10b981); color:#ffffff;">
+        <div>
+          <span style="font-size:0.75rem; font-weight:800; letter-spacing:1px; opacity:0.85; text-transform:uppercase;">Curación Editorial</span>
+          <h3 id="modal-prop-approved-title" style="margin:0.25rem 0 0 0; font-size:1.2rem; font-weight:800; color:#ffffff;">✓ Propuesta Aprobada como Borrador</h3>
+        </div>
+        <button type="button" class="modal-close" onclick="closeModal('modal-proposal-approved-success')" aria-label="Cerrar modal" style="color:#ffffff;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding:1.25rem; font-size:0.9rem; line-height:1.5; color:var(--text-main); display:flex; flex-direction:column; gap:1rem;">
+        <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:0.85rem 1rem; color:#065f46; font-size:0.875rem;">
+          <div style="font-weight:700; margin-bottom:0.25rem;">Propuesta aprobada con éxito</div>
+          <div id="modal-prop-approved-msg">Se ha creado el evento borrador en el catálogo. Nunca se publica automáticamente.</div>
+        </div>
+
+        <div id="modal-prop-approved-summary" style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:1rem; font-size:0.85rem; display:flex; flex-direction:column; gap:0.4rem;">
+          <div><strong>Evento creado:</strong> <span id="modal-prop-approved-event-id" style="font-weight:700; color:#059669;">#—</span></div>
+          <div><strong>Título:</strong> <span id="modal-prop-approved-event-title" style="font-weight:600;">—</span></div>
+          <div><strong>Fecha / Hora:</strong> <span id="modal-prop-approved-event-datetime">—</span></div>
+          <div><strong>Estado en catálogo:</strong> <span class="status-pill status-tentative" style="font-size:0.75rem;">Borrador (draft)</span></div>
+        </div>
+
+        <div style="font-size:0.8125rem; color:var(--text-muted); line-height:1.4;">
+          👉 <strong>Siguiente paso:</strong> Revisa los datos del evento y pulsa <em>"🚀 Publicar ahora"</em> cuando desees que aparezca visible en la agenda pública de Palencia.
+        </div>
+      </div>
+
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center; gap:0.5rem; padding:0.75rem 1.25rem; border-top:1px solid var(--border); background:#ffffff;">
+        <button type="button" class="btn-secondary" onclick="closeModal('modal-proposal-approved-success')">Seguir en propuestas</button>
+        <button type="button" id="btn-modal-prop-approved-view-event" class="btn-primary" style="background:#059669; border-color:#059669; font-weight:700; display:inline-flex; align-items:center; gap:0.4rem;">🎯 Ver y Publicar Evento</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: RECHAZAR PROPUESTA -->
   <div id="modal-reject-proposal" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-reject-proposal')">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-reject-prop-title" style="max-width:480px;" onclick="event.stopPropagation()">
@@ -4716,10 +4752,10 @@ export function renderAdminHtml(): string {
         <input type="hidden" id="edit-prop-source-url" value="">
         <div id="edit-prop-error" class="editor-alert-error" style="display:none; margin-bottom:1rem;"></div>
 
-        <!-- Banner de advertencia: Esta acción NO crea eventos ni publica -->
+        <!-- Banner de advertencia: Diferenciación de guardado y aprobación -->
         <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:0.75rem 1rem; margin-bottom:1.25rem; font-size:0.85rem; color:#1e40af; display:flex; align-items:center; gap:0.5rem;">
           <span>ℹ️</span>
-          <span id="edit-prop-banner-text"><strong>Edición previa:</strong> Modificar esta propuesta guarda los cambios en el buzón editorial (estado <strong>PENDIENTE</strong>). <strong>No crea eventos en la agenda ni los aprueba ni publica</strong>.</span>
+          <span id="edit-prop-banner-text"><strong>Revisión editorial:</strong> Guardar cambios conserva la propuesta en el buzón (estado <strong>PENDIENTE</strong>). Para crear el evento en el catálogo, usa <strong>"✓ Aprobar y Crear Borrador"</strong>.</span>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 220px; gap:1.25rem;">
@@ -4866,9 +4902,12 @@ export function renderAdminHtml(): string {
         </div>
       </div>
 
-      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center; gap:0.5rem; flex-wrap:wrap;">
         <button type="button" class="btn-secondary" onclick="closeModal('modal-edit-proposal')">Cancelar</button>
-        <button type="button" id="btn-submit-edit-prop" class="btn-primary" onclick="submitEditProposal()" style="background:#2563eb; border-color:#2563eb; font-weight:700;">💾 Guardar Cambios</button>
+        <div style="display:inline-flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+          <button type="button" id="btn-submit-edit-prop" class="btn-secondary" onclick="submitEditProposal()" style="font-weight:700;" title="Guardar cambios y conservar estado PENDIENTE">💾 Guardar Cambios</button>
+          <button type="button" id="btn-approve-edit-prop" class="btn-primary" onclick="submitEditAndApproveProposal()" style="background:#059669; border-color:#059669; color:#ffffff; font-weight:700; display:inline-flex; align-items:center; gap:0.35rem;" title="Aprobar propuesta y crear evento borrador en el catálogo">✓ Aprobar y Crear Borrador</button>
+        </div>
       </div>
     </div>
   </div>
@@ -7448,6 +7487,7 @@ export function renderAdminHtml(): string {
           const statusLabels = {
             'published': 'Publicado',
             'tentative': 'Borrador',
+            'draft': 'Borrador',
             'cancelled': 'Cancelado',
             'archived': 'Archivado',
             'duplicate': 'Duplicado',
@@ -7478,7 +7518,7 @@ export function renderAdminHtml(): string {
       if (!container) return;
       container.innerHTML = '';
 
-      if (status === 'tentative') {
+      if (status === 'tentative' || status === 'draft') {
         container.innerHTML = \`<button type="button" class="btn-sm btn-publish" onclick="submitEventStatusChange('published')">🚀 Publicar ahora</button>\`;
       } else if (status === 'published') {
         container.innerHTML = \`<button type="button" class="btn-sm btn-logout" onclick="submitEventStatusChange('cancelled')">🚫 Cancelar evento</button>\`;
@@ -11320,12 +11360,17 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       let menuItemsHtml = '';
 
       if (p.review_status === 'pending') {
-        primaryBtnHtml = '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="✏️ Editar" aria-label="Revisar y editar propuesta #' + p.id + '" style="font-weight:700; white-space:nowrap;">✏️ Revisar</button>';
-
         let approveBtnText = '✓ Aprobar Borrador';
         if (!isContinuous && (p.classification === 'EVENTO_POSIBLE_SIN_HORA' || !p.proposed_time)) {
           approveBtnText = '⏰ Asignar Hora y Aprobar';
         }
+
+        const approveCardBtn = (p.classification !== 'CONTENIDO_VENUE')
+          ? '<button type="button" class="btn-sm btn-success" onclick="openApproveProposalModal(' + p.id + ')" title="' + approveBtnText + '" aria-label="' + approveBtnText + ' #' + p.id + '" style="font-weight:700; white-space:nowrap; background:#059669; border-color:#059669; color:#ffffff;">' + approveBtnText + '</button>'
+          : '';
+
+        primaryBtnHtml = '<button type="button" class="btn-sm btn-primary" onclick="openEditProposalModal(' + p.id + ')" title="✏️ Editar" aria-label="Revisar y editar propuesta #' + p.id + '" style="font-weight:700; white-space:nowrap;">✏️ Revisar</button>' +
+          (approveCardBtn ? ' ' + approveCardBtn : '');
 
         menuItemsHtml = (p.classification !== 'CONTENIDO_VENUE'
             ? '<button type="button" class="proposal-menu-item" onclick="closeAllProposalActionMenus(); openApproveProposalModal(' + p.id + ')">' + approveBtnText + '</button>'
@@ -11782,13 +11827,58 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         }
 
         closeModal('modal-approve-proposal');
-        alert('✓ ' + (data.message || 'Propuesta aprobada como borrador con éxito.'));
-        loadAdminProposals();
+        if (prop) {
+          prop.review_status = 'approved_draft';
+          if (data.createdEvent && data.createdEvent.id) {
+            prop.created_event_id = data.createdEvent.id;
+          }
+        }
+        await loadAdminProposals();
+
+        if (data.createdEvent) {
+          window.showProposalApprovedSuccessModal(data.createdEvent, data.message);
+        } else {
+          alert('✓ ' + (data.message || 'Propuesta aprobada como borrador con éxito.'));
+        }
       } catch (err) {
         if (errBox) { errBox.innerText = 'Error de conexión: ' + err.message; errBox.style.display = 'block'; }
       } finally {
         if (btn) { btn.disabled = false; btn.innerText = '✓ Aprobar y Crear Borrador'; }
       }
+    };
+
+    window.showProposalApprovedSuccessModal = function(createdEvent, customMessage) {
+      if (!createdEvent || !createdEvent.id) return;
+
+      const msgEl = document.getElementById('modal-prop-approved-msg');
+      if (msgEl) {
+        msgEl.innerText = customMessage || ('Se ha creado el evento borrador ID #' + createdEvent.id + ' en el catálogo. Nunca se publica automáticamente.');
+      }
+
+      const idEl = document.getElementById('modal-prop-approved-event-id');
+      if (idEl) idEl.innerText = '#' + createdEvent.id;
+
+      const titleEl = document.getElementById('modal-prop-approved-event-title');
+      if (titleEl) titleEl.innerText = createdEvent.title || '—';
+
+      const dtEl = document.getElementById('modal-prop-approved-event-datetime');
+      if (dtEl) {
+        let timePart = '';
+        if (createdEvent.start_time) {
+          timePart = ' · ' + (createdEvent.time_status === 'continuous' ? 'Continuo' : (typeof createdEvent.start_time === 'string' && createdEvent.start_time.includes('T') ? createdEvent.start_time.slice(11, 16) + ' h' : ''));
+        }
+        dtEl.innerText = (createdEvent.editorial_date || '—') + timePart;
+      }
+
+      const viewBtn = document.getElementById('btn-modal-prop-approved-view-event');
+      if (viewBtn) {
+        viewBtn.onclick = function() {
+          closeModal('modal-proposal-approved-success');
+          editEvent(createdEvent.id);
+        };
+      }
+
+      openModal('modal-proposal-approved-success');
     };
 
     window.openRejectProposalModal = function(id) {
@@ -12145,7 +12235,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const priceNoteInput = document.getElementById('edit-prop-price-note-input');
       if (priceNoteInput) priceNoteInput.value = prop.price_note || '';
 
-      onEditPriceStatusChange();
+      if (typeof window.onEditPriceStatusChange === 'function') {
+        window.onEditPriceStatusChange();
+      } else if (typeof onEditPriceStatusChange === 'function') {
+        onEditPriceStatusChange();
+      }
 
       // Previsualización de imagen
       const img = document.getElementById('edit-prop-img-preview');
@@ -12219,11 +12313,22 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       const bannerText = document.getElementById('edit-prop-banner-text');
       if (bannerText) {
-        bannerText.innerHTML = '<strong>Edición previa:</strong> Modificar esta propuesta guarda los cambios en el buzón editorial (estado <strong>PENDIENTE</strong>). <strong>No crea eventos en la agenda ni los aprueba ni publica</strong>.';
+        bannerText.innerHTML = '<strong>Revisión editorial:</strong> Guardar cambios conserva la propuesta en el buzón (estado <strong>PENDIENTE</strong>). Para crear el evento en el catálogo, usa <strong>"✓ Aprobar y Crear Borrador"</strong>.';
       }
 
       const btnSubmit = document.getElementById('btn-submit-edit-prop');
       if (btnSubmit) btnSubmit.innerText = '💾 Guardar Cambios';
+
+      const btnApprove = document.getElementById('btn-approve-edit-prop');
+      if (btnApprove) {
+        if (prop.review_status === 'pending' && prop.classification !== 'CONTENIDO_VENUE') {
+          btnApprove.style.display = 'inline-flex';
+          btnApprove.disabled = false;
+          btnApprove.innerText = '✓ Aprobar y Crear Borrador';
+        } else {
+          btnApprove.style.display = 'none';
+        }
+      }
 
       const sourceUrlHidden = document.getElementById('edit-prop-source-url');
       if (sourceUrlHidden) sourceUrlHidden.value = prop.source_url || '';
@@ -12256,6 +12361,11 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       const btnSubmit = document.getElementById('btn-submit-edit-prop');
       if (btnSubmit) btnSubmit.innerText = '💾 Guardar como Propuesta Pendiente';
+
+      const btnApprove = document.getElementById('btn-approve-edit-prop');
+      if (btnApprove) {
+        btnApprove.style.display = 'none';
+      }
 
       const errBox = document.getElementById('edit-prop-error');
       if (errBox) {
@@ -12842,6 +12952,238 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (btn) {
           btn.disabled = false;
           btn.innerText = '💾 Guardar Cambios';
+        }
+        const btnApprove = document.getElementById('btn-approve-edit-prop');
+        if (btnApprove) {
+          btnApprove.disabled = false;
+        }
+      }
+    };
+
+    window.submitEditAndApproveProposal = async function() {
+      if (isSavingProposal) return;
+
+      const idVal = document.getElementById('edit-prop-id')?.value;
+      if (!idVal) {
+        alert('Esta acción solo es válida para propuestas existentes.');
+        return;
+      }
+      const id = parseInt(idVal, 10);
+      const prop = cachedProposals.find(p => p.id === id);
+      if (!id || !prop) {
+        alert('Propuesta no encontrada.');
+        return;
+      }
+
+      const errBox = document.getElementById('edit-prop-error');
+      if (errBox) {
+        errBox.style.display = 'none';
+        errBox.innerText = '';
+      }
+
+      const title = (document.getElementById('edit-prop-title-input')?.value || '').trim();
+      const classification = document.getElementById('edit-prop-classification-select')?.value || prop.classification || 'EVENTO_POSIBLE';
+      const dateVal = (document.getElementById('edit-prop-date-input')?.value || '').trim();
+      const endDateVal = (document.getElementById('edit-prop-end-date-input')?.value || '').trim();
+      const timeVal = (document.getElementById('edit-prop-time-input')?.value || '').trim();
+      const endTimeVal = (document.getElementById('edit-prop-end-time-input')?.value || '').trim();
+      const venueVal = document.getElementById('edit-prop-venue-select')?.value;
+      const category = document.getElementById('edit-prop-category-select')?.value || prop.category || 'dj_tardeo';
+      const priceStatus = document.getElementById('edit-prop-price-status-select')?.value || 'NOT_INFORMED';
+      const priceNote = (document.getElementById('edit-prop-price-note-input')?.value || '').trim();
+      const priceRaw = (document.getElementById('edit-prop-price-input')?.value || '').trim();
+
+      // 1. Reglas de validación antes de aprobar
+      if (classification === 'CONTENIDO_VENUE') {
+        if (errBox) {
+          errBox.innerText = 'El contenido clasificado como CONTENIDO_VENUE no puede aprobarse como evento de agenda.';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      if (!title || title.length < 3) {
+        if (errBox) {
+          errBox.innerText = 'El título de la propuesta es obligatorio y debe tener al menos 3 caracteres.';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      if (!dateVal || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateVal)) {
+        if (errBox) {
+          errBox.innerText = 'La fecha del evento es obligatoria en formato válido (YYYY-MM-DD).';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      const isContinuous = classification === 'EVENTO_CONTINUO' || Boolean(endDateVal && endDateVal !== dateVal);
+
+      const timeRegex = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!isContinuous && !timeVal) {
+        if (errBox) {
+          errBox.innerText = 'La hora del evento es obligatoria para poder crear el borrador puntual (HH:mm).';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      if (timeVal && !timeRegex.test(timeVal)) {
+        if (errBox) {
+          errBox.innerText = 'El formato de hora de inicio debe ser HH:mm (ej: 20:30).';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      if (endTimeVal && !timeRegex.test(endTimeVal)) {
+        if (errBox) {
+          errBox.innerText = 'El formato de hora de fin debe ser HH:mm (ej: 23:00).';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      const venueId = venueVal ? parseInt(venueVal, 10) : null;
+      if (!venueId || isNaN(venueId)) {
+        if (errBox) {
+          errBox.innerText = 'Debes seleccionar un local (venue) válido del censo antes de aprobar la propuesta.';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      let priceToSend = null;
+      if (priceStatus === 'FREE') {
+        priceToSend = '0';
+      } else if (priceStatus === 'CONFIRMED') {
+        const cleanedPrice = priceRaw.replace(',', '.');
+        const num = parseFloat(cleanedPrice);
+        if (isNaN(num) || num < 0) {
+          if (errBox) {
+            errBox.innerText = 'Introduce un importe válido para el precio confirmado (ej: 15,00).';
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+        priceToSend = num.toFixed(2);
+      }
+
+      // Proteger contra doble envío
+      isSavingProposal = true;
+      const btnApprove = document.getElementById('btn-approve-edit-prop');
+      const btnSave = document.getElementById('btn-submit-edit-prop');
+      if (btnApprove) {
+        btnApprove.disabled = true;
+        btnApprove.innerText = 'Aprobando y creando borrador...';
+      }
+      if (btnSave) btnSave.disabled = true;
+
+      try {
+        // Paso 1: Persistir modificaciones en la propuesta primero (PATCH)
+        const patchPayload = {
+          title: title,
+          classification: classification,
+          proposed_date: dateVal,
+          proposed_end_date: endDateVal || null,
+          proposed_time: timeVal || null,
+          proposed_end_time: endTimeVal || null,
+          venue_id: venueId,
+          category: category,
+          price_status: priceStatus,
+          price_note: priceNote || null,
+          price: priceToSend !== null ? parseFloat(priceToSend) : null
+        };
+
+        const patchRes = await apiFetch('/api/v1/admin/proposals/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify(patchPayload)
+        });
+
+        if (!patchRes.ok) {
+          const patchData = await patchRes.json().catch(() => ({}));
+          if (errBox) {
+            errBox.innerText = patchData.message || 'Error al guardar los cambios de la propuesta antes de aprobar.';
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+
+        // Paso 2: Ejecutar la aprobación y creación de borrador (POST /approve)
+        const approvePayload = {
+          title: title,
+          proposed_date: dateVal,
+          proposed_end_date: endDateVal || null,
+          proposed_time: timeVal || null,
+          proposed_end_time: endTimeVal || null,
+          is_continuous: isContinuous,
+          venue_id: venueId,
+          category: category,
+          price_status: priceStatus,
+          price: priceToSend,
+          price_note: priceNote || null,
+          description: (document.getElementById('edit-prop-caption-input')?.value || document.getElementById('edit-prop-original-caption')?.innerText || prop.caption || '').trim(),
+          image_url: prop.image_url || document.getElementById('edit-prop-image-url')?.value || undefined
+        };
+
+        const approveRes = await apiFetch('/api/v1/admin/proposals/' + id + '/approve', {
+          method: 'POST',
+          body: JSON.stringify(approvePayload)
+        });
+
+        const approveData = await approveRes.json().catch(() => ({}));
+
+        if (approveRes.status === 409) {
+          // Colisión de duplicado
+          if (errBox) {
+            const existing = approveData.existingEvent;
+            errBox.innerHTML = '<strong>' + escapeHtml(approveData.message || 'Ya existe un evento idéntico en el catálogo.') + '</strong>' +
+              (existing ? '<br>Evento existente: ID #' + existing.id + ' — "' + escapeHtml(existing.title) + '" (' + existing.status + ')' : '');
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+
+        if (!approveRes.ok) {
+          if (errBox) {
+            errBox.innerText = approveData.message || 'Error al aprobar la propuesta.';
+            errBox.style.display = 'block';
+          }
+          return;
+        }
+
+        // Éxito: cerrar modal de edición y actualizar vista
+        closeModal('modal-edit-proposal');
+        prop.review_status = 'approved_draft';
+        if (approveData.createdEvent && approveData.createdEvent.id) {
+          prop.created_event_id = approveData.createdEvent.id;
+        }
+
+        const savedScrollY = (typeof window !== 'undefined' && window.scrollY !== undefined) ? window.scrollY : 0;
+        await loadAdminProposals();
+        if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+          window.scrollTo(0, savedScrollY);
+        }
+
+        if (approveData.createdEvent) {
+          window.showProposalApprovedSuccessModal(approveData.createdEvent, approveData.message);
+        } else {
+          alert('✓ ' + (approveData.message || 'Propuesta aprobada como borrador con éxito.'));
+        }
+      } catch (err) {
+        if (errBox) {
+          errBox.innerText = 'Error de conexión: ' + (err.message || 'Inténtelo de nuevo.');
+          errBox.style.display = 'block';
+        }
+      } finally {
+        isSavingProposal = false;
+        if (btnApprove) {
+          btnApprove.disabled = false;
+          btnApprove.innerText = '✓ Aprobar y Crear Borrador';
+        }
+        if (btnSave) {
+          btnSave.disabled = false;
         }
       }
     };
