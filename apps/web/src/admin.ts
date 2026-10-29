@@ -12577,7 +12577,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (specsContainer) {
           if (isStory) {
             const maxDisplay = data.maxChargeLimitUsd !== undefined ? String(data.maxChargeLimitUsd).replace('.', ',') : '0,045';
-            const estDisplay = data.estimatedCostUsd !== undefined ? String(data.estimatedCostUsd).replace('.', ',') : '0,0125';
+            const singleDisplay = data.singleStoryCostUsd !== undefined ? String(data.singleStoryCostUsd).replace('.', ',') : '0,0095';
+            const maxStoriesDisplay = data.maxStoriesCostUsd !== undefined ? String(data.maxStoriesCostUsd).replace('.', ',') : '0,0445';
             specsContainer.innerHTML =
               '<div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:1rem; font-size:0.825rem; color:#4c1d95; display:flex; flex-direction:column; gap:0.5rem;">' +
               '<div><strong>Proveedor:</strong> <code style="background:#ffffff; padding:0.15rem 0.35rem; border-radius:4px; font-weight:700; color:#6d28d9;">' + escapeHtml(data.actorId || 'intropix/instagram-stories-scraper') + '</code></div>' +
@@ -12586,12 +12587,19 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
               '<div><strong>URL canónica:</strong> <span id="paid-fallback-url-display" style="word-break:break-all; font-family:monospace; color:#1e1b4b;">' + escapeHtml(data.canonicalUrl || '-') + '</span></div>' +
               '<div><strong>Alcance:</strong> Consulta historias activas de la cuenta e importa exclusivamente la que coincida con el ID</div>' +
               '<div style="background:#ffffff; border:1px solid #ede9fe; border-radius:6px; padding:0.6rem; font-size:0.775rem; color:#5b21b6; display:flex; flex-direction:column; gap:0.25rem;">' +
+              '<div style="font-weight:700; color:#4c1d95; margin-bottom:0.15rem;">Desglose de tarifas del Actor:</div>' +
               '<div style="display:flex; justify-content:space-between;"><span>• Inicio de run (<code>actor-start</code>):</span><span>0,0050 USD</span></div>' +
-              '<div style="display:flex; justify-content:space-between;"><span>• Por historia entregada (<code>result-item</code>):</span><span>0,0025 USD</span></div>' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Cuenta consultada (<code>account-scan</code>):</span><span>0,0020 USD</span></div>' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Historia entregada (<code>result-item</code>):</span><span>0,0025 USD / item</span></div>' +
+              '<div style="border-top:1px dashed #e9d5ff; margin-top:0.25rem; padding-top:0.25rem; color:#6b21a8;">' +
+              '<div><strong>Fórmula:</strong> <code>0,0050 + 0,0020 + (N × 0,0025) USD</code></div>' +
+              '<div style="display:flex; justify-content:space-between; margin-top:0.15rem;"><span>• Escenario 1 historia entregada:</span><strong>' + singleDisplay + ' USD</strong></div>' +
+              '<div style="display:flex; justify-content:space-between;"><span>• Escenario 15 historias entregadas:</span><strong>' + maxStoriesDisplay + ' USD</strong></div>' +
+              '</div>' +
               '</div>' +
               '<div style="display:flex; justify-content:space-between; border-top:1px dashed #c4b5fd; padding-top:0.5rem; margin-top:0.25rem;">' +
-              '<span><strong>Coste estimado en éxito:</strong> ~' + estDisplay + ' USD</span>' +
-              '<span><strong>Límite máximo autorizado:</strong> <span style="font-weight:800; color:#7c3aed;">' + maxDisplay + ' USD</span></span>' +
+              '<span><strong>Máximo autorizado en Apify:</strong></span>' +
+              '<span style="font-weight:800; color:#7c3aed;">' + maxDisplay + ' USD</span>' +
               '</div>' +
               '</div>';
           } else {
@@ -12620,15 +12628,16 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             termsContainer.innerHTML =
               '<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:0.85rem; font-size:0.8rem; color:#92400e; line-height:1.4;">' +
               '<div style="font-weight:700; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.35rem;">' +
-              '<span>⚠️</span> Desglose de Facturación y Condiciones de Historias:' +
+              '<span>⚠️</span> Facturación, Escenarios y Condiciones de Historias:' +
               '</div>' +
               '<ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">' +
-              '<li>Cargo inicial de <strong>0,005 USD</strong> por arranque del contenedor (no reembolsable si la cuenta no tiene historias o la extracción falla).</li>' +
-              '<li>El Actor consulta las historias activas de <strong>@' + escapeHtml(data.username || '') + '</strong> y devenga <strong>0,0025 USD</strong> por cada historia entregada (máx. 15 historias).</li>' +
-              '<li>El parámetro <code>maxTotalChargeUsd=0.045</code> impone un tope presupuestario infranqueable en Apify.</li>' +
+              '<li><strong>Tarifas:</strong> 0,0050 USD por arranque del contenedor + 0,0020 USD por consulta de cuenta + 0,0025 USD por historia entregada.</li>' +
+              '<li><strong>Costes según entrega:</strong> 1 historia devenga <strong>0,0095 USD</strong>; hasta 15 historias devengan <strong>0,0445 USD</strong>.</li>' +
+              '<li><strong>Tope presupuestario:</strong> El parámetro <code>maxTotalChargeUsd=0.045</code> impone un límite infranqueable en Apify.</li>' +
+              '<li><strong>Riesgo en fallo o cancelación:</strong> Una ejecución fallida o interrumpida puede devengar cargos parciales en el proveedor según la fase alcanzada. El paso a carga manual alternativa no genera nuevos costes de API, pero no cancela cargos devengados previamente.</li>' +
               '<li><strong>Identificación exacta:</strong> Solo se creará la propuesta si la historia coincide exactamente con el ID solicitado (<code>' + escapeHtml(data.storyId || data.shortcode || '') + '</code>).</li>' +
-              '<li><strong>El éxito no está garantizado:</strong> Las historias expiran a las 24h. Si caducó o fue eliminada, el proveedor indicará que no está activa.</li>' +
-              '<li><strong>Sin reintentos automáticos:</strong> Esta autorización puntual cubre un único intento facturable.</li>' +
+              '<li><strong>El éxito no está garantizado:</strong> Las historias expiran en 24h. Si caducó o fue borrada, no se localizará en el dataset.</li>' +
+              '<li><strong>Sin reintentos automáticos:</strong> Esta autorización puntual cubre un único intento puntual.</li>' +
               '</ul>' +
               '</div>';
           } else {
@@ -12721,8 +12730,12 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             feedback.style.border = '1px solid #fecaca';
 
             const errMessage = data.message || 'El proveedor alternativo no pudo extraer el contenido.';
-            feedback.innerHTML = '<div style="margin-bottom:0.5rem;">❌ ' + escapeHtml(errMessage) + '</div>' +
-              '<div style="font-size:0.75rem; color:#7f1d1d; margin-bottom:0.75rem;">El proveedor alternativo tampoco pudo obtener el contenido. Puedes registrar la propuesta introduciendo los datos manualmente.</div>' +
+            const costNote = data.operation && data.operation.reportedCostUsd !== null && data.operation.reportedCostUsd !== undefined
+              ? ' (cargo reportado en proveedor: ' + data.operation.reportedCostUsd + ' USD)'
+              : (data.operation && data.operation.runId ? ' (coste final en proveedor no determinado o pendiente de liquidación)' : '');
+
+            feedback.innerHTML = '<div style="margin-bottom:0.5rem;">❌ ' + escapeHtml(errMessage) + escapeHtml(costNote) + '</div>' +
+              '<div style="font-size:0.75rem; color:#7f1d1d; margin-bottom:0.75rem;">El proveedor alternativo no pudo obtener el contenido. Si el run arrancó en el proveedor, pueden haberse devengado cargos. Puedes registrar la propuesta introduciendo los datos manualmente (la carga manual no genera nuevas consultas de API).</div>' +
               '<div style="padding-top:0.5rem; border-top:1px dashed #fca5a5; display:flex; justify-content:flex-end;">' +
               '<button type="button" id="btn-paid-fallback-to-manual" class="btn-primary" style="background:#2563eb; border-color:#2563eb; font-size:0.8125rem; padding:0.4rem 0.8rem; font-weight:700; cursor:pointer;">' +
               '✍️ Completar manualmente</button>' +
@@ -12746,8 +12759,8 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         await loadAdminProposals();
 
         const costInfo = data.operation?.reportedCostUsd !== null && data.operation?.reportedCostUsd !== undefined
-          ? ' (coste: ' + data.operation.reportedCostUsd + ' USD)'
-          : '';
+          ? ' (coste reportado: ' + data.operation.reportedCostUsd + ' USD)'
+          : ' (coste no reportado por el proveedor)';
 
         const itemType = canUrl.includes('/stories/') ? 'Historia' : 'Publicación';
         alert('✅ ' + itemType + ' extraída exitosamente con el proveedor alternativo' + costInfo + ' y registrada como propuesta pendiente.');

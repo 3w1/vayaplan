@@ -21,11 +21,14 @@ const {
   scrapeStoryWithIntropix,
   processIntropixStoryResponse,
   INTROPIX_STORY_ACTOR_ID,
-  INTROPIX_STORY_ESTIMATED_COST_USD,
   INTROPIX_STORY_MAX_CHARGE_LIMIT_USD,
   INTROPIX_STORY_START_CHARGE_USD,
+  INTROPIX_STORY_ACCOUNT_SCAN_CHARGE_USD,
   INTROPIX_STORY_ITEM_CHARGE_USD,
+  INTROPIX_STORY_SINGLE_ITEM_COST_USD,
+  INTROPIX_STORY_MAX_RESULTS_COST_USD,
   INTROPIX_STORY_MAX_RESULTS,
+  isStoryImportFeatureEnabled,
 } = await import('../../../services/bar-instagram-import/intropix-story-adapter');
 const { validateInstagramPostUrl } = await import('../../../services/bar-instagram-import/url-validator');
 
@@ -41,6 +44,7 @@ const TARGET_REF_USERNAME = 'elautenticobar';
 const TARGET_REF_URL = `https://www.instagram.com/stories/${TARGET_REF_USERNAME}/${TARGET_REF_STORY_ID}/`;
 
 beforeAll(async () => {
+  process.env.ENABLE_INSTAGRAM_STORY_IMPORT = 'true';
   adminToken = await sign(
     { email: 'curator@vayaplan.com', role: 'admin' },
     JWT_SECRET,
@@ -198,9 +202,17 @@ describe('Importación puntual de historias de Instagram (Caso de Referencia: el
     expect(data.storyId).toBe(storyId);
     expect(data.maxChargeLimitUsd).toBe(INTROPIX_STORY_MAX_CHARGE_LIMIT_USD);
     expect(data.startFeeUsd).toBe(INTROPIX_STORY_START_CHARGE_USD);
+    expect(data.accountScanFeeUsd).toBe(INTROPIX_STORY_ACCOUNT_SCAN_CHARGE_USD);
     expect(data.resultItemFeeUsd).toBe(INTROPIX_STORY_ITEM_CHARGE_USD);
+    expect(data.singleStoryCostUsd).toBe(INTROPIX_STORY_SINGLE_ITEM_COST_USD);
+    expect(data.maxStoriesCostUsd).toBe(INTROPIX_STORY_MAX_RESULTS_COST_USD);
+    expect(data.pricingFormula).toContain('0,0050');
+    expect(data.pricingFormula).toContain('0,0020');
+    expect(data.pricingFormula).toContain('0,0025');
     expect(data.notice).toContain('@elautenticobar');
-    expect(data.notice).toContain('0,045 USD');
+    expect(data.notice).toContain('0,0095 USD');
+    expect(data.notice).toContain('0,0445 USD');
+    expect(data.notice).toContain('0,0450 USD');
 
     // Comprobar que en BD se persistió con lockKey aislado `ig_paid_story:...`
     const lockCheck = await testPool.query(
@@ -458,12 +470,12 @@ describe('Importación puntual de historias de Instagram (Caso de Referencia: el
     expect(execData.canCompleteManually).toBe(true);
   });
 
-  test('12. Denegación del proveedor (outcome: denied): provider_... con coste 0', async () => {
+  test('12. Denegación del proveedor (outcome: denied): con coste 0 preserva 0', async () => {
     const storyId = `4018658867898287701`;
     const storyUrl = `https://www.instagram.com/stories/elautenticobar/${storyId}/`;
 
     setIntropixStoryFetcherOverride(async () => ({
-      run: { id: 'run_story_denied', status: 'FAILED', usageTotalUsd: 0 },
+      run: { id: 'run_story_denied_0', status: 'FAILED', usageTotalUsd: 0 },
       output: { outcome: 'denied', reason: 'user_daily_exhausted', message: 'Límite diario alcanzado' },
       items: [],
     }));
@@ -494,7 +506,47 @@ describe('Importación puntual de historias de Instagram (Caso de Referencia: el
     expect(exec.status).toBe(422);
     const execData = await exec.json();
     expect(execData.error).toBe('provider_user_daily_exhausted');
+    expect(execData.operation.reportedCostUsd).toBe(0);
     expect(execData.canCompleteManually).toBe(true);
+  });
+
+  test('12b. Denegación o fallo sin coste reportado en proveedor: reportedCostUsd es null (indeterminado), nunca 0 ni tarifa de inicio', async () => {
+    const storyId = `4018658867898287799`;
+    const storyUrl = `https://www.instagram.com/stories/elautenticobar/${storyId}/`;
+
+    setIntropixStoryFetcherOverride(async () => ({
+      run: { id: 'run_story_denied_unknown', status: 'FAILED' }, // usageTotalUsd no reportado por Apify
+      output: { outcome: 'denied', reason: 'call_budget_below_minimum' },
+      items: [],
+    }));
+
+    const prep = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: storyUrl }),
+    });
+    const prepData = await prep.json();
+
+    const exec = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operationId: prepData.operationId,
+        shortcode: prepData.shortcode,
+        canonicalUrl: prepData.canonicalUrl,
+      }),
+    });
+
+    expect(exec.status).toBe(422);
+    const execData = await exec.json();
+    expect(execData.error).toBe('provider_call_budget_below_minimum');
+    expect(execData.operation.reportedCostUsd).toBeNull();
   });
 
   // ============================================================================
@@ -713,6 +765,138 @@ describe('Importación puntual de historias de Instagram (Caso de Referencia: el
     for (const row of check.rows) {
       expect(row.review_status).toBe('pending');
       expect(row.created_event_id).toBeNull();
+    }
+  });
+
+  // ============================================================================
+  // 6. FIXTURE DE CONTRATO PUBLICADO, PRESERVACIÓN DE TIPOS Y FEATURE FLAG
+  // ============================================================================
+  test('19. Fixture fiel al contrato publicado (story_pk, taken_at, expiring_at, width, height, caption nullable) sin datos privados', async () => {
+    const fixturePath = new URL('../../../services/bar-instagram-import/__tests__/fixtures/intropix-story-item.fixture.json', import.meta.url).pathname;
+    const fixtureRaw = await Bun.file(fixturePath).text();
+    const fixture = JSON.parse(fixtureRaw);
+
+    // Comprobar ausencia estricta de datos privados
+    expect(fixtureRaw).not.toContain('cookie');
+    expect(fixtureRaw).not.toContain('session');
+    expect(fixtureRaw).not.toContain('token');
+    expect(fixtureRaw).not.toContain('Bearer');
+
+    // Comprobar tipos y campos del contrato publicado
+    expect(typeof fixture.story_pk).toBe('string');
+    expect(fixture.story_pk).toBe('4018658867898287794');
+    expect(typeof fixture.username).toBe('string');
+    expect(fixture.username).toBe('elautenticobar');
+    expect(typeof fixture.taken_at).toBe('string');
+    expect(typeof fixture.expiring_at).toBe('string');
+    expect(typeof fixture.width).toBe('number');
+    expect(typeof fixture.height).toBe('number');
+    expect(fixture.media_type).toBe('image');
+    expect(typeof fixture.media_url).toBe('string');
+    expect(fixture.caption === null || typeof fixture.caption === 'string').toBe(true);
+
+    // Procesar a través del adapter comprobando el mapeo explícito
+    const res = processIntropixStoryResponse({
+      canonicalUrl: TARGET_REF_URL,
+      requestedUsername: 'elautenticobar',
+      requestedStoryId: '4018658867898287794',
+      run: { id: 'run_fixture_test', status: 'SUCCEEDED', usageTotalUsd: 0.0095 },
+      items: [fixture],
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.item).toBeDefined();
+    expect(res.item?.story_pk).toBe('4018658867898287794');
+    expect(res.item?.expiring_at).toBe('2026-10-30T18:30:00.000Z');
+    expect(res.item?.expiresAt).toBe('2026-10-30T18:30:00.000Z');
+    expect(res.item?.width).toBe(1080);
+    expect(res.item?.height).toBe(1920);
+    expect(res.item?.caption).toContain('Música en directo');
+    expect(res.reportedCostUsd).toBe(0.0095);
+  });
+
+  test('20. Rechazo de identificadores numéricos que pierden precisión sin intentar reconstruir dígitos perdidos', () => {
+    // Un JSON mal parseado o que suministra story_pk numérico
+    const unsafeItems = [
+      {
+        username: 'elautenticobar',
+        story_pk: 4018658867898288000, // número de JS > MAX_SAFE_INTEGER
+        media_type: 'image',
+        media_url: 'https://cdn.instagram.com/unsafe.jpg',
+      },
+    ];
+
+    const res = processIntropixStoryResponse({
+      canonicalUrl: TARGET_REF_URL,
+      requestedUsername: 'elautenticobar',
+      requestedStoryId: '4018658867898287794',
+      run: { id: 'run_unsafe_number', status: 'SUCCEEDED', usageTotalUsd: 0.007 },
+      items: unsafeItems,
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.code).toBe('unsafe_numeric_story_id');
+    expect(res.error).toContain('formato numérico');
+    expect(res.error).toContain('pérdida de precisión');
+    expect(res.canCompleteManually).toBe(true);
+  });
+
+  test('21. Control por Feature Flag (ENABLE_INSTAGRAM_STORY_IMPORT): cuando está inactivo, rechaza con 403 y ofrece alta manual', async () => {
+    const prevFlag = process.env.ENABLE_INSTAGRAM_STORY_IMPORT;
+    const freshStoryId = '4018658867898289998';
+    const freshStoryUrl = `https://www.instagram.com/stories/elautenticobar/${freshStoryId}/`;
+
+    try {
+      process.env.ENABLE_INSTAGRAM_STORY_IMPORT = 'false';
+
+      // 1. Rechazo en import-instagram-post
+      const importRes = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: freshStoryUrl }),
+      });
+      expect(importRes.status).toBe(403);
+      const importData = await importRes.json();
+      expect(importData.code).toBe('story_import_disabled_retention_policy_required');
+      expect(importData.canUsePaidFallback).toBe(false);
+      expect(importData.canCompleteManually).toBe(true);
+
+      // 2. Rechazo en prepare-paid-fallback
+      const prepRes = await app.request('/api/v1/admin/proposals/prepare-paid-fallback', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: freshStoryUrl }),
+      });
+      expect(prepRes.status).toBe(403);
+      const prepData = await prepRes.json();
+      expect(prepData.code).toBe('story_import_disabled_retention_policy_required');
+      expect(prepData.canCompleteManually).toBe(true);
+
+      // 3. Rechazo en execute-paid-fallback
+      const execRes = await app.request('/api/v1/admin/proposals/execute-paid-fallback', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operationId: 'op_test_disabled',
+          shortcode: freshStoryId,
+          canonicalUrl: freshStoryUrl,
+        }),
+      });
+      expect(execRes.status).toBe(403);
+      const execData = await execRes.json();
+      expect(execData.code).toBe('story_import_disabled_retention_policy_required');
+      expect(execData.canCompleteManually).toBe(true);
+    } finally {
+      process.env.ENABLE_INSTAGRAM_STORY_IMPORT = prevFlag;
     }
   });
 });

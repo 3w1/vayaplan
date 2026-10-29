@@ -1317,6 +1317,7 @@ adminProposalsRoutes.post('/proposals/import-instagram-post', async (c) => {
     return c.json(
       {
         error: result.code || 'import_failed',
+        code: result.code || 'import_failed',
         message: result.error,
         canCompleteManually: Boolean(result.canCompleteManually),
         canUsePaidFallback: Boolean(result.canUsePaidFallback),
@@ -1666,7 +1667,7 @@ adminProposalsRoutes.post('/proposals/prepare-paid-fallback', async (c) => {
   });
 
   if (!result.success) {
-    return c.json({ error: result.code || 'prepare_failed', message: result.error }, result.status as any);
+    return c.json({ error: result.code || 'prepare_failed', code: result.code || 'prepare_failed', message: result.error, canCompleteManually: Boolean(result.canCompleteManually) }, result.status as any);
   }
 
   return c.json(result.data, 200);
@@ -1718,6 +1719,7 @@ adminProposalsRoutes.post('/proposals/execute-paid-fallback', async (c) => {
     return c.json(
       {
         error: result.code,
+        code: result.code,
         message: result.error,
         canCompleteManually: Boolean(result.canCompleteManually),
         canonicalUrl: result.canonicalUrl,

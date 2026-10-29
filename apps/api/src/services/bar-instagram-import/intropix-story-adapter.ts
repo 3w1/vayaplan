@@ -3,20 +3,33 @@ import { isTestOverrideAllowed } from './single-post-importer';
 export const INTROPIX_STORY_ACTOR_ID = 'intropix/instagram-stories-scraper';
 export const INTROPIX_STORY_ACTOR_SLUG = 'intropix~instagram-stories-scraper';
 
-// Tarifas del Actor en Apify comprobadas (modelo PAY_PER_EVENT):
-// - actor-start: 0.005 USD (por arrancar el contenedor)
-// - result-item: 0.0025 USD (por historia activa entregada al dataset; 2,50 USD / 1000 items)
+// Tarifas del Actor en Apify comprobadas (modelo PAY_PER_EVENT de intropix/instagram-stories-scraper):
+// - actor-start: 0.0050 USD (por arrancar el contenedor)
+// - account-scan: 0.0020 USD (por consultar la cuenta del autor)
+// - result-item: 0.0025 USD (por cada historia activa entregada al dataset; 2,50 USD / 1000 items)
 export const INTROPIX_STORY_START_CHARGE_USD = 0.005;
+export const INTROPIX_STORY_ACCOUNT_SCAN_CHARGE_USD = 0.002;
 export const INTROPIX_STORY_ITEM_CHARGE_USD = 0.0025;
 export const INTROPIX_STORY_MAX_RESULTS = 15;
 
-// Coste estimado medio (arranque + entrega de historias activas):
-// 0.005 + 0.0025 * 3 = 0.0125 USD
-export const INTROPIX_STORY_ESTIMATED_COST_USD = 0.0125;
+// Escenarios de facturación según contrato:
+// - 1 cuenta y 1 historia entregada: 0.005 + 0.002 + 0.0025 = 0.0095 USD
+export const INTROPIX_STORY_SINGLE_ITEM_COST_USD = 0.0095;
+// - 1 cuenta y 15 historias entregadas (tope de consulta): 0.005 + 0.002 + 15 * 0.0025 = 0.0445 USD
+export const INTROPIX_STORY_MAX_RESULTS_COST_USD = 0.0445;
 
 // Techo presupuestario estricto impuesto en maxTotalChargeUsd:
-// 0.005 + 15 * 0.0025 = 0.0425 USD, redondeado defensivamente a 0.045 USD
+// 0.0445 USD redondeado defensivamente a 0.0450 USD como límite infranqueable en Apify
 export const INTROPIX_STORY_MAX_CHARGE_LIMIT_USD = 0.045;
+
+/**
+ * Comprueba si la importación automatizada de historias está habilitada por configuración.
+ * Por defecto permanece desactivada ('false') para evitar almacenamiento no autorizado
+ * de historias efímeras en R2 y base de datos hasta que se defina la política de retención.
+ */
+export function isStoryImportFeatureEnabled(): boolean {
+  return process.env.ENABLE_INSTAGRAM_STORY_IMPORT === 'true';
+}
 
 export interface IntropixStoryDatasetItem {
   username: string;
@@ -28,7 +41,8 @@ export interface IntropixStoryDatasetItem {
   media_type: 'image' | 'video';
   media_url: string;
   taken_at?: string;
-  expiresAt?: string;
+  expiring_at?: string; // Campo nativo del esquema publicado
+  expiresAt?: string;   // Alias compatible
   caption?: string | null;
   width?: number;
   height?: number;
@@ -125,7 +139,7 @@ export async function scrapeStoryWithIntropix(params: {
         canonicalUrl,
         requestedUsername: username,
         requestedStoryId: storyId,
-        run: mockResult.run || { id: params.customRunId || ('mock_story_run_' + Date.now()), status: 'SUCCEEDED', usageTotalUsd: INTROPIX_STORY_ESTIMATED_COST_USD },
+        run: mockResult.run || { id: params.customRunId || ('mock_story_run_' + Date.now()), status: 'SUCCEEDED', usageTotalUsd: INTROPIX_STORY_SINGLE_ITEM_COST_USD },
         outputRecord: mockResult.output,
         items: mockResult.items || [],
       });
@@ -370,7 +384,7 @@ export function processIntropixStoryResponse(params: {
       code: `provider_${reason}`,
       error: userMsg,
       runId: run.id,
-      reportedCostUsd: reportedCostUsd ?? 0,
+      reportedCostUsd, // Distinguir coste desconocido (null) de 0; nunca asumir 0 a ciegas
       outputRecord,
       canCompleteManually: true,
       canonicalUrl,
@@ -402,7 +416,7 @@ export function processIntropixStoryResponse(params: {
         code: `target_${failReason}`,
         error: failMessage,
         runId: run.id,
-        reportedCostUsd: reportedCostUsd ?? INTROPIX_STORY_START_CHARGE_USD,
+        reportedCostUsd, // Preservar valor reportado real o null; no asumir tarifa de inicio fija
         outputRecord,
         canCompleteManually: true,
         canonicalUrl,
@@ -420,7 +434,29 @@ export function processIntropixStoryResponse(params: {
       code: 'account_no_active_stories',
       error: `La cuenta @${requestedUsername} no tiene historias activas en este momento o han expirado las 24 horas.`,
       runId: run.id,
-      reportedCostUsd: reportedCostUsd ?? INTROPIX_STORY_START_CHARGE_USD,
+      reportedCostUsd,
+      outputRecord,
+      canCompleteManually: true,
+      canonicalUrl,
+      username: requestedUsername,
+      storyId: requestedStoryId,
+    };
+  }
+
+  // 3b. Verificación defensiva de identificadores numéricos en el dataset:
+  // Si story_pk viene como number, JavaScript ya perdió precisión al parsearlo (IEEE-754 64-bit float
+  // para IDs de 19 dígitos). No se intentan reconstruir dígitos perdidos; se rechaza de inmediato.
+  const hasUnsafeNumericPk = items.some(
+    (it) => it && typeof it === 'object' && typeof it.story_pk === 'number'
+  );
+  if (hasUnsafeNumericPk) {
+    return {
+      success: false,
+      status: 422,
+      code: 'unsafe_numeric_story_id',
+      error: 'El dataset contiene identificadores de historia en formato numérico (story_pk number). Por pérdida de precisión en 64 bits no se pueden reconstruir los dígitos perdidos de forma segura.',
+      runId: run.id,
+      reportedCostUsd,
       outputRecord,
       canCompleteManually: true,
       canonicalUrl,
@@ -430,10 +466,11 @@ export function processIntropixStoryResponse(params: {
   }
 
   // 4. Búsqueda exacta de la historia solicitada
-  // Comprobación de identidad: story_pk === requestedStoryId Y username coincide
+  // Comprobación de identidad: story_pk === requestedStoryId (estrictamente como string) Y username coincide
   const matchedItem = items.find((it: any) => {
     if (!it || typeof it !== 'object') return false;
-    const itStoryPk = it.story_pk != null ? String(it.story_pk).trim() : '';
+    if (typeof it.story_pk !== 'string') return false;
+    const itStoryPk = it.story_pk.trim();
     const itUsername = typeof it.username === 'string' ? it.username.trim().toLowerCase() : '';
     return itStoryPk === requestedStoryId && itUsername === requestedUsername.toLowerCase();
   });
@@ -447,7 +484,7 @@ export function processIntropixStoryResponse(params: {
         code: 'story_not_found_truncated',
         error: `La historia solicitada no se localizó dentro de las primeras ${INTROPIX_STORY_MAX_RESULTS} historias analizadas de @${requestedUsername}. No se puede determinar si sigue activa o ha caducado.`,
         runId: run.id,
-        reportedCostUsd: reportedCostUsd ?? INTROPIX_STORY_START_CHARGE_USD,
+        reportedCostUsd,
         outputRecord,
         canCompleteManually: true,
         canonicalUrl,
@@ -462,7 +499,7 @@ export function processIntropixStoryResponse(params: {
       code: 'story_not_found',
       error: `La historia solicitada (${requestedStoryId}) no figura entre las historias activas disponibles de @${requestedUsername}. Puede haber expirado o haber sido eliminada.`,
       runId: run.id,
-      reportedCostUsd: reportedCostUsd ?? INTROPIX_STORY_START_CHARGE_USD,
+      reportedCostUsd,
       outputRecord,
       canCompleteManually: true,
       canonicalUrl,
@@ -509,7 +546,11 @@ export function processIntropixStoryResponse(params: {
     };
   }
 
-  // 6. Normalización del item (story_pk preservado estrictamente como string de 19 dígitos)
+  // 6. Normalización del item (mapeo explícito a partir de campos publicados)
+  const expiringAt = matchedItem.expiring_at || matchedItem.expiresAt || undefined;
+  const width = typeof matchedItem.width === 'number' ? matchedItem.width : (matchedItem.dimensions?.width ?? 1080);
+  const height = typeof matchedItem.height === 'number' ? matchedItem.height : (matchedItem.dimensions?.height ?? 1920);
+
   const normalizedItem: IntropixStoryDatasetItem = {
     username: requestedUsername,
     story_pk: requestedStoryId,
@@ -521,10 +562,11 @@ export function processIntropixStoryResponse(params: {
     media_url: primaryMediaUrl,
     cover_url: matchedItem.cover_url || null,
     taken_at: matchedItem.taken_at || new Date().toISOString(),
-    expiresAt: matchedItem.expiresAt || undefined,
+    expiring_at: expiringAt,
+    expiresAt: expiringAt,
     caption: typeof matchedItem.caption === 'string' ? matchedItem.caption : null,
-    width: matchedItem.width || matchedItem.dimensions?.width || 1080,
-    height: matchedItem.height || matchedItem.dimensions?.height || 1920,
+    width,
+    height,
   };
 
   return {

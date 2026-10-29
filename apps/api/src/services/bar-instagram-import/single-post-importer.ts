@@ -12,6 +12,7 @@ import { DEFAULT_LOCK_KEY, acquirePersistentLock, releasePersistentLock } from '
 import { classifyBarPost } from './bar-classifier';
 import { matchPostWithPublishedEvents } from './event-matcher';
 import type { ApifyInstagramRawPost } from './bar-types';
+import { isStoryImportFeatureEnabled } from './intropix-story-adapter';
 
 export const MAX_SINGLE_POST_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 export const MAX_IMAGE_INPUT_PIXELS = 40_000_000; // 40 MPx
@@ -616,12 +617,15 @@ export async function importSingleInstagramPost(
 
   // 3b. Las historias de Instagram requieren el proveedor alternativo con confirmación de gasto
   if (isStory) {
+    const isFeatureEnabled = isStoryImportFeatureEnabled();
     return {
       success: false,
-      status: 400,
-      code: 'story_requires_paid_fallback',
-      error: 'Las historias de Instagram no admiten extracción anónima estándar y requieren el proveedor alternativo con confirmación de gasto.',
-      canUsePaidFallback: true,
+      status: isFeatureEnabled ? 400 : 403,
+      code: isFeatureEnabled ? 'story_requires_paid_fallback' : 'story_import_disabled_retention_policy_required',
+      error: isFeatureEnabled
+        ? 'Las historias de Instagram no admiten extracción anónima estándar y requieren el proveedor alternativo con confirmación de gasto.'
+        : 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
+      canUsePaidFallback: isFeatureEnabled,
       canCompleteManually: true,
       canonicalUrl,
       shortcode,

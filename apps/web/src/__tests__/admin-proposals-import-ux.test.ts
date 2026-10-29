@@ -766,4 +766,124 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
     expect(domElements['edit-prop-source-url'].value).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
     expect(domElements['edit-prop-venue-select'].value).toBe('2');
   });
+
+  test('17. openPaidFallbackModal para historias: presenta desglose, fórmula, escenarios (0,0095 y 0,0445 USD) y máximo autorizado sin "coste medio"', async () => {
+    const storyUrl = 'https://www.instagram.com/stories/elautenticobar/4018658867898287794/';
+    const { sandbox, domElements, openedModals } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/prepare-paid-fallback': {
+          ok: true,
+          status: 200,
+          body: {
+            success: true,
+            operationId: 'op_story_test_abc123',
+            contentType: 'story',
+            username: 'elautenticobar',
+            storyId: '4018658867898287794',
+            canonicalUrl: storyUrl,
+            shortcode: '4018658867898287794',
+            actorId: 'intropix/instagram-stories-scraper',
+            startFeeUsd: 0.005,
+            accountScanFeeUsd: 0.002,
+            resultItemFeeUsd: 0.0025,
+            pricingFormula: '0,0050 USD (inicio) + 0,0020 USD (cuenta) + (N × 0,0025 USD por historia)',
+            singleStoryCostUsd: 0.0095,
+            maxStoriesCostUsd: 0.0445,
+            maxChargeLimitUsd: 0.045,
+            currency: 'USD',
+          },
+        },
+      },
+    });
+
+    await sandbox.window.openPaidFallbackModal(storyUrl, 2);
+
+    expect(openedModals).toContain('modal-paid-fallback-confirm');
+    const specsHtml = domElements['paid-fallback-specs-container'].innerHTML;
+
+    // Comprobar que contiene desglose y tarifas exactas del contrato
+    expect(specsHtml).toContain('intropix/instagram-stories-scraper');
+    expect(specsHtml).toContain('@elautenticobar');
+    expect(specsHtml).toContain('4018658867898287794');
+    expect(specsHtml).toContain('0,0050 USD');
+    expect(specsHtml).toContain('0,0020 USD');
+    expect(specsHtml).toContain('0,0025 USD');
+
+    // Comprobar fórmula y escenarios
+    expect(specsHtml).toContain('0,0050 + 0,0020 + (N × 0,0025) USD');
+    expect(specsHtml).toContain('0,0095 USD');
+    expect(specsHtml).toContain('0,0445 USD');
+    expect(specsHtml).toContain('0,045 USD');
+
+    // Eliminar "coste medio" sin base estadística
+    expect(specsHtml).not.toContain('Coste estimado en éxito');
+    expect(specsHtml).not.toContain('coste medio');
+    expect(specsHtml).not.toContain('0,0125');
+
+    // Comprobar botón con límite presupuestario
+    expect(domElements['btn-confirm-paid-fallback'].innerText).toContain('0,045 USD');
+  });
+
+  test('18. Condiciones y advertencias de historias: informan de tarifas, escenarios y riesgo de cargos parciales sin llamar "sin coste" al fallo', async () => {
+    const storyUrl = 'https://www.instagram.com/stories/elautenticobar/4018658867898287794/';
+    const { sandbox, domElements } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/prepare-paid-fallback': {
+          ok: true,
+          status: 200,
+          body: {
+            success: true,
+            contentType: 'story',
+            username: 'elautenticobar',
+            storyId: '4018658867898287794',
+            canonicalUrl: storyUrl,
+            singleStoryCostUsd: 0.0095,
+            maxStoriesCostUsd: 0.0445,
+            maxChargeLimitUsd: 0.045,
+          },
+        },
+      },
+    });
+
+    await sandbox.window.openPaidFallbackModal(storyUrl);
+
+    const termsHtml = domElements['paid-fallback-terms-container'].innerHTML;
+    expect(termsHtml).toContain('0,0095 USD');
+    expect(termsHtml).toContain('0,0445 USD');
+    expect(termsHtml).toContain('maxTotalChargeUsd=0.045');
+    expect(termsHtml).toContain('Riesgo en fallo o cancelación');
+    expect(termsHtml).not.toContain('sin coste');
+  });
+
+  test('19. submitExecutePaidFallback ante fallo con coste indeterminado: no muestra 0 ni afirma gratuidad', async () => {
+    const { sandbox, domElements } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/execute-paid-fallback': {
+          ok: false,
+          status: 504,
+          body: {
+            error: 'apify_start_timeout',
+            message: 'Tiempo de espera al conectar con el proveedor.',
+            canCompleteManually: true,
+            operation: {
+              runId: 'run_timeout_123',
+              reportedCostUsd: null, // Coste indeterminado
+            },
+          },
+        },
+      },
+    });
+
+    domElements['paid-fallback-operation-id'].value = 'op_timeout';
+    domElements['paid-fallback-shortcode'].value = '4018658867898287794';
+    domElements['paid-fallback-canonical-url'].value = 'https://www.instagram.com/stories/elautenticobar/4018658867898287794/';
+
+    await sandbox.window.submitExecutePaidFallback();
+
+    const feedbackHtml = domElements['paid-fallback-feedback'].innerHTML;
+    expect(feedbackHtml).toContain('coste final en proveedor no determinado');
+    expect(feedbackHtml).not.toContain('0 USD');
+    expect(feedbackHtml).not.toContain('sin coste');
+    expect(feedbackHtml).toContain('btn-paid-fallback-to-manual');
+  });
 });

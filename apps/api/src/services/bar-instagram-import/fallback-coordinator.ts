@@ -12,10 +12,13 @@ import {
 } from './intropix-adapter';
 import {
   INTROPIX_STORY_ACTOR_ID,
-  INTROPIX_STORY_ESTIMATED_COST_USD,
   INTROPIX_STORY_MAX_CHARGE_LIMIT_USD,
   INTROPIX_STORY_START_CHARGE_USD,
+  INTROPIX_STORY_ACCOUNT_SCAN_CHARGE_USD,
   INTROPIX_STORY_ITEM_CHARGE_USD,
+  INTROPIX_STORY_SINGLE_ITEM_COST_USD,
+  INTROPIX_STORY_MAX_RESULTS_COST_USD,
+  isStoryImportFeatureEnabled,
   scrapeStoryWithIntropix,
   type IntropixStoryScrapeResult,
 } from './intropix-story-adapter';
@@ -36,13 +39,21 @@ export interface PrepareAuthorizationResult {
   status: number;
   error?: string;
   code?: string;
+  canCompleteManually?: boolean;
+  canonicalUrl?: string;
+  shortcode?: string;
+  venueId?: number | null;
   data?: {
     operationId: string;
     actorId: string;
     canonicalUrl: string;
     shortcode: string;
     venueId: number | null;
-    estimatedCostUsd: number;
+    estimatedCostUsd?: number;
+    singleStoryCostUsd?: number;
+    maxStoriesCostUsd?: number;
+    pricingFormula?: string;
+    accountScanFeeUsd?: number;
     maxChargeLimitUsd: number;
     startFeeUsd: number;
     profileScanFeeUsd?: number;
@@ -98,6 +109,20 @@ export async function preparePaidImportAuthorization(
 
   const { canonicalUrl, shortcode } = urlValidation;
 
+  // 1b. Si es historia, verificar si la funcionalidad está habilitada por configuración
+  const isStory = urlValidation.contentType === 'story';
+  if (isStory && !isStoryImportFeatureEnabled()) {
+    return {
+      success: false,
+      status: 403,
+      code: 'story_import_disabled_retention_policy_required',
+      error: 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
+      canCompleteManually: true,
+      canonicalUrl,
+      shortcode,
+    };
+  }
+
   // 2. Validar Venue (opcional)
   let venueId: number | null = null;
   if (params.venueId !== undefined && params.venueId !== null && params.venueId !== ('' as any)) {
@@ -117,7 +142,6 @@ export async function preparePaidImportAuthorization(
   }
 
   // 3. Comprobar duplicados existentes en propuestas y catálogo
-  const isStory = urlValidation.contentType === 'story';
   const dedupeKey = isStory ? 'instagram_story_' + shortcode : 'instagram_' + shortcode;
   const dupProp = await query(
     `SELECT id, review_status FROM curation_proposals 
@@ -161,8 +185,9 @@ export async function preparePaidImportAuthorization(
 
   const actorId = isStory ? INTROPIX_STORY_ACTOR_ID : INTROPIX_ACTOR_ID;
   const maxBudgetUsd = isStory ? INTROPIX_STORY_MAX_CHARGE_LIMIT_USD : INTROPIX_MAX_CHARGE_LIMIT_USD;
-  const estimatedCostUsd = isStory ? INTROPIX_STORY_ESTIMATED_COST_USD : INTROPIX_ESTIMATED_COST_USD;
   const startFeeUsd = isStory ? INTROPIX_STORY_START_CHARGE_USD : INTROPIX_START_CHARGE_USD;
+  const accountScanFeeUsd = isStory ? INTROPIX_STORY_ACCOUNT_SCAN_CHARGE_USD : INTROPIX_PROFILE_SCAN_CHARGE_USD;
+  const resultItemFeeUsd = isStory ? INTROPIX_STORY_ITEM_CHARGE_USD : INTROPIX_RESULT_ITEM_CHARGE_USD;
 
   const executionDetails = {
     operationId,
@@ -174,8 +199,11 @@ export async function preparePaidImportAuthorization(
     actorId,
     venueId,
     maxBudgetUsd,
-    estimatedCostUsd,
     startFeeUsd,
+    accountScanFeeUsd,
+    resultItemFeeUsd,
+    singleStoryCostUsd: isStory ? INTROPIX_STORY_SINGLE_ITEM_COST_USD : undefined,
+    maxStoriesCostUsd: isStory ? INTROPIX_STORY_MAX_RESULTS_COST_USD : undefined,
     userEmail,
     status: 'authorized',
     authorizedAt: now.toISOString(),
@@ -265,7 +293,7 @@ export async function preparePaidImportAuthorization(
   }
 
   const notice = isStory
-    ? `El proveedor consulta las historias activas de la cuenta (@${urlValidation.username}). Cobra 0,005 USD de inicio y 0,0025 USD por historia entregada (máx. 15 historias / 0,045 USD). Coste estimado: ~0,0125 USD. Sin reintentos automáticos.`
+    ? `Tarifas del proveedor: 0,0050 USD inicio + 0,0020 USD cuenta (@${urlValidation.username}) + 0,0025 USD por historia entregada. Escenarios: 1 historia = 0,0095 USD; hasta 15 historias = 0,0445 USD (máximo autorizado: 0,0450 USD). Sin reintentos automáticos.`
     : 'El proveedor cobra una tarifa de inicio de run (0,005 USD), resolución de cuenta de autor (0,002 USD) y entrega de post (0,0019 USD). Coste estimado: ~0,0089 USD. Sin reintentos automáticos.';
 
   return {
@@ -280,11 +308,17 @@ export async function preparePaidImportAuthorization(
       canonicalUrl,
       shortcode,
       venueId,
-      estimatedCostUsd,
       maxChargeLimitUsd: maxBudgetUsd,
       startFeeUsd,
       profileScanFeeUsd: isStory ? undefined : INTROPIX_PROFILE_SCAN_CHARGE_USD,
-      resultItemFeeUsd: isStory ? INTROPIX_STORY_ITEM_CHARGE_USD : INTROPIX_RESULT_ITEM_CHARGE_USD,
+      accountScanFeeUsd: isStory ? INTROPIX_STORY_ACCOUNT_SCAN_CHARGE_USD : undefined,
+      resultItemFeeUsd,
+      pricingFormula: isStory
+        ? '0,0050 USD (inicio) + 0,0020 USD (cuenta) + (N × 0,0025 USD por historia)'
+        : '0,0050 USD (inicio) + 0,0020 USD (cuenta) + 0,0019 USD (post)',
+      singleStoryCostUsd: isStory ? INTROPIX_STORY_SINGLE_ITEM_COST_USD : undefined,
+      maxStoriesCostUsd: isStory ? INTROPIX_STORY_MAX_RESULTS_COST_USD : undefined,
+      estimatedCostUsd: isStory ? undefined : INTROPIX_ESTIMATED_COST_USD,
       currency: 'USD',
       expiresAt: expiresAt.toISOString(),
       notice,
@@ -315,6 +349,20 @@ export async function executeAuthorizedPaidImport(
   const { operationId, canonicalUrl, shortcode, userEmail } = params;
   const urlCheck = validateInstagramPostUrl(canonicalUrl);
   const isStory = urlCheck.valid && urlCheck.contentType === 'story';
+
+  if (isStory && !isStoryImportFeatureEnabled()) {
+    return {
+      success: false,
+      status: 403,
+      code: 'story_import_disabled_retention_policy_required',
+      error: 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
+      canCompleteManually: true,
+      canonicalUrl,
+      shortcode,
+      venueId: params.venueId ?? null,
+    };
+  }
+
   const lockKey = isStory ? `ig_paid_story:${shortcode}` : `ig_paid:${shortcode}`;
   const now = new Date();
 
