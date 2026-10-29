@@ -24,7 +24,7 @@ const PATTERNS = {
   // 3. Actividad concreta
   liveMusicActivity: /\b(concierto|conciertos|m[uú]sica\s+en\s+directo|en\s+directo|ac[uú]stico|tributo|banda|en\s+vivo|showcase)\b/i,
   djActivity: /(?:@\w*dj\w*|\b\w*dj\b|\bdjs\b|drum\s*(?:&|and)?\s*bass|dnb|techno|house|techhouse|sesi[oó]n|sesiones|pinchada|pinchar|sesi[oó]n\s+dj|dj\s+set|a\s+los\s+platos|b2b)/i,
-  gastronomyActivity: /\b(cata|maridaje|degustaci[oó]n|vermut\s+musical|vermut\s+torero)\b/i,
+  gastronomyActivity: /\b(catas?|maridajes?|degustaci[oó]n|degustaciones|jornadas?\s+gastron[oó]micas?|ferias?\s+gastron[oó]micas?|ferias?\s+del\s+vino|rutas?\s+(?:de\s+)?(?:la\s+)?(?:tapas?|pinchos?|bravas?)|talleres?\s+(?:de\s+cocina|culinarios?|gastron[oó]micos?)|showcookings?|vermut\s+musical|vermut\s+torero)\b/i,
   entertainmentActivity: /\b(fiesta|fiestas|party|tard[oó]n|tardeo|halloween|aniversario|inauguraci[oó]n|quiz|trivial|mon[oó]logo|mon[oó]logos|bingo)\b/i,
 
   // Señales de exclusión o reclasificación:
@@ -34,8 +34,8 @@ const PATTERNS = {
   // Promoción de alquiler de sala / servicios generales
   privateHire: /\b(alquiler\s+del\s+local|celebrar\s+tu\s+pr[oó]ximo\s+evento|cumplea[ñn]os|prebodas|bautismos|reuniones\s+privadas|catering)\b/i,
 
-  // Horario habitual / servicios cotidianos
-  routineService: /\b(de\s+martes\s+a\s+s[aá]bados|abrimos\s+de|dardos|futbol[ií]n|chupitos\s+y\s+copas|plan\s+de\s+hermanas|la\s+malhablada\s+abre\s+sus\s+puertas\s+nuevamente)\b/i,
+  // Horario habitual / servicios cotidianos / carta habitual de restaurante
+  routineService: /\b(de\s+martes\s+a\s+s[aá]bados|abrimos\s+de|dardos|futbol[ií]n|chupitos\s+y\s+copas|plan\s+de\s+hermanas|la\s+malhablada\s+abre\s+sus\s+puertas\s+nuevamente|men[uú]\s+del\s+d[ií]a|men[uú]\s+diario|men[uú]\s+semanal|men[uú]\s+habitual|nuestra\s+carta|plato\s+del\s+d[ií]a|reserva\s+tu\s+mesa|sugerencias?\s+del\s+chef|cocina\s+abierta)\b/i,
 
   // Copywriting genérico de fin de semana (falsos positivos clásicos de ocio nocturno)
   genericVibe: /\b(la\s+letra\s+peque[ñn]a\s+de\s+este\s+fin\s+de\s+semana|los\s+djs\s+ya\s+est[aá]n\s+avisados|hay\s+planes\s+que\s+se\s+hablan|deja\s+que\s+los\s+djs\s+pongan\s+el\s+ritmo|esta\s+semana\s+nos\s+regalan\s+una\s+hora|una\s+hora\s+extra\s+para\s+alargar|no\s+tenemos\s+una\s+frase\s+ingeniosa|tenemos\s+m[uú]sica\.\s+tenemos\s+barra)\b/i,
@@ -87,8 +87,8 @@ export function classifyBarPost(
     };
   }
 
-  // 3. Descartar reaperturas u horarios de rutina
-  if (PATTERNS.routineService.test(caption) && !PATTERNS.liveMusicActivity.test(caption)) {
+  // 3. Descartar reaperturas u horarios de rutina (a menos que contengan evento de música o gastronomía puntual)
+  if (PATTERNS.routineService.test(caption) && !PATTERNS.liveMusicActivity.test(caption) && !PATTERNS.gastronomyActivity.test(caption)) {
     return {
       classification: 'PROMOCION',
       reason: 'Promoción de horario habitual de apertura o servicios recreativos permanentes (dardos, futbolín, copas).',
@@ -238,9 +238,10 @@ export function classifyBarPost(
       confidence: 'BAJA',
       detectedActivity,
       provisionalCategory,
+      category: provisionalCategory || null,
       inferredDate: detectedDate,
       inferredTime: detectedTime,
-      candidateCategory: provisionalCategory,
+      candidateCategory: provisionalCategory || null,
       estimatedPriceCents,
       priceStatus,
       priceNote,
@@ -260,7 +261,8 @@ export function classifyBarPost(
       inferredTime: null,
       detectedActivity,
       provisionalCategory,
-      candidateCategory: provisionalCategory || 'dj_tardeo',
+      category: provisionalCategory || null,
+      candidateCategory: provisionalCategory || null,
       estimatedPriceCents,
       priceStatus,
       priceNote,
@@ -281,7 +283,8 @@ export function classifyBarPost(
       inferredTime: null,
       detectedActivity,
       provisionalCategory,
-      candidateCategory: provisionalCategory || 'dj_tardeo',
+      category: provisionalCategory || null,
+      candidateCategory: provisionalCategory || null,
       provisionalTitle,
       candidateTitle: provisionalTitle,
       estimatedPriceCents,
@@ -305,7 +308,8 @@ export function classifyBarPost(
       inferredTime: detectedTime,
       detectedActivity,
       provisionalCategory,
-      candidateCategory: provisionalCategory || 'dj_tardeo',
+      category: provisionalCategory || null,
+      candidateCategory: provisionalCategory || null,
       provisionalTitle,
       candidateTitle: provisionalTitle,
       estimatedPriceCents,

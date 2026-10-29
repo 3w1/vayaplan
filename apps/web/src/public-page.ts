@@ -859,6 +859,76 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       gap: 0.75rem;
     }
 
+    /* Banner Contextual de Rutas Gastronómicas */
+    .gastronomy-routes-banner {
+      margin: 0 1rem 1rem 1rem;
+      background: #fdf8f6;
+      border: 1px solid #fed7aa;
+      border-radius: var(--radius-md);
+      padding: 0.875rem 1rem;
+    }
+    .gastronomy-routes-banner.has-active-routes {
+      background: #fffaf5;
+      border-color: #fdba74;
+      box-shadow: 0 2px 8px rgba(154, 52, 18, 0.05);
+    }
+    .routes-banner-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.875rem;
+      flex-wrap: wrap;
+    }
+    .routes-banner-icon {
+      font-size: 1.5rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .routes-banner-text {
+      flex: 1 1 200px;
+    }
+    .routes-banner-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .routes-banner-title {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #9a3412;
+    }
+    .routes-banner-badge {
+      background: #ffedd5;
+      color: #9a3412;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: var(--radius-pill);
+      border: 1px solid #fed7aa;
+    }
+    .routes-banner-desc {
+      font-size: 0.85rem;
+      color: #4b5563;
+      margin-top: 0.2rem;
+    }
+    .routes-banner-cta {
+      display: inline-flex;
+      align-items: center;
+      background: #9a3412;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 0.825rem;
+      font-weight: 600;
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      white-space: nowrap;
+      transition: background 0.15s ease;
+    }
+    .routes-banner-cta:hover {
+      background: #7c2d12;
+    }
+
     .card-compact {
       display: flex;
       gap: 0.875rem;
@@ -2023,6 +2093,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         </div>
         <span class="cat-label">Deporte</span>
       </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="gastronomia" aria-label="Categoría Gastronomía">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-8.03c2.09-.13 3.75-1.85 3.75-3.97V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>
+        </div>
+        <span class="cat-label">Gastronomía</span>
+      </button>
     </section>
 
     <!-- Barra de Filtros Secundarios (Modificador de precio y exposiciones) -->
@@ -2151,6 +2228,9 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     let promotionsSeq = 0; // Previene respuestas desordenadas al cambiar de ciudad
     let carouselCleanupFn = null; // Limpieza de listeners del carrusel
     let promotionExpirationTimer = null; // Temporizador para retirar campañas expiradas
+    let gastronomicRoutesCache = null; // null: sin consultar; Array: consultado con éxito
+    let gastronomicRoutesCity = ''; // Ciudad de las rutas en memoria
+    let routesFetchInProgress = false; // Estado de petición de rutas en vuelo
 
     // ==============================================================================
     // Métricas y Session Hash efímero (sessionStorage)
@@ -2336,6 +2416,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         futbol: 'Fútbol',
         rugby: 'Rugby',
         conferencia: 'Charla o conferencia',
+        gastronomia: 'Gastronomía',
       };
       return labels[category] || category || 'Plan';
     }
@@ -2631,10 +2712,38 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       currentCity = newSlug;
       activePromotions = [];
       activePromotionsCity = newSlug;
+      gastronomicRoutesCache = null;
+      gastronomicRoutesCity = '';
       updateListingUrl();
       loadData();
     }
     window.changeCity = changeCity;
+
+    async function loadGastronomicRoutes(citySlug) {
+      if (gastronomicRoutesCity === citySlug && gastronomicRoutesCache !== null) {
+        return;
+      }
+      routesFetchInProgress = true;
+      try {
+        const res = await fetch(\`/api/v1/cities/\${encodeURIComponent(citySlug)}/routes\`);
+        if (!res.ok) {
+          gastronomicRoutesCache = null;
+          return;
+        }
+        const data = await res.json();
+        if (data && Array.isArray(data.routes)) {
+          gastronomicRoutesCache = data.routes;
+          gastronomicRoutesCity = citySlug;
+        } else {
+          gastronomicRoutesCache = [];
+          gastronomicRoutesCity = citySlug;
+        }
+      } catch {
+        gastronomicRoutesCache = null;
+      } finally {
+        routesFetchInProgress = false;
+      }
+    }
 
     // ==============================================================================
     // Carga de datos mediante rutas relativas /api/v1/... (con control de concurrencia)
@@ -2659,7 +2768,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
 
         const [res] = await Promise.all([
           fetch(url),
-          loadActivePromotions(currentCity).catch(() => {})
+          loadActivePromotions(currentCity).catch(() => {}),
+          loadGastronomicRoutes(currentCity).catch(() => {})
         ]);
 
         if (!res.ok) throw new Error('Error al cargar agenda');
@@ -2735,6 +2845,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         result = result.filter((ev) => CULTURE_CATEGORIES.includes(ev.category));
       } else if (currentFilter === 'deporte') {
         result = result.filter((ev) => SPORTS_CATEGORIES.includes(ev.category));
+      } else if (currentFilter === 'gastronomia') {
+        result = result.filter((ev) => ev.category === 'gastronomia');
       }
 
       if (isFreeFilterActive) {
@@ -2788,6 +2900,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         result = result.filter((r) => CULTURE_CATEGORIES.includes(r.category));
       } else if (currentFilter === 'deporte') {
         result = result.filter((r) => SPORTS_CATEGORIES.includes(r.category));
+      } else if (currentFilter === 'gastronomia') {
+        result = result.filter((r) => r.category === 'gastronomia');
       }
 
       if (isFreeFilterActive) {
@@ -2811,6 +2925,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         cine: 'Cine',
         cultura: 'Cultura',
         deporte: 'Deporte',
+        gastronomia: 'Gastronomía',
       };
 
       if (currentFilter !== 'all') {
@@ -3038,7 +3153,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
 
       const catParam = (params.get('cat') || params.get('category'));
-      const validCategories = ['musica', 'tardeo', 'cine', 'cultura', 'deporte'];
+      const validCategories = ['musica', 'tardeo', 'cine', 'cultura', 'deporte', 'gastronomia'];
       const targetFilter = (catParam && validCategories.includes(catParam.trim().toLowerCase())) ? catParam.trim().toLowerCase() : 'all';
       if (targetFilter !== currentFilter) {
         currentFilter = targetFilter;
@@ -3136,6 +3251,93 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
     window.createSvgFallbackNode = createSvgFallbackNode;
 
     // ==============================================================================
+    // Banner Contextual de Rutas Gastronómicas
+    // ==============================================================================
+    function renderGastronomyRoutesBannerHtml() {
+      if (currentFilter !== 'gastronomia') return '';
+
+      // Si no hay información suficiente (no consultado aún, error de red o en curso):
+      // usar texto neutral estricto: "Explorar rutas gastronómicas"
+      if (gastronomicRoutesCache === null || routesFetchInProgress) {
+        return \`
+          <aside class="gastronomy-routes-banner" aria-label="Rutas gastronómicas">
+            <div class="routes-banner-content">
+              <div class="routes-banner-icon">🍷</div>
+              <div class="routes-banner-text">
+                <span class="routes-banner-title">Rutas Gastronómicas</span>
+                <p class="routes-banner-desc">Descubre itinerarios de tapas, pinchos y experiencias culinarias en Palencia.</p>
+              </div>
+              <a href="/rutas" class="routes-banner-cta" aria-label="Explorar rutas gastronómicas en Palencia">
+                Explorar rutas gastronómicas →
+              </a>
+            </div>
+          </aside>
+        \`;
+      }
+
+      // Si se consultó: verificar ciudad, publicación (status='published' garantizado por el endpoint) y fechas
+      let targetDates = [];
+      if (currentView === 'weekend') {
+        if (currentData && Array.isArray(currentData.days)) {
+          targetDates = currentData.days.map((d) => d.editorial_date);
+        }
+      } else {
+        if (selectedDate) targetDates = [selectedDate];
+      }
+
+      const activeRoutes = gastronomicRoutesCache.filter((r) => {
+        if (r.is_permanent || (!r.start_date && !r.end_date)) return true;
+        if (targetDates.length === 0) return true;
+        return targetDates.some((dateStr) => {
+          const afterStart = !r.start_date || r.start_date <= dateStr;
+          const beforeEnd = !r.end_date || r.end_date >= dateStr;
+          return afterStart && beforeEnd;
+        });
+      });
+
+      if (activeRoutes.length === 0) {
+        return \`
+          <aside class="gastronomy-routes-banner" aria-label="Rutas gastronómicas">
+            <div class="routes-banner-content">
+              <div class="routes-banner-icon">🍷</div>
+              <div class="routes-banner-text">
+                <span class="routes-banner-title">Rutas Gastronómicas</span>
+                <p class="routes-banner-desc">Descubre itinerarios de tapas, pinchos y experiencias culinarias en Palencia.</p>
+              </div>
+              <a href="/rutas" class="routes-banner-cta" aria-label="Explorar rutas gastronómicas en Palencia">
+                Explorar rutas gastronómicas →
+              </a>
+            </div>
+          </aside>
+        \`;
+      }
+
+      const count = activeRoutes.length;
+      const countLabel = count === 1 ? '1 ruta activa' : \`\${count} rutas activas\`;
+      const routeTitles = activeRoutes.map((r) => escapeHtml(r.title)).join(', ');
+
+      return \`
+        <aside class="gastronomy-routes-banner has-active-routes" aria-label="Rutas gastronómicas activas">
+          <div class="routes-banner-content">
+            <div class="routes-banner-icon">🍷</div>
+            <div class="routes-banner-text">
+              <div class="routes-banner-header">
+                <span class="routes-banner-title">Rutas Gastronómicas</span>
+                <span class="routes-banner-badge">\${countLabel}</span>
+              </div>
+              <p class="routes-banner-desc">
+                Disponibles para esta fecha: <strong>\${routeTitles}</strong>
+              </p>
+            </div>
+            <a href="/rutas" class="routes-banner-cta" aria-label="Explorar rutas gastronómicas en Palencia">
+              Explorar rutas gastronómicas →
+            </a>
+          </div>
+        </aside>
+      \`;
+    }
+
+    // ==============================================================================
     // Renderizado: Agenda de Hoy / Día Seleccionado
     // ==============================================================================
     function renderDayAgenda() {
@@ -3225,6 +3427,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         }
 
         container.innerHTML = \`
+          \${renderGastronomyRoutesBannerHtml()}
           <div class="empty-state">
             <h3>\${escapeHtml(emptyTitle)}</h3>
             <p>\${escapeHtml(emptyDesc)}</p>
@@ -3236,7 +3439,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         return;
       }
 
-      let html = '<div class="events-list-compact">';
+      let html = renderGastronomyRoutesBannerHtml() + '<div class="events-list-compact">';
 
       // 2. Tarjetas compactas de eventos (botones semánticos accesibles)
       for (const ev of listEvents) {
@@ -3508,6 +3711,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         }
 
         container.innerHTML = \`
+          \${renderGastronomyRoutesBannerHtml()}
           <div class="empty-state">
             <h3>\${escapeHtml(emptyTitle)}</h3>
             <p>\${escapeHtml(emptyDesc)}</p>
@@ -3519,7 +3723,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         return;
       }
 
-      container.innerHTML = html;
+      container.innerHTML = renderGastronomyRoutesBannerHtml() + html;
     }
 
     function getCategoryTitle(cat) {
@@ -3535,6 +3739,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         futbol: 'Fútbol',
         rugby: 'Rugby',
         conferencia: 'Charlas y conferencias',
+        gastronomia: 'Gastronomía',
       };
       return t[cat] || 'Planes';
     }
@@ -4234,6 +4439,18 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       });
 
       updateListingUrl();
+
+      if (filter === 'gastronomia' && (gastronomicRoutesCache === null || gastronomicRoutesCity !== currentCity) && !routesFetchInProgress) {
+        loadGastronomicRoutes(currentCity).then(() => {
+          if (currentFilter === 'gastronomia') {
+            if (currentView === 'weekend') {
+              renderWeekendAgenda();
+            } else {
+              renderDayAgenda();
+            }
+          }
+        }).catch(() => {});
+      }
 
       if (currentView === 'weekend') {
         renderWeekendAgenda();

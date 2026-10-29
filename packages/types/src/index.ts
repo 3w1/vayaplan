@@ -14,7 +14,8 @@ export type EventCategory =
   | 'baloncesto'
   | 'futbol'
   | 'rugby'
-  | 'conferencia';
+  | 'conferencia'
+  | 'gastronomia';
 
 export type EventTimeStatus =
   | 'confirmed'

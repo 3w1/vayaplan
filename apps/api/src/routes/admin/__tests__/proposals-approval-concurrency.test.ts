@@ -36,7 +36,7 @@ describe('Admin Proposals - Concurrency, Duplicate and Linked Protection', () =>
         '2026-11-20',
         '21:00',
         venueId,
-        'ocio',
+        'dj_tardeo',
         15.0,
         'https://www.instagram.com/p/test_conc/',
         'instagram',
@@ -59,7 +59,7 @@ describe('Admin Proposals - Concurrency, Duplicate and Linked Protection', () =>
           proposed_date: '2026-11-20',
           proposed_time: '21:00',
           venue_id: venueId,
-          category: 'ocio',
+          category: 'dj_tardeo',
         }),
       });
 
@@ -71,7 +71,7 @@ describe('Admin Proposals - Concurrency, Duplicate and Linked Protection', () =>
           proposed_date: '2026-11-20',
           proposed_time: '21:00',
           venue_id: venueId,
-          category: 'ocio',
+          category: 'dj_tardeo',
         }),
       });
 
@@ -95,7 +95,7 @@ describe('Admin Proposals - Concurrency, Duplicate and Linked Protection', () =>
           proposed_date: '2026-11-20',
           proposed_time: '21:00',
           venue_id: venueId,
-          category: 'ocio',
+          category: 'dj_tardeo',
         }),
       });
       const data3 = await req3.json();
@@ -131,7 +131,7 @@ describe('Admin Proposals - Concurrency, Duplicate and Linked Protection', () =>
         '2026-11-28',
         '22:00',
         existingEv.venue_id,
-        'ocio',
+        'dj_tardeo',
         12.0,
         'https://www.instagram.com/p/linked_test/',
         'instagram',
@@ -154,7 +154,7 @@ describe('Admin Proposals - Concurrency, Duplicate and Linked Protection', () =>
           proposed_date: '2026-11-28',
           proposed_time: '22:00',
           venue_id: existingEv.venue_id,
-          category: 'ocio',
+          category: 'dj_tardeo',
         }),
       });
 

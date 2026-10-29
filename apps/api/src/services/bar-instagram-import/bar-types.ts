@@ -88,6 +88,7 @@ export interface PostClassificationResult {
   provisionalTitle?: string | null;
   confidence: 'ALTA' | 'MEDIA' | 'BAJA';
   // Aliases y compatibilidad con pipelines
+  category?: string | null;
   inferredDate?: string | null;
   inferredTime?: string | null;
   candidateCategory?: string | null;

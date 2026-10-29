@@ -945,6 +945,14 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     expect(domElements['edit-prop-error'].style.display).toBe('block');
     expect(domElements['edit-prop-error'].innerText).toContain('precio');
     expect(apiCalls.length).toBe(1);
+
+    // Caso F: Categoría histórica 'ocio' o inválida impide aprobar hasta elegir categoría válida
+    domElements['edit-prop-price-input'].value = '45,00';
+    domElements['edit-prop-category-select'].value = 'ocio';
+    await ctx.window.submitEditAndApproveProposal();
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('categoría');
+    expect(apiCalls.length).toBe(1);
   });
 
   test('20. Flujo completo: propuesta pendiente -> revisión -> guardar/aprobar -> borrador creado -> modal éxito con enlace directo', async () => {
@@ -1019,12 +1027,12 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     ctx.window.openEditProposalModal(76);
     expect(domElements['edit-prop-title-input'].value).toBe('Cata en Restaurante La Traserilla');
 
-    // 2. Operador modifica el título en el modal
+    // 2. Operador modifica el título y selecciona explícitamente categoría 'gastronomia'
     domElements['edit-prop-title-input'].value = 'Cata Exclusiva en Restaurante La Traserilla';
     domElements['edit-prop-date-input'].value = '2026-10-29';
     domElements['edit-prop-time-input'].value = '20:00';
     domElements['edit-prop-venue-select'].value = '10119';
-    domElements['edit-prop-category-select'].value = 'ocio';
+    domElements['edit-prop-category-select'].value = 'gastronomia';
     domElements['edit-prop-price-status-select'].value = 'CONFIRMED';
     domElements['edit-prop-price-input'].value = '45,00';
 
@@ -1090,6 +1098,7 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
         proposed_date: '2026-10-29',
         proposed_time: '20:00',
         classification: 'EVENTO_POSIBLE',
+        category: 'gastronomia',
         review_status: 'pending',
       },
     ];
@@ -1118,6 +1127,7 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     ctx.window.openEditProposalModal(76);
 
     domElements['edit-prop-venue-select'].value = '10119';
+    domElements['edit-prop-category-select'].value = 'gastronomia';
 
     // Lanzar dos llamadas simultáneas
     const call1 = ctx.window.submitEditAndApproveProposal();
@@ -1170,5 +1180,66 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     expect(cardsHtml).toContain('✏️ Revisar');
     expect(cardsHtml).toContain('openApproveProposalModal(76)');
     expect(cardsHtml).toContain('✓ Aprobar Borrador');
+  });
+
+  test('25. Propuesta con categoría histórica "ocio" muestra aviso en selector, no se muta a dj_tardeo al abrir/guardar y bloquea aprobación', async () => {
+    let patchPayload: any = null;
+    let approveCalled = false;
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10119,
+        title: 'Cata en Restaurante La Traserilla',
+        proposed_date: '2026-10-29',
+        proposed_time: '20:00',
+        classification: 'EVENTO_POSIBLE',
+        category: 'ocio',
+        review_status: 'pending',
+      },
+    ];
+
+    const apiResponses: Record<string, any> = {
+      '/api/v1/admin/proposals/76': async (opts: any) => {
+        patchPayload = JSON.parse(opts.body);
+        return { ok: true, status: 200, json: async () => ({ success: true }) };
+      },
+      '/api/v1/admin/proposals/76/approve': async () => {
+        approveCalled = true;
+        return { ok: true, status: 200, json: async () => ({ success: true, createdEvent: { id: 104 } }) };
+      },
+    };
+
+    const { ctx, domElements } = setupTestContext(mockProposals, apiResponses);
+    await ctx.window.loadAdminProposals();
+
+    // 1. Abrir modal de propuesta histórica
+    ctx.window.openEditProposalModal(76);
+
+    // Selector mantiene 'ocio' y no se convierte en 'dj_tardeo'
+    expect(domElements['edit-prop-category-select'].value).toBe('ocio');
+    const selectedOptText = domElements['edit-prop-category-select'].options.find((o: any) => o.value === 'ocio')?.text || '';
+    expect(selectedOptText).toContain('requiere');
+
+    // 2. Modificar título y guardar cambios ordinarios (submitEditProposal)
+    domElements['edit-prop-title-input'].value = 'Cata en Restaurante La Traserilla (Editada)';
+    await ctx.window.submitEditProposal();
+
+    expect(patchPayload).not.toBeNull();
+    expect(patchPayload.title).toBe('Cata en Restaurante La Traserilla (Editada)');
+    expect(patchPayload.category).toBe('ocio'); // Preservada, sin mutar a dj_tardeo
+
+    // 3. Intentar aprobar sin cambiar la categoría: bloquea con error accionable en cliente
+    approveCalled = false;
+    await ctx.window.submitEditAndApproveProposal();
+    expect(domElements['edit-prop-error'].style.display).toBe('block');
+    expect(domElements['edit-prop-error'].innerText).toContain('requiere selección');
+    expect(approveCalled).toBe(false);
+
+    // 4. Cambiar a 'gastronomia': permite aprobar y crea evento con gastronomia
+    domElements['edit-prop-category-select'].value = 'gastronomia';
+    patchPayload = null;
+    await ctx.window.submitEditAndApproveProposal();
+    expect(patchPayload.category).toBe('gastronomia');
+    expect(approveCalled).toBe(true);
   });
 });

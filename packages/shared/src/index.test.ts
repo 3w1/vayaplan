@@ -100,6 +100,7 @@ describe('Piloto de Ampliación de Agenda — Categorías y Etiquetas', () => {
     expect(VALID_EVENT_CATEGORIES).toContain('futbol');
     expect(VALID_EVENT_CATEGORIES).toContain('rugby');
     expect(VALID_EVENT_CATEGORIES).toContain('conferencia');
+    expect(VALID_EVENT_CATEGORIES).toContain('gastronomia');
     const { VALID_EVENT_STATUSES } = require('./index');
     expect(VALID_EVENT_STATUSES).toContain('draft');
     expect(VALID_EVENT_STATUSES).toContain('tentative');

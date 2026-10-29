@@ -654,7 +654,7 @@ export async function executeAuthorizedPaidImport(
 
     const dedupeKey = 'instagram_' + shortcode;
     const title = (classificationResult.candidateTitle || `Publicación de @${item.username || 'instagram'}`).slice(0, 255);
-    const category = classificationResult.category || 'ocio';
+    const category = classificationResult.candidateCategory || classificationResult.provisionalCategory || classificationResult.category || null;
     const classification = classificationResult.classification || 'REQUIERE_REVISION';
     const proposedDate = classificationResult.detectedDate || null;
     const proposedTime = classificationResult.detectedTime || null;
