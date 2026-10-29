@@ -4919,6 +4919,60 @@ export function renderAdminHtml(): string {
     </div>
   </div>
 
+  <!-- MODAL: CONFIRMACIÓN Y AUTORIZACIÓN DE COSTE - PROVEEDOR ALTERNATIVO -->
+  <div id="modal-paid-fallback-confirm" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-paid-fallback-confirm')">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-paid-fallback-title" style="max-width:580px; width:95%;" onclick="event.stopPropagation()">
+      <div class="modal-header" style="background:linear-gradient(135deg, #4c1d95, #7c3aed); color:#ffffff;">
+        <div>
+          <span style="font-size:0.75rem; font-weight:800; letter-spacing:1px; opacity:0.85; text-transform:uppercase;">Extracción con Coste Adicional</span>
+          <h3 id="modal-paid-fallback-title" style="margin:0.25rem 0 0 0; font-size:1.15rem; font-weight:800; color:#ffffff; display:flex; align-items:center; gap:0.5rem;">
+            <span>⚡</span> Confirmación de Autorización de Gasto
+          </h3>
+        </div>
+        <button type="button" class="modal-close" onclick="closeModal('modal-paid-fallback-confirm')" aria-label="Cerrar modal" style="color:#ffffff;">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding:1.25rem; display:flex; flex-direction:column; gap:1rem; background:#fdfdfd;">
+        <input type="hidden" id="paid-fallback-operation-id" value="">
+        <input type="hidden" id="paid-fallback-shortcode" value="">
+        <input type="hidden" id="paid-fallback-canonical-url" value="">
+        <input type="hidden" id="paid-fallback-venue-id" value="">
+
+        <!-- Tarjeta de Especificaciones de la Operación -->
+        <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px; padding:1rem; font-size:0.825rem; color:#4c1d95; display:flex; flex-direction:column; gap:0.5rem;">
+          <div><strong>Proveedor:</strong> <code style="background:#ffffff; padding:0.15rem 0.35rem; border-radius:4px; font-weight:700; color:#6d28d9;">intropix/instagram-posts-reels-scraper</code></div>
+          <div><strong>URL de la publicación:</strong> <span id="paid-fallback-url-display" style="word-break:break-all; font-family:monospace; color:#1e1b4b;">-</span></div>
+          <div><strong>Alcance:</strong> 1 publicación específica (sin recorrer perfiles)</div>
+          <div style="display:flex; justify-content:space-between; border-top:1px dashed #c4b5fd; padding-top:0.5rem; margin-top:0.25rem;">
+            <span><strong>Coste estimado:</strong> ~0,009 USD</span>
+            <span><strong>Límite máximo efectivo:</strong> <span style="font-weight:800; color:#7c3aed;">0,015 USD</span></span>
+          </div>
+        </div>
+
+        <!-- Aviso transparente de cargos y condiciones -->
+        <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:0.85rem; font-size:0.8rem; color:#92400e; line-height:1.4;">
+          <div style="font-weight:700; margin-bottom:0.25rem; display:flex; align-items:center; gap:0.35rem;">
+            <span>⚠️</span> Condiciones y Cargos Aplicables:
+          </div>
+          <ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">
+            <li>El proveedor aplica una tarifa de inicio de run (<strong>0,005 USD</strong>) con independencia del resultado.</li>
+            <li><strong>El éxito no está garantizado:</strong> el extractor alternativo puede fallar si la publicación fue eliminada o Instagram bloquea el acceso.</li>
+            <li><strong>Sin reintentos automáticos:</strong> esta autorización cubre un único intento puntual para este enlace.</li>
+          </ul>
+        </div>
+
+        <div id="paid-fallback-feedback" style="display:none; padding:0.75rem; border-radius:6px; font-size:0.8125rem;"></div>
+      </div>
+
+      <div class="modal-footer" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" id="btn-cancel-paid-fallback" class="btn-secondary" onclick="closeModal('modal-paid-fallback-confirm')">Cancelar</button>
+        <button type="button" id="btn-confirm-paid-fallback" class="btn-primary" onclick="submitExecutePaidFallback()" style="background:#7c3aed; border-color:#7c3aed; font-weight:700;">
+          ⚡ Autorizar hasta 0,015 USD y extraer
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: DECISIÓN EDITORIAL DE IMAGEN DE BIBLIOTECA PÚBLICA -->
   <div id="modal-biblioteca-decision" class="modal-overlay" onclick="if(event.target===this)closeModal('modal-biblioteca-decision')">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-bib-decision-title" style="max-width:540px;" onclick="event.stopPropagation()">
@@ -12324,6 +12378,186 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       });
     };
 
+    window.openPaidFallbackModal = async function(url, venueId) {
+      const urlDisplay = document.getElementById('paid-fallback-url-display');
+      const opIdInput = document.getElementById('paid-fallback-operation-id');
+      const scInput = document.getElementById('paid-fallback-shortcode');
+      const canUrlInput = document.getElementById('paid-fallback-canonical-url');
+      const vIdInput = document.getElementById('paid-fallback-venue-id');
+      const fallbackFeedback = document.getElementById('paid-fallback-feedback');
+      const confirmBtn = document.getElementById('btn-confirm-paid-fallback');
+      const cancelBtn = document.getElementById('btn-cancel-paid-fallback');
+
+      if (fallbackFeedback) {
+        fallbackFeedback.style.display = 'none';
+        fallbackFeedback.innerHTML = '';
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerText = 'Preparando autorización...';
+      }
+      if (cancelBtn) cancelBtn.disabled = false;
+
+      if (urlDisplay) urlDisplay.innerText = url;
+      openModal('modal-paid-fallback-confirm');
+
+      try {
+        const token = getToken();
+        const res = await fetch('/api/v1/admin/proposals/prepare-paid-fallback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+          },
+          body: JSON.stringify({ url: url, venue_id: venueId }),
+        });
+
+        const data = await res.json().catch(function() { return {}; });
+
+        if (!res.ok) {
+          if (fallbackFeedback) {
+            fallbackFeedback.style.display = 'block';
+            fallbackFeedback.style.background = '#fef2f2';
+            fallbackFeedback.style.color = '#991b1b';
+            fallbackFeedback.style.border = '1px solid #fecaca';
+            fallbackFeedback.innerText = '❌ Error al preparar autorización: ' + (data.message || res.statusText);
+          }
+          if (confirmBtn) {
+            confirmBtn.disabled = true;
+            confirmBtn.innerText = 'No autorizable';
+          }
+          return;
+        }
+
+        if (opIdInput) opIdInput.value = data.operationId;
+        if (scInput) scInput.value = data.shortcode;
+        if (canUrlInput) canUrlInput.value = data.canonicalUrl;
+        if (vIdInput) vIdInput.value = data.venueId ? String(data.venueId) : '';
+        if (urlDisplay) urlDisplay.innerText = data.canonicalUrl;
+
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          const maxDisplay = data.maxChargeLimitUsd !== undefined ? String(data.maxChargeLimitUsd).replace('.', ',') : '0,015';
+          confirmBtn.innerText = '⚡ Autorizar hasta ' + maxDisplay + ' ' + (data.currency || 'USD') + ' y extraer';
+        }
+      } catch (err) {
+        if (fallbackFeedback) {
+          fallbackFeedback.style.display = 'block';
+          fallbackFeedback.style.background = '#fef2f2';
+          fallbackFeedback.style.color = '#991b1b';
+          fallbackFeedback.style.border = '1px solid #fecaca';
+          fallbackFeedback.innerText = '❌ Error de conexión: ' + (err.message || 'Inténtelo de nuevo.');
+        }
+      }
+    };
+
+    let isExecutingPaidFallback = false;
+
+    window.submitExecutePaidFallback = async function() {
+      if (isExecutingPaidFallback) return;
+
+      const opId = document.getElementById('paid-fallback-operation-id')?.value;
+      const sc = document.getElementById('paid-fallback-shortcode')?.value;
+      const canUrl = document.getElementById('paid-fallback-canonical-url')?.value;
+      const vId = document.getElementById('paid-fallback-venue-id')?.value;
+      const feedback = document.getElementById('paid-fallback-feedback');
+      const confirmBtn = document.getElementById('btn-confirm-paid-fallback');
+      const cancelBtn = document.getElementById('btn-cancel-paid-fallback');
+
+      if (!opId || !sc || !canUrl) {
+        alert('Datos de autorización incompletos.');
+        return;
+      }
+
+      isExecutingPaidFallback = true;
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerText = '⏳ Extrayendo con intropix... (hasta 60s)';
+      }
+      if (cancelBtn) cancelBtn.disabled = true;
+      if (feedback) {
+        feedback.style.display = 'block';
+        feedback.style.background = '#eff6ff';
+        feedback.style.color = '#1e40af';
+        feedback.style.border = '1px solid #bfdbfe';
+        feedback.innerHTML = '⏳ Extrayendo publicación con proveedor alternativo (intropix). Esta operación puede demorar hasta 60 segundos...';
+      }
+
+      try {
+        const token = getToken();
+        const res = await fetch('/api/v1/admin/proposals/execute-paid-fallback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+          },
+          body: JSON.stringify({
+            operationId: opId,
+            shortcode: sc,
+            canonicalUrl: canUrl,
+            venue_id: vId ? parseInt(vId, 10) : undefined,
+          }),
+        });
+
+        const data = await res.json().catch(function() { return {}; });
+
+        if (!res.ok) {
+          if (feedback) {
+            feedback.style.background = '#fef2f2';
+            feedback.style.color = '#991b1b';
+            feedback.style.border = '1px solid #fecaca';
+
+            const errMessage = data.message || 'El proveedor alternativo no pudo extraer la publicación.';
+            feedback.innerHTML = '<div style="margin-bottom:0.5rem;">❌ ' + escapeHtml(errMessage) + '</div>' +
+              '<div style="font-size:0.75rem; color:#7f1d1d; margin-bottom:0.75rem;">El proveedor alternativo tampoco pudo obtener la publicación. Puedes registrar la propuesta introduciendo los datos manualmente.</div>' +
+              '<div style="padding-top:0.5rem; border-top:1px dashed #fca5a5; display:flex; justify-content:flex-end;">' +
+              '<button type="button" id="btn-paid-fallback-to-manual" class="btn-primary" style="background:#2563eb; border-color:#2563eb; font-size:0.8125rem; padding:0.4rem 0.8rem; font-weight:700; cursor:pointer;">' +
+              '✍️ Completar manualmente</button>' +
+              '</div>';
+
+            const manualBtn = document.getElementById('btn-paid-fallback-to-manual');
+            if (manualBtn) {
+              manualBtn.onclick = function() {
+                closeModal('modal-paid-fallback-confirm');
+                closeModal('modal-import-instagram-post');
+                openManualProposalFromImport(canUrl, vId);
+              };
+            }
+          }
+          return;
+        }
+
+        // Éxito: propuesta creada con éxito
+        closeModal('modal-paid-fallback-confirm');
+        closeModal('modal-import-instagram-post');
+        await loadAdminProposals();
+
+        const costInfo = data.operation?.reportedCostUsd !== null && data.operation?.reportedCostUsd !== undefined
+          ? ' (coste: ' + data.operation.reportedCostUsd + ' USD)'
+          : '';
+
+        alert('✅ Publicación extraída exitosamente con el proveedor alternativo' + costInfo + ' y registrada como propuesta pendiente.');
+
+        if (data.proposal && data.proposal.id) {
+          openEditProposalModal(data.proposal.id);
+        }
+      } catch (err) {
+        if (feedback) {
+          feedback.style.background = '#fef2f2';
+          feedback.style.color = '#991b1b';
+          feedback.style.border = '1px solid #fecaca';
+          feedback.innerText = '❌ Error de conexión: ' + (err.message || 'Inténtelo de nuevo.');
+        }
+      } finally {
+        isExecutingPaidFallback = false;
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerText = '⚡ Autorizar hasta 0,015 USD y extraer';
+        }
+        if (cancelBtn) cancelBtn.disabled = false;
+      }
+    };
+
     window.handleProposalImageFileSelect = async function(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
@@ -12688,7 +12922,30 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             const errMessage = data.message || 'Error al importar la publicación.';
             feedback.innerText = '❌ ' + errMessage;
 
-            if (data.canCompleteManually || data.error === 'access_restricted' || data.error === 'incomplete_response') {
+            if (data.canUsePaidFallback) {
+              const canonicalUrl = data.canonicalUrl || rawUrl;
+              const vId = data.venueId || (venueSelect ? venueSelect.value : '');
+              feedback.innerHTML = '<div style="margin-bottom:0.5rem;">❌ ' + escapeHtml(errMessage) + '</div>' +
+                '<div style="margin-top:0.75rem; padding-top:0.5rem; border-top:1px dashed #fca5a5; display:flex; justify-content:flex-end; gap:0.5rem; flex-wrap:wrap;">' +
+                '<button type="button" id="btn-import-ig-paid-fallback" class="btn-primary" style="background:#7c3aed; border-color:#7c3aed; font-size:0.8125rem; padding:0.4rem 0.8rem; font-weight:700; cursor:pointer;">' +
+                '⚡ Intentar con proveedor alternativo</button>' +
+                '<button type="button" id="btn-import-ig-manual" class="btn-primary" style="background:#2563eb; border-color:#2563eb; font-size:0.8125rem; padding:0.4rem 0.8rem; font-weight:700; cursor:pointer;">' +
+                '✍️ Completar manualmente</button>' +
+                '</div>';
+
+              const fallbackBtn = document.getElementById('btn-import-ig-paid-fallback');
+              if (fallbackBtn) {
+                fallbackBtn.onclick = function() {
+                  openPaidFallbackModal(canonicalUrl, vId);
+                };
+              }
+              const manualBtn = document.getElementById('btn-import-ig-manual');
+              if (manualBtn) {
+                manualBtn.onclick = function() {
+                  openManualProposalFromImport(canonicalUrl, vId);
+                };
+              }
+            } else if (data.canCompleteManually || data.error === 'access_restricted' || data.error === 'incomplete_response') {
               const canonicalUrl = data.canonicalUrl || rawUrl;
               const vId = data.venueId || (venueSelect ? venueSelect.value : '');
               feedback.innerHTML = '<div style="margin-bottom:0.5rem;">❌ ' + escapeHtml(errMessage) + '</div>' +
