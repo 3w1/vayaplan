@@ -20,6 +20,10 @@ import {
   executeAuthorizedPaidImport,
   getPaidImportStatus,
 } from '../../services/bar-instagram-import/fallback-coordinator';
+import {
+  evaluateStoryRetentionDryRun,
+  executeStoryRetentionPolicy,
+} from '../../services/bar-instagram-import/story-retention-service';
 
 let cachedTaquillaEvents: TaquillaEventMetadata[] | null = null;
 let lastTaquillaFetch = 0;
@@ -1768,4 +1772,64 @@ adminProposalsRoutes.get('/proposals/paid-fallback-status/:operationId', async (
   }
 
   return c.json({ success: true, operation: status }, 200);
+});
+
+/**
+ * GET /api/v1/admin/proposals/story-retention/preview
+ *
+ * Acción manual de vista previa (Dry-Run estricto de solo lectura).
+ * Proyecta qué historias han alcanzado su vencimiento y qué acciones
+ * de purga o desacoplamiento se ejecutarían, sin alterar la base de datos ni R2.
+ */
+adminProposalsRoutes.get('/proposals/story-retention/preview', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  const report = await evaluateStoryRetentionDryRun();
+  return c.json({ success: true, report }, 200);
+});
+
+/**
+ * POST /api/v1/admin/proposals/story-retention/execute
+ *
+ * Acción manual separada de ejecución de retención con confirmación explícita,
+ * permisos de administrador y auditoría duradera.
+ */
+adminProposalsRoutes.post('/proposals/story-retention/execute', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  if (body.confirm !== true) {
+    return c.json(
+      {
+        error: 'confirmation_required',
+        code: 'confirmation_required',
+        message: 'Para ejecutar la purga y desacoplamiento de historias debes enviar confirm: true tras revisar la vista previa.',
+        canPreview: true,
+        previewUrl: '/api/v1/admin/proposals/story-retention/preview',
+      },
+      400
+    );
+  }
+
+  const targetProposalId = body.targetProposalId ? parseInt(String(body.targetProposalId), 10) : undefined;
+  const result = await executeStoryRetentionPolicy({
+    dryRun: false,
+    targetProposalId: isNaN(targetProposalId as any) ? undefined : targetProposalId,
+    operatorEmail: user.email,
+  });
+
+  return c.json(
+    {
+      success: true,
+      message: 'Política de retención ejecutada con éxito.',
+      result,
+    },
+    200
+  );
 });

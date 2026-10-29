@@ -8,6 +8,7 @@ import { deleteR2Object } from '../r2-client';
 export const STORY_PENDING_RETENTION_DAYS = 7;
 export const STORY_REJECTED_RETENTION_DAYS = 7;
 export const STORY_EVENT_MEDIA_GRACE_DAYS = 2; // 48h tras la celebración del evento
+export const STORY_MAX_ACQUISITION_RETENTION_DAYS = 30; // Límite general máximo desde adquisición
 export const STORY_AUDIT_LOGS_RETENTION_DAYS = 365; // 1 año para auditoría contable de costes
 
 export type StoryRetentionActionType =
@@ -30,9 +31,17 @@ export interface StoryRetentionItemEvaluation {
   r2Key: string | null;
   imageUrl: string | null;
   isImageSubstituted: boolean;
+  substitutedImageUrl?: string | null;
+  substitutedImageProvenance?: string;
   recommendedAction: StoryRetentionActionType;
   reason: string;
   crossReferenceCount: number;
+  sharedReferenceDetails?: Array<{
+    proposalId: number;
+    title: string;
+    reviewStatus: string;
+  }>;
+  mediaPhysicalPurgeBlockedBySharedReferences?: boolean;
 }
 
 export interface StoryRetentionReport {
@@ -46,6 +55,7 @@ export interface StoryRetentionReport {
     expiredEventMediaCount: number;
     substitutedMediaCount: number;
     actionsRecommended: number;
+    sharedReferenceConflictCount: number;
   };
   items: StoryRetentionItemEvaluation[];
 }
@@ -54,6 +64,7 @@ export interface StoryRetentionExecutionResult {
   executedAt: string;
   dryRun: boolean;
   purgedR2ObjectsCount: number;
+  deferredR2PurgesCount: number;
   detachedEventImagesCount: number;
   archivedProposalsCount: number;
   errors: Array<{ targetId: number; error: string }>;
@@ -63,6 +74,8 @@ export interface StoryRetentionExecutionResult {
     action: string;
     r2KeyHash?: string;
     timestamp: string;
+    operatorEmail?: string;
+    details?: string;
   }>;
 }
 
@@ -116,6 +129,7 @@ export async function evaluateStoryRetentionDryRun(options: {
   let expiredEventMediaCount = 0;
   let substitutedMediaCount = 0;
   let actionsRecommended = 0;
+  let sharedReferenceConflictCount = 0;
 
   for (const row of res.rows) {
     const proposalId = row.id;
@@ -132,51 +146,102 @@ export async function evaluateStoryRetentionDryRun(options: {
 
     let expiresAtDate: Date;
     let isImageSubstituted = false;
+    let substitutedImageUrl: string | null = null;
+    let substitutedImageProvenance: string | undefined = undefined;
     let recommendedAction: StoryRetentionActionType = 'keep_active';
     let reason = '';
+    let mediaPhysicalPurgeBlockedBySharedReferences = false;
+
+    // Límite general máximo desde adquisición (30 días)
+    const maxAcquisitionCapDate = new Date(
+      acquiredAtDate.getTime() + STORY_MAX_ACQUISITION_RETENTION_DAYS * 24 * 60 * 60 * 1000
+    );
 
     // Comprobar referencias cruzadas al mismo r2_key
     let crossReferenceCount = 0;
+    let sharedReferenceDetails: Array<{ proposalId: number; title: string; reviewStatus: string }> = [];
     if (r2Key) {
       const refCheck = await query(
-        `SELECT COUNT(*)::int AS count 
+        `SELECT id, title, review_status
          FROM curation_proposals 
          WHERE r2_key = $1 AND id <> $2;`,
         [r2Key, proposalId]
       );
-      crossReferenceCount = refCheck.rows[0]?.count || 0;
+      crossReferenceCount = refCheck.rows.length;
+      sharedReferenceDetails = refCheck.rows.map((r: any) => ({
+        proposalId: r.id,
+        title: r.title,
+        reviewStatus: r.review_status,
+      }));
     }
 
     if (eventId && eventDate) {
       // Caso 1: Propuesta aprobada y convertida en evento
-      // La imagen efímera de la historia vence a los 2 días tras la fecha del evento
+      // Vencimiento en la fecha más temprana entre:
+      // a) finalización del evento + 48h
+      // b) adquisición + 30 días
       const eventDateTime = new Date(`${eventDate}T23:59:59.999Z`);
-      expiresAtDate = new Date(eventDateTime.getTime() + STORY_EVENT_MEDIA_GRACE_DAYS * 24 * 60 * 60 * 1000);
+      const eventGraceDate = new Date(
+        eventDateTime.getTime() + STORY_EVENT_MEDIA_GRACE_DAYS * 24 * 60 * 60 * 1000
+      );
+      expiresAtDate = new Date(Math.min(eventGraceDate.getTime(), maxAcquisitionCapDate.getTime()));
 
       // Comprobar si el evento ya sustituyó la imagen por material oficial del local
       if (eventImageUrl && imageUrl && eventImageUrl !== imageUrl) {
         isImageSubstituted = true;
+        substitutedImageUrl = eventImageUrl;
+        substitutedImageProvenance =
+          eventImageUrl.startsWith('https://r2.vayaplan.com/official_') || eventImageUrl.includes('/official_')
+            ? 'venue_official'
+            : 'independent_source';
         substitutedMediaCount++;
         recommendedAction = 'already_substituted';
-        reason = `El evento (#${eventId}) ya cuenta con imagen oficial independiente aportada por el local. El asset efímero original puede purgarse sin impacto.`;
+
+        let purgeNotice = '';
+        if (crossReferenceCount > 0) {
+          sharedReferenceConflictCount++;
+          mediaPhysicalPurgeBlockedBySharedReferences = true;
+          purgeNotice = `El asset efímero original (${r2Key}) NO se puede purgar físicamente aún de R2 porque tiene ${crossReferenceCount} referencias compartidas (#${sharedReferenceDetails.map((s) => s.proposalId).join(', #')}). El nuevo archivo del evento (${eventImageUrl}) permanece intacto.`;
+        } else {
+          purgeNotice = `El asset efímero original (${r2Key}) puede purgarse de R2 sin afectar a la nueva imagen del evento (${eventImageUrl}), cuya procedencia identificada es '${substitutedImageProvenance}'.`;
+        }
+        reason = `El evento (#${eventId}) ya cuenta con una imagen independiente aportada para el local. ${purgeNotice}`;
       } else if (nowMs > expiresAtDate.getTime()) {
         expiredEventMediaCount++;
         recommendedAction = 'detach_event_story_image';
-        reason = `El evento (#${eventId}) se celebró el ${eventDate} y han transcurrido más de ${STORY_EVENT_MEDIA_GRACE_DAYS} días. Procede desacoplar la imagen efímera y purgar el archivo R2, conservando el evento intacto.`;
+        let detailNotice = `El evento (#${eventId}) se celebró el ${eventDate} y ha alcanzado su límite de conservación (${expiresAtDate.toISOString().slice(0, 10)}). Procede desacoplar la imagen efímera del evento, conservando los datos factuales intactos.`;
+        if (crossReferenceCount > 0) {
+          sharedReferenceConflictCount++;
+          mediaPhysicalPurgeBlockedBySharedReferences = true;
+          detailNotice += ` ATENCIÓN: El archivo físico en R2 (${r2Key}) NO se purgará de inmediato porque está compartido por otras ${crossReferenceCount} propuestas activas (#${sharedReferenceDetails.map((s) => s.proposalId).join(', #')}).`;
+        } else {
+          detailNotice += ` Procede la purga física del archivo efímero R2.`;
+        }
+        reason = detailNotice;
       } else {
         activeCount++;
         recommendedAction = 'keep_active';
-        reason = `Evento futuro o en curso (#${eventId}, fecha: ${eventDate}). El cartel efímero permanece activo hasta ${expiresAtDate.toISOString().slice(0, 10)}.`;
+        reason = `Evento futuro o en curso (#${eventId}, fecha: ${eventDate}). El cartel efímero permanece activo hasta ${expiresAtDate.toISOString().slice(0, 10)} (mínimo entre celebración + 48h y adquisición + 30 días).`;
       }
     } else if (reviewStatus === 'rejected') {
       // Caso 2: Propuesta rechazada
+      // 7 días desde rechazo, sin superar el límite general desde adquisición (30 días)
       const rejectedRefDate = row.reviewed_at ? new Date(row.reviewed_at) : acquiredAtDate;
-      expiresAtDate = new Date(rejectedRefDate.getTime() + STORY_REJECTED_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      const rejectedGraceDate = new Date(
+        rejectedRefDate.getTime() + STORY_REJECTED_RETENTION_DAYS * 24 * 60 * 60 * 1000
+      );
+      expiresAtDate = new Date(Math.min(rejectedGraceDate.getTime(), maxAcquisitionCapDate.getTime()));
 
       if (nowMs > expiresAtDate.getTime()) {
         expiredRejectedCount++;
         recommendedAction = 'purge_proposal_r2_image';
-        reason = `Propuesta rechazada hace más de ${STORY_REJECTED_RETENTION_DAYS} días. Procede purgar el cartel R2 y anonimizar metadatos, conservando dedupe_key.`;
+        let detailNotice = `Propuesta rechazada vencida (límite: ${expiresAtDate.toISOString().slice(0, 10)}). Procede purgar el cartel R2 y el caption efímero, conservando dedupe_key.`;
+        if (crossReferenceCount > 0) {
+          sharedReferenceConflictCount++;
+          mediaPhysicalPurgeBlockedBySharedReferences = true;
+          detailNotice += ` ATENCIÓN: El archivo en R2 se preserva temporalmente por ${crossReferenceCount} referencias compartidas (#${sharedReferenceDetails.map((s) => s.proposalId).join(', #')}).`;
+        }
+        reason = detailNotice;
       } else {
         activeCount++;
         recommendedAction = 'keep_active';
@@ -184,12 +249,21 @@ export async function evaluateStoryRetentionDryRun(options: {
       }
     } else {
       // Caso 3: Propuesta pendiente sin revisar (o archivada)
-      expiresAtDate = new Date(acquiredAtDate.getTime() + STORY_PENDING_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      // Vencimiento a los 7 días desde adquisición
+      expiresAtDate = new Date(
+        acquiredAtDate.getTime() + STORY_PENDING_RETENTION_DAYS * 24 * 60 * 60 * 1000
+      );
 
       if (nowMs > expiresAtDate.getTime()) {
         expiredPendingCount++;
         recommendedAction = 'archive_proposal_metadata';
-        reason = `Propuesta pendiente sin atender durante más de ${STORY_PENDING_RETENTION_DAYS} días. Procede archivar y purgar imagen efímera.`;
+        let detailNotice = `Propuesta pendiente sin atender durante más de ${STORY_PENDING_RETENTION_DAYS} días desde adquisición. Procede archivar y purgar contenido efímero.`;
+        if (crossReferenceCount > 0) {
+          sharedReferenceConflictCount++;
+          mediaPhysicalPurgeBlockedBySharedReferences = true;
+          detailNotice += ` ATENCIÓN: El archivo físico en R2 tiene ${crossReferenceCount} referencias compartidas.`;
+        }
+        reason = detailNotice;
       } else {
         activeCount++;
         recommendedAction = 'keep_active';
@@ -215,9 +289,13 @@ export async function evaluateStoryRetentionDryRun(options: {
       r2Key,
       imageUrl,
       isImageSubstituted,
+      substitutedImageUrl,
+      substitutedImageProvenance,
       recommendedAction,
       reason,
       crossReferenceCount,
+      sharedReferenceDetails: crossReferenceCount > 0 ? sharedReferenceDetails : undefined,
+      mediaPhysicalPurgeBlockedBySharedReferences: mediaPhysicalPurgeBlockedBySharedReferences || undefined,
     });
   }
 
@@ -232,6 +310,7 @@ export async function evaluateStoryRetentionDryRun(options: {
       expiredEventMediaCount,
       substitutedMediaCount,
       actionsRecommended,
+      sharedReferenceConflictCount,
     },
     items,
   };
@@ -240,11 +319,13 @@ export async function evaluateStoryRetentionDryRun(options: {
 /**
  * Ejecución de la política de retención.
  * Por defecto opera estrictamente en MODO DRY-RUN sin alterar la base de datos ni R2.
+ * Requiere options.dryRun === false para ejecutar purgas y desacoplamientos reales.
  */
 export async function executeStoryRetentionPolicy(options: {
   dryRun?: boolean;
   now?: Date;
   targetProposalId?: number;
+  operatorEmail?: string;
 } = {}): Promise<StoryRetentionExecutionResult> {
   const isDryRun = options.dryRun !== false; // Default true
   const evaluation = await evaluateStoryRetentionDryRun({
@@ -258,10 +339,13 @@ export async function executeStoryRetentionPolicy(options: {
     action: string;
     r2KeyHash?: string;
     timestamp: string;
+    operatorEmail?: string;
+    details?: string;
   }> = [];
   const errors: Array<{ targetId: number; error: string }> = [];
 
   let purgedR2ObjectsCount = 0;
+  let deferredR2PurgesCount = 0;
   let detachedEventImagesCount = 0;
   let archivedProposalsCount = 0;
 
@@ -276,16 +360,33 @@ export async function executeStoryRetentionPolicy(options: {
         action: `[DRY_RUN] ${item.recommendedAction}`,
         r2KeyHash: item.r2Key ? `hash_${item.r2Key.slice(-16)}` : undefined,
         timestamp: evaluation.evaluatedAt,
+        operatorEmail: options.operatorEmail || 'system_dry_run',
+        details: item.reason,
       });
 
       if (item.recommendedAction === 'detach_event_story_image') {
         detachedEventImagesCount++;
-        purgedR2ObjectsCount++;
-      } else if (item.recommendedAction === 'purge_proposal_r2_image' || item.recommendedAction === 'already_substituted') {
-        purgedR2ObjectsCount++;
+        if (item.crossReferenceCount === 0) {
+          purgedR2ObjectsCount++;
+        } else {
+          deferredR2PurgesCount++;
+        }
+      } else if (
+        item.recommendedAction === 'purge_proposal_r2_image' ||
+        item.recommendedAction === 'already_substituted'
+      ) {
+        if (item.crossReferenceCount === 0) {
+          purgedR2ObjectsCount++;
+        } else {
+          deferredR2PurgesCount++;
+        }
       } else if (item.recommendedAction === 'archive_proposal_metadata') {
         archivedProposalsCount++;
-        purgedR2ObjectsCount++;
+        if (item.crossReferenceCount === 0) {
+          purgedR2ObjectsCount++;
+        } else {
+          deferredR2PurgesCount++;
+        }
       }
     }
 
@@ -293,6 +394,7 @@ export async function executeStoryRetentionPolicy(options: {
       executedAt: evaluation.evaluatedAt,
       dryRun: true,
       purgedR2ObjectsCount,
+      deferredR2PurgesCount,
       detachedEventImagesCount,
       archivedProposalsCount,
       errors,
@@ -302,6 +404,7 @@ export async function executeStoryRetentionPolicy(options: {
 
   // Ejecución real autorizada (cuando dryRun === false)
   const nowIso = (options.now || new Date()).toISOString();
+  const operator = options.operatorEmail || 'admin_manual_execution';
 
   for (const item of evaluation.items) {
     if (item.recommendedAction === 'keep_active') continue;
@@ -324,35 +427,52 @@ export async function executeStoryRetentionPolicy(options: {
           targetId: item.eventId,
           action: 'detach_story_media_event_preserved',
           timestamp: nowIso,
+          operatorEmail: operator,
+          details: `Imagen efímera de historia desacoplada del evento #${item.eventId}. Registro factual del evento intacto.`,
         });
       }
 
-      // 2. Eliminación física idempotente en Cloudflare R2
-      if (item.r2Key && item.crossReferenceCount === 0) {
-        try {
-          await deleteR2Object(item.r2Key);
-          purgedR2ObjectsCount++;
+      // 2. Eliminación física en Cloudflare R2 solo si NO tiene referencias compartidas
+      if (item.r2Key) {
+        if (item.crossReferenceCount === 0) {
+          try {
+            await deleteR2Object(item.r2Key);
+            purgedR2ObjectsCount++;
+            auditLog.push({
+              targetType: 'proposal',
+              targetId: item.proposalId,
+              action: 'r2_object_deleted',
+              r2KeyHash: `hash_${item.r2Key.slice(-16)}`,
+              timestamp: nowIso,
+              operatorEmail: operator,
+              details: `Objeto efímero en R2 eliminado físicamente sin referencias cruzadas residuales.`,
+            });
+          } catch (r2Err: any) {
+            // Idempotencia: si ya no existía en R2 (404), no consideramos error fatal
+            if (!r2Err.message?.includes('NotFound') && !r2Err.message?.includes('NoSuchKey')) {
+              throw r2Err;
+            }
+          }
+        } else {
+          deferredR2PurgesCount++;
           auditLog.push({
             targetType: 'proposal',
             targetId: item.proposalId,
-            action: 'r2_object_deleted',
+            action: 'r2_physical_purge_deferred_due_to_shared_references',
             r2KeyHash: `hash_${item.r2Key.slice(-16)}`,
             timestamp: nowIso,
+            operatorEmail: operator,
+            details: `Purga física en R2 aplazada porque el asset está compartido con ${item.crossReferenceCount} propuestas activas.`,
           });
-        } catch (r2Err: any) {
-          // Idempotencia: si el objeto ya no existía en R2 (404), no consideramos error fatal
-          if (!r2Err.message?.includes('NotFound') && !r2Err.message?.includes('NoSuchKey')) {
-            throw r2Err;
-          }
         }
       }
 
-      // 3. Anonimización y actualización de propuesta en PostgreSQL
+      // 3. Purga y anonimización de propuesta en PostgreSQL (eliminando el caption completo)
       await query(
         `UPDATE curation_proposals 
          SET r2_key = NULL,
              image_url = 'placeholder://category/' || COALESCE(category, 'gastronomia'),
-             caption = '[PURGED_RETENTION_POLICY]',
+             caption = NULL,
              review_status = CASE 
                WHEN review_status = 'pending' THEN 'archived' 
                ELSE review_status 
@@ -366,8 +486,10 @@ export async function executeStoryRetentionPolicy(options: {
       auditLog.push({
         targetType: 'proposal',
         targetId: item.proposalId,
-        action: 'proposal_metadata_archived',
+        action: 'proposal_metadata_and_caption_purged',
         timestamp: nowIso,
+        operatorEmail: operator,
+        details: `Caption completo eliminado y propuesta marcada como purgada conservando dedupe_key para evitar reimportaciones.`,
       });
     } catch (itemErr: any) {
       errors.push({
@@ -381,6 +503,7 @@ export async function executeStoryRetentionPolicy(options: {
     executedAt: nowIso,
     dryRun: false,
     purgedR2ObjectsCount,
+    deferredR2PurgesCount,
     detachedEventImagesCount,
     archivedProposalsCount,
     errors,
