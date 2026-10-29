@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { renderAdminHtml } from './admin';
 import { renderPublicHtml } from './public-page';
 import { renderFestivalHtml } from './festival-page';
+import { renderRoutesHtml } from './routes-page';
 import { extractEventActionSource, computeCalendarState, generateIcsCalendar } from './event-actions';
 import type { PublicEventItem } from '@vayaplan/types';
 
@@ -175,8 +176,8 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then((response) => {
         // Solo cachear respuestas 200 OK para evitar enmascarar errores (404, 5xx)
-        // y excluir expresamente rutas dinámicas de eventos /events/, festivales /festivals/ y ciudades /ciudades/
-        if (response && response.status === 200 && !url.pathname.startsWith('/events/') && !url.pathname.startsWith('/festivals/') && !url.pathname.startsWith('/ciudades/')) {
+        // y excluir expresamente rutas dinámicas de eventos /events/, festivales /festivals/, rutas /rutas y ciudades /ciudades/
+        if (response && response.status === 200 && !url.pathname.startsWith('/events/') && !url.pathname.startsWith('/festivals/') && !url.pathname.startsWith('/rutas') && !url.pathname.startsWith('/ciudades/')) {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
         }
@@ -185,8 +186,8 @@ self.addEventListener('fetch', (event) => {
       .catch(() => {
         return caches.match(event.request).then((cached) => {
           if (cached) return cached;
-          // No disfrazar rutas de eventos /events/, festivales /festivals/ ni ciudades /ciudades/ como la página principal '/'
-          if (event.request.mode === 'navigate' && !url.pathname.startsWith('/events/') && !url.pathname.startsWith('/festivals/') && !url.pathname.startsWith('/ciudades/')) {
+          // No disfrazar rutas de eventos /events/, festivales /festivals/, rutas /rutas ni ciudades /ciudades/ como la página principal '/'
+          if (event.request.mode === 'navigate' && !url.pathname.startsWith('/events/') && !url.pathname.startsWith('/festivals/') && !url.pathname.startsWith('/rutas') && !url.pathname.startsWith('/ciudades/')) {
             return caches.match('/');
           }
           return new Response('Sin conexión a internet', {
@@ -677,6 +678,57 @@ const handleFestivalRoute = async (c: any) => {
 
 app.get('/festivals/:slug', handleFestivalRoute);
 app.get('/ciudades/:citySlug/festivals/:slug', handleFestivalRoute);
+
+// ==============================================================================
+// Rutas Gastronómicas Públicas: GET /rutas y GET /ciudades/:citySlug/rutas
+// ==============================================================================
+const handleRoutesRoute = async (c: any) => {
+  const citySlug = c.req.param('citySlug')?.trim() || 'palencia';
+  const internalApi = (process.env.INTERNAL_API_URL || 'http://api:4000').replace(/\/$/, '');
+  const apiUrl = `${internalApi}/api/v1/cities/${encodeURIComponent(citySlug)}/routes`;
+
+  let apiRes: Response;
+  try {
+    apiRes = await fetch(apiUrl, {
+      signal: AbortSignal.timeout(3000),
+      headers: { Accept: 'application/json' },
+    });
+  } catch {
+    return c.text('El servicio no está disponible en este momento.', 502);
+  }
+
+  if (apiRes.status === 404) {
+    return c.html(
+      renderPublicHtml({
+        title: 'Rutas no encontradas | VayaPlan',
+        description: 'No hay rutas gastronómicas disponibles para esta ciudad.',
+        canonicalUrl: `${(process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '')}/`,
+        initialError: {
+          statusCode: 404,
+          error: 'routes_not_found',
+          message: 'No hay rutas gastronómicas publicadas en esta ciudad.',
+        },
+      }),
+      404,
+      { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+    );
+  }
+
+  if (!apiRes.ok) {
+    return c.text('Error al consultar las rutas gastronómicas.', 502);
+  }
+
+  const data = await apiRes.json();
+  const publicOrigin = (process.env.PUBLIC_URL || 'https://vayaplan.com').replace(/\/$/, '');
+  const canonicalUrl = `${publicOrigin}/rutas`;
+
+  return c.html(renderRoutesHtml(data, canonicalUrl), 200, {
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+  });
+};
+
+app.get('/rutas', handleRoutesRoute);
+app.get('/ciudades/:citySlug/rutas', handleRoutesRoute);
 
 // ==============================================================================
 // Puerto y arranque del servidor web

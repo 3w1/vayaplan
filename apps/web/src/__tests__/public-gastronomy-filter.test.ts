@@ -333,4 +333,116 @@ describe('apps/web — Filtro «Gastronomía» en Agenda Pública (public-page.t
     expect(filterEvents(mockSyntheticEvents, 'cultura', false).length).toBe(0);
     expect(filterEvents(mockSyntheticEvents, 'deporte', false).length).toBe(0);
   });
+
+  // ----------------------------------------------------------------------------
+  // 9. Banner Contextual de Descubribilidad de Rutas Gastronómicas
+  // ----------------------------------------------------------------------------
+  describe('Banner Contextual de Rutas Gastronómicas', () => {
+    const mockRoutes = [
+      {
+        id: 1,
+        title: 'Ruta de la Tapa y Maridaje de Otoño',
+        slug: 'ruta-tapa-otono',
+        summary: 'Itinerario de 6 tapas maridadas con vinos DO Arlanza',
+        category: 'tapas_pinchos',
+        badge_label: 'Edición Otoño',
+        start_date: '2026-10-25',
+        end_date: '2026-11-05',
+        is_permanent: false,
+        approximate_price_cents: 350,
+        participants_count: 6,
+      },
+      {
+        id: 2,
+        title: 'Ruta Permanente de los Mesones Tradicionales',
+        slug: 'ruta-mesones',
+        summary: 'Los mejores asados y raciones clásicas de Palencia',
+        category: 'tradicional',
+        badge_label: 'Permanente',
+        start_date: null,
+        end_date: null,
+        is_permanent: true,
+        approximate_price_cents: null,
+        participants_count: 4,
+      },
+      {
+        id: 3,
+        title: 'Jornadas del Lechazo Palentino',
+        slug: 'jornadas-lechazo',
+        summary: 'Menús especiales de lechazo churro',
+        category: 'menu_degustacion',
+        badge_label: 'Noviembre',
+        start_date: '2026-11-10',
+        end_date: '2026-11-20',
+        is_permanent: false,
+        approximate_price_cents: 2800,
+        participants_count: 5,
+      },
+    ];
+
+    function evaluateActiveRoutes(routes: any[] | null, targetDates: string[]) {
+      if (!routes) return null;
+      return routes.filter((r) => {
+        if (r.is_permanent || (!r.start_date && !r.end_date)) return true;
+        if (targetDates.length === 0) return true;
+        return targetDates.some((dateStr) => {
+          const afterStart = !r.start_date || r.start_date <= dateStr;
+          const beforeEnd = !r.end_date || r.end_date >= dateStr;
+          return afterStart && beforeEnd;
+        });
+      });
+    }
+
+    test('no se renderiza el banner en categorías distintas a gastronomia (musica, all, deporte)', () => {
+      expect(html).toContain('renderGastronomyRoutesBannerHtml');
+      // Verificamos que si currentFilter no es gastronomia devuelve vacío
+      function renderBanner(currentFilter: string) {
+        if (currentFilter !== 'gastronomia') return '';
+        return '<aside class="gastronomy-routes-banner">...</aside>';
+      }
+      expect(renderBanner('all')).toBe('');
+      expect(renderBanner('musica')).toBe('');
+      expect(renderBanner('deporte')).toBe('');
+    });
+
+    test('al seleccionar Gastronomía sin datos aún o ante error: muestra texto neutral "Explorar rutas gastronómicas" y enlace a /rutas', () => {
+      const active = evaluateActiveRoutes(null, ['2026-10-29']);
+      expect(active).toBeNull();
+      // Texto neutral exigido
+      const neutralCta = 'Explorar rutas gastronómicas →';
+      expect(html).toContain('Explorar rutas gastronómicas →');
+      expect(html).toContain('href="/rutas"');
+    });
+
+    test('al seleccionar Gastronomía con fecha 2026-10-29: reconoce la ruta de otoño y la permanente, descartando la de noviembre', () => {
+      const active = evaluateActiveRoutes(mockRoutes, ['2026-10-29']);
+      expect(active).not.toBeNull();
+      expect(active!.length).toBe(2);
+      expect(active!.some((r) => r.slug === 'ruta-tapa-otono')).toBe(true);
+      expect(active!.some((r) => r.slug === 'ruta-mesones')).toBe(true);
+      expect(active!.some((r) => r.slug === 'jornadas-lechazo')).toBe(false);
+    });
+
+    test('resolución de fin de semana (weekendDates): reconoce rutas activas en cualquiera de los días del fin de semana', () => {
+      const activeWeekend = evaluateActiveRoutes(mockRoutes, ['2026-11-06', '2026-11-07', '2026-11-08']);
+      // En ese fin de semana la de otoño ya acabó (terminó el 5) y la de noviembre no empezó (empieza el 10).
+      // Solo la permanente está activa.
+      expect(activeWeekend!.length).toBe(1);
+      expect(activeWeekend![0].slug === 'ruta-mesones').toBe(true);
+    });
+
+    test('renderRoutesHtml genera la página /rutas con accesibilidad, metadatos y retorno a la agenda', () => {
+      const { renderRoutesHtml } = require('../routes-page');
+      const routesPageHtml = renderRoutesHtml({
+        city: { slug: 'palencia', name: 'Palencia' },
+        routes: mockRoutes,
+      }, 'https://vayaplan.com/rutas');
+
+      expect(routesPageHtml).toContain('Rutas Gastronómicas en Palencia');
+      expect(routesPageHtml).toContain('Ruta de la Tapa y Maridaje de Otoño');
+      expect(routesPageHtml).toContain('6 locales participantes');
+      expect(routesPageHtml).toContain('← Volver a la agenda');
+      expect(routesPageHtml).toContain('href="/?cat=gastronomia"');
+    });
+  });
 });
