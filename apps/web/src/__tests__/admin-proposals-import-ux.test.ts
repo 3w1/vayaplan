@@ -65,6 +65,17 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
       'import-ig-feedback': { style: { display: 'none' }, innerText: '' },
       'btn-submit-import-ig': { disabled: false, innerText: '🔍 Extraer y Crear Propuesta' },
       'btn-open-import-ig': {},
+
+      // Modal de confirmación y autorización de fallback pagado
+      'modal-paid-fallback-confirm': { style: {} },
+      'paid-fallback-operation-id': { value: '' },
+      'paid-fallback-shortcode': { value: '' },
+      'paid-fallback-canonical-url': { value: '' },
+      'paid-fallback-venue-id': { value: '' },
+      'paid-fallback-url-display': { innerText: '' },
+      'paid-fallback-feedback': { style: { display: 'none' }, innerHTML: '', innerText: '' },
+      'btn-confirm-paid-fallback': { disabled: true, innerText: '' },
+      'btn-cancel-paid-fallback': { disabled: false },
     };
 
     const alerts: string[] = [];
@@ -566,5 +577,191 @@ describe('apps/web — UX de Importación Puntual de Instagram por URL (admin.ts
 
     expect(closedModals).toContain('modal-edit-proposal');
     expect(getLoadedProposalsCalls()).toBe(1);
+  });
+
+  // ============================================================================
+  // IMPORTACIÓN ESCALONADA: ACTOR ALTERNATIVO CON AUTORIZACIÓN PUNTUAL DE GASTO
+  // ============================================================================
+
+  test('12. Renderiza modal de confirmación de fallback pagado (#modal-paid-fallback-confirm) con proveedor y avisos de coste', () => {
+    const html = renderAdminHtml();
+    expect(html).toContain('id="modal-paid-fallback-confirm"');
+    expect(html).toContain('intropix/instagram-posts-reels-scraper');
+    expect(html).toContain('0,015 USD');
+    expect(html).toContain('0,005');
+    expect(html).toContain('profile-scan');
+    expect(html).toContain('result-item');
+    expect(html).toContain('actor-start');
+    expect(html).toContain('0,0089 USD');
+    expect(html).toContain('id="btn-confirm-paid-fallback"');
+    expect(html).toContain('id="btn-cancel-paid-fallback"');
+    expect(html).toContain('id="paid-fallback-feedback"');
+    expect(html).toContain('id="paid-fallback-url-display"');
+  });
+
+  test('13. Error access_restricted con canUsePaidFallback ofrece opción de proveedor alternativo Y manual sin forzar pago', async () => {
+    const { sandbox, domElements, closedModals, openedModals } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/import-instagram-post': {
+          ok: false,
+          status: 422,
+          body: {
+            error: 'access_restricted',
+            message: 'Instagram restringe el acceso a esta publicación.',
+            canUsePaidFallback: true,
+            canCompleteManually: true,
+            canonicalUrl: 'https://www.instagram.com/p/De_jb4yFX_T/',
+            shortcode: 'De_jb4yFX_T',
+            venueId: 2,
+          },
+        },
+      },
+    });
+
+    domElements['import-ig-url-input'].value = 'https://www.instagram.com/p/De_jb4yFX_T/';
+    domElements['import-ig-venue-select'].value = '2';
+
+    await sandbox.window.submitImportInstagramPost();
+
+    const feedbackHtml = domElements['import-ig-feedback'].innerHTML;
+    // Comprobar que contiene ambos botones
+    expect(feedbackHtml).toContain('btn-import-ig-paid-fallback');
+    expect(feedbackHtml).toContain('⚡ Intentar con proveedor alternativo');
+    expect(feedbackHtml).toContain('btn-import-ig-manual');
+    expect(feedbackHtml).toContain('✍️ Completar manualmente');
+
+    // Comprobar que el operador puede elegir la vía manual directamente
+    sandbox.window.openManualProposalFromImport('https://www.instagram.com/p/De_jb4yFX_T/', 2);
+    expect(closedModals).toContain('modal-import-instagram-post');
+    expect(openedModals).toContain('modal-edit-proposal');
+    expect(domElements['edit-prop-source-url'].value).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
+    expect(domElements['edit-prop-venue-select'].value).toBe('2');
+  });
+
+  test('14. openPaidFallbackModal prepara la autorización mediante API y habilita confirmación con límite en USD', async () => {
+    const { sandbox, domElements, openedModals, apiCalls } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/prepare-paid-fallback': {
+          ok: true,
+          status: 200,
+          body: {
+            success: true,
+            operationId: 'op_test_1234567890abcdef',
+            shortcode: 'De_jb4yFX_T',
+            canonicalUrl: 'https://www.instagram.com/p/De_jb4yFX_T/',
+            venueId: 2,
+            actorId: 'intropix/instagram-posts-reels-scraper',
+            estimatedCostUsd: 0.0089,
+            maxChargeLimitUsd: 0.015,
+            startChargeUsd: 0.005,
+            currency: 'USD',
+          },
+        },
+      },
+    });
+
+    await sandbox.window.openPaidFallbackModal('https://www.instagram.com/p/De_jb4yFX_T/', 2);
+
+    expect(openedModals).toContain('modal-paid-fallback-confirm');
+    expect(apiCalls.some(c => c.url.includes('/api/v1/admin/proposals/prepare-paid-fallback'))).toBe(true);
+
+    expect(domElements['paid-fallback-operation-id'].value).toBe('op_test_1234567890abcdef');
+    expect(domElements['paid-fallback-shortcode'].value).toBe('De_jb4yFX_T');
+    expect(domElements['paid-fallback-canonical-url'].value).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
+    expect(domElements['paid-fallback-venue-id'].value).toBe('2');
+    expect(domElements['paid-fallback-url-display'].innerText).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
+    expect(domElements['btn-confirm-paid-fallback'].disabled).toBe(false);
+    expect(domElements['btn-confirm-paid-fallback'].innerText).toContain('0,015 USD');
+  });
+
+  test('15. submitExecutePaidFallback envía ejecución, cierra modales, recarga y abre edición de la propuesta', async () => {
+    let executePayload: any = null;
+    let openedEditId: number | null = null;
+
+    const { sandbox, domElements, closedModals, getLoadedProposalsCalls } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/execute-paid-fallback': {
+          ok: true,
+          status: 201,
+          body: {
+            success: true,
+            proposal: {
+              id: 999,
+              title: 'Concierto Extraído con Fallback',
+              review_status: 'pending',
+              classification: 'CONCIERTO',
+            },
+            operation: {
+              operationId: 'op_test_1234567890abcdef',
+              reportedCostUsd: 0.0089,
+            },
+          },
+        },
+      },
+    });
+
+    const origFetch = sandbox.fetch;
+    sandbox.fetch = async (url: string, opts: any) => {
+      if (url.includes('/api/v1/admin/proposals/execute-paid-fallback')) {
+        executePayload = JSON.parse(opts.body);
+      }
+      return origFetch(url, opts);
+    };
+
+    sandbox.window.openEditProposalModal = (id: number) => {
+      openedEditId = id;
+    };
+
+    domElements['paid-fallback-operation-id'].value = 'op_test_1234567890abcdef';
+    domElements['paid-fallback-shortcode'].value = 'De_jb4yFX_T';
+    domElements['paid-fallback-canonical-url'].value = 'https://www.instagram.com/p/De_jb4yFX_T/';
+    domElements['paid-fallback-venue-id'].value = '2';
+
+    await sandbox.window.submitExecutePaidFallback();
+
+    expect(executePayload).toBeDefined();
+    expect(executePayload.operationId).toBe('op_test_1234567890abcdef');
+    expect(executePayload.shortcode).toBe('De_jb4yFX_T');
+    expect(executePayload.canonicalUrl).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
+    expect(executePayload.venue_id).toBe(2);
+
+    expect(closedModals).toContain('modal-paid-fallback-confirm');
+    expect(closedModals).toContain('modal-import-instagram-post');
+    expect(getLoadedProposalsCalls()).toBe(1);
+    expect(openedEditId).toBe(999);
+  });
+
+  test('16. submitExecutePaidFallback ante fallo del proveedor alternativo muestra error y ofrece completar manualmente', async () => {
+    const { sandbox, domElements, closedModals, openedModals } = setupTestContext({
+      apiResponses: {
+        '/api/v1/admin/proposals/execute-paid-fallback': {
+          ok: false,
+          status: 422,
+          body: {
+            error: 'target_post_not_found',
+            message: 'La publicación no existe o fue eliminada en Instagram.',
+            canCompleteManually: true,
+          },
+        },
+      },
+    });
+
+    domElements['paid-fallback-operation-id'].value = 'op_test_not_found';
+    domElements['paid-fallback-shortcode'].value = 'De_jb4yFX_T';
+    domElements['paid-fallback-canonical-url'].value = 'https://www.instagram.com/p/De_jb4yFX_T/';
+    domElements['paid-fallback-venue-id'].value = '2';
+
+    await sandbox.window.submitExecutePaidFallback();
+
+    const feedbackHtml = domElements['paid-fallback-feedback'].innerHTML;
+    expect(feedbackHtml).toContain('La publicación no existe o fue eliminada');
+    expect(feedbackHtml).toContain('btn-paid-fallback-to-manual');
+    expect(feedbackHtml).toContain('✍️ Completar manualmente');
+
+    // Al pulsar el botón manual ofrecido en el error del fallback
+    sandbox.window.openManualProposalFromImport('https://www.instagram.com/p/De_jb4yFX_T/', 2);
+    expect(openedModals).toContain('modal-edit-proposal');
+    expect(domElements['edit-prop-source-url'].value).toBe('https://www.instagram.com/p/De_jb4yFX_T/');
+    expect(domElements['edit-prop-venue-select'].value).toBe('2');
   });
 });

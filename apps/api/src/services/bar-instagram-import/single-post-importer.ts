@@ -85,6 +85,7 @@ export interface ImportSingleInstagramPostResult {
   proposal?: any;
   event?: any;
   canCompleteManually?: boolean;
+  canUsePaidFallback?: boolean;
   canonicalUrl?: string;
   shortcode?: string;
 }
@@ -423,9 +424,10 @@ export async function downloadAndUploadPostImageToR2(
     throw new Error('La publicación no contiene una URL de imagen (displayUrl).');
   }
 
+  const effectiveFetcher = mockImageFetcher || (isTestOverrideAllowed() ? testImageFetcherOverride : null);
   let rawBuffer: Buffer;
-  if (mockImageFetcher) {
-    rawBuffer = await mockImageFetcher(post.displayUrl);
+  if (effectiveFetcher) {
+    rawBuffer = await effectiveFetcher(post.displayUrl);
   } else {
     rawBuffer = await fetchSafeImageBuffer(post.displayUrl);
   }
@@ -819,6 +821,7 @@ export async function importSingleInstagramPost(
         error:
           'Instagram restringe el acceso a esta publicación. No se ha podido importar automáticamente. Puedes completar la propuesta manualmente.',
         canCompleteManually: true,
+        canUsePaidFallback: true,
         canonicalUrl,
         shortcode,
       };

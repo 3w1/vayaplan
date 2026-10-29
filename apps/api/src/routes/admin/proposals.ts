@@ -15,6 +15,11 @@ import {
 } from '../../services/bar-instagram-import/taquilla-contrast';
 import { importSingleInstagramPost } from '../../services/bar-instagram-import/single-post-importer';
 import { validateInstagramPostUrl } from '../../services/bar-instagram-import/url-validator';
+import {
+  preparePaidImportAuthorization,
+  executeAuthorizedPaidImport,
+  getPaidImportStatus,
+} from '../../services/bar-instagram-import/fallback-coordinator';
 
 let cachedTaquillaEvents: TaquillaEventMetadata[] | null = null;
 let lastTaquillaFetch = 0;
@@ -1224,6 +1229,7 @@ adminProposalsRoutes.post('/proposals/import-instagram-post', async (c) => {
         error: result.code || 'import_failed',
         message: result.error,
         canCompleteManually: Boolean(result.canCompleteManually),
+        canUsePaidFallback: Boolean(result.canUsePaidFallback),
         canonicalUrl: result.canonicalUrl || null,
         shortcode: result.shortcode || null,
         venueId: venueId || null,
@@ -1540,4 +1546,133 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
     },
     201
   );
+});
+
+/**
+ * POST /api/v1/admin/proposals/prepare-paid-fallback
+ *
+ * Prepara y devuelve los detalles de la autorización de gasto para el proveedor alternativo
+ * (intropix/instagram-posts-reels-scraper).
+ * Persiste la autorización con TTL acotado (10 min) e identificador único de operación.
+ */
+adminProposalsRoutes.post('/proposals/prepare-paid-fallback', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid_json', message: 'Cuerpo JSON inválido' }, 400);
+  }
+
+  const result = await preparePaidImportAuthorization({
+    url: body.url,
+    venueId: body.venue_id,
+    userEmail: user.email,
+  });
+
+  if (!result.success) {
+    return c.json({ error: result.code || 'prepare_failed', message: result.error }, result.status as any);
+  }
+
+  return c.json(result.data, 200);
+});
+
+/**
+ * POST /api/v1/admin/proposals/execute-paid-fallback
+ *
+ * Ejecuta la extracción autorizada con el proveedor alternativo:
+ * - Valida de nuevo usuario, URL, shortcode y presupuesto.
+ * - Invoca intropix con límite de gasto impuesto.
+ * - Si tiene éxito, descarga imagen a R2 y registra propuesta pendiente.
+ * - Si falla, devuelve error claro con canCompleteManually: true.
+ */
+adminProposalsRoutes.post('/proposals/execute-paid-fallback', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  let body: any;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid_json', message: 'Cuerpo JSON inválido' }, 400);
+  }
+
+  if (!body.operationId || typeof body.operationId !== 'string') {
+    return c.json({ error: 'missing_operation_id', message: 'El identificador de operación es obligatorio.' }, 400);
+  }
+
+  if (!body.canonicalUrl || typeof body.canonicalUrl !== 'string') {
+    return c.json({ error: 'missing_url', message: 'La URL canónica es obligatoria.' }, 400);
+  }
+
+  if (!body.shortcode || typeof body.shortcode !== 'string') {
+    return c.json({ error: 'missing_shortcode', message: 'El shortcode es obligatorio.' }, 400);
+  }
+
+  const result = await executeAuthorizedPaidImport({
+    operationId: body.operationId,
+    canonicalUrl: body.canonicalUrl,
+    shortcode: body.shortcode,
+    venueId: body.venue_id,
+    userEmail: user.email,
+  });
+
+  if (!result.success) {
+    return c.json(
+      {
+        error: result.code,
+        message: result.error,
+        canCompleteManually: Boolean(result.canCompleteManually),
+        canonicalUrl: result.canonicalUrl,
+        shortcode: result.shortcode,
+        venueId: result.venueId || null,
+        operation: result.operation || null,
+      },
+      result.status as any
+    );
+  }
+
+  return c.json(
+    {
+      success: true,
+      message:
+        result.status === 200
+          ? 'Esta extracción ya se había completado previamente.'
+          : 'Propuesta extraída con proveedor alternativo y registrada como pendiente.',
+      alreadyCompleted: result.status === 200,
+      proposal: result.proposal,
+      operation: result.operation,
+    },
+    result.status as any
+  );
+});
+
+/**
+ * GET /api/v1/admin/proposals/paid-fallback-status/:operationId
+ *
+ * Consulta el estado de una operación de extracción autorizada sin iniciar un nuevo run.
+ */
+adminProposalsRoutes.get('/proposals/paid-fallback-status/:operationId', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  const operationId = c.req.param('operationId');
+  if (!operationId) {
+    return c.json({ error: 'missing_operation_id', message: 'El identificador de operación es obligatorio.' }, 400);
+  }
+
+  const status = await getPaidImportStatus(operationId);
+  if (!status) {
+    return c.json({ error: 'operation_not_found', message: 'Operación no encontrada.' }, 404);
+  }
+
+  return c.json({ success: true, operation: status }, 200);
 });
