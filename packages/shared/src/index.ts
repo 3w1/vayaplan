@@ -51,6 +51,7 @@ export const VALID_EVENT_CATEGORIES: readonly EventCategory[] = [
   'futbol',
   'rugby',
   'conferencia',
+  'gastronomia',
 ] as const;
 
 /**

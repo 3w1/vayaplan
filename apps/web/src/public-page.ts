@@ -2023,6 +2023,13 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         </div>
         <span class="cat-label">Deporte</span>
       </button>
+
+      <button class="cat-btn" data-action="set-cat" data-cat="gastronomia" aria-label="Categoría Gastronomía">
+        <div class="cat-circle">
+          <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-8.03c2.09-.13 3.75-1.85 3.75-3.97V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>
+        </div>
+        <span class="cat-label">Gastronomía</span>
+      </button>
     </section>
 
     <!-- Barra de Filtros Secundarios (Modificador de precio y exposiciones) -->
@@ -2336,6 +2343,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         futbol: 'Fútbol',
         rugby: 'Rugby',
         conferencia: 'Charla o conferencia',
+        gastronomia: 'Gastronomía',
       };
       return labels[category] || category || 'Plan';
     }
@@ -2735,6 +2743,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         result = result.filter((ev) => CULTURE_CATEGORIES.includes(ev.category));
       } else if (currentFilter === 'deporte') {
         result = result.filter((ev) => SPORTS_CATEGORIES.includes(ev.category));
+      } else if (currentFilter === 'gastronomia') {
+        result = result.filter((ev) => ev.category === 'gastronomia');
       }
 
       if (isFreeFilterActive) {
@@ -2788,6 +2798,8 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         result = result.filter((r) => CULTURE_CATEGORIES.includes(r.category));
       } else if (currentFilter === 'deporte') {
         result = result.filter((r) => SPORTS_CATEGORIES.includes(r.category));
+      } else if (currentFilter === 'gastronomia') {
+        result = result.filter((r) => r.category === 'gastronomia');
       }
 
       if (isFreeFilterActive) {
@@ -2811,6 +2823,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         cine: 'Cine',
         cultura: 'Cultura',
         deporte: 'Deporte',
+        gastronomia: 'Gastronomía',
       };
 
       if (currentFilter !== 'all') {
@@ -3038,7 +3051,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
       }
 
       const catParam = (params.get('cat') || params.get('category'));
-      const validCategories = ['musica', 'tardeo', 'cine', 'cultura', 'deporte'];
+      const validCategories = ['musica', 'tardeo', 'cine', 'cultura', 'deporte', 'gastronomia'];
       const targetFilter = (catParam && validCategories.includes(catParam.trim().toLowerCase())) ? catParam.trim().toLowerCase() : 'all';
       if (targetFilter !== currentFilter) {
         currentFilter = targetFilter;
@@ -3535,6 +3548,7 @@ export function renderPublicHtml(meta?: PublicPageMeta): string {
         futbol: 'Fútbol',
         rugby: 'Rugby',
         conferencia: 'Charlas y conferencias',
+        gastronomia: 'Gastronomía',
       };
       return t[cat] || 'Planes';
     }

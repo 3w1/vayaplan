@@ -163,6 +163,16 @@ export function inferCategoryFromRecord(
   if (combined.includes('exposición') || combined.includes('exposicion') || combined.includes('fotografía') || combined.includes('fotografia') || combined.includes('arte')) {
     return 'exposicion';
   }
+  if (
+    combined.includes('cata') ||
+    combined.includes('maridaje') ||
+    combined.includes('degustación') ||
+    combined.includes('degustacion') ||
+    combined.includes('gastronom') ||
+    combined.includes('enolog')
+  ) {
+    return 'gastronomia';
+  }
   return 'cultura';
 }
 

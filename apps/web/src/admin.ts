@@ -3381,7 +3381,8 @@ export function renderAdminHtml(): string {
                 <option value="cine">Cine (proyecciones, cineclub, estrenos)</option>
                 <option value="teatro">Teatro & Artes escénicas</option>
                 <option value="exposicion">Exposición & Arte</option>
-                <option value="cultura">Cultura & Divulgación (talleres, catas, conferencias)</option>
+                <option value="cultura">Cultura & Divulgación (talleres, conferencias)</option>
+                <option value="gastronomia">🍷 Gastronomía (catas, degustaciones, maridajes, ferias)</option>
                 <option value="baloncesto">🏀 Baloncesto (competiciones y partidos)</option>
                 <option value="futbol">⚽ Fútbol (competiciones y partidos)</option>
                 <option value="rugby">🏉 Rugby (competiciones y partidos)</option>
@@ -5378,6 +5379,7 @@ export function renderAdminHtml(): string {
         'futbol': 'Fútbol',
         'rugby': 'Rugby',
         'conferencia': 'Conferencia',
+        'gastronomia': 'Gastronomía',
       };
       return map[cat] || cat;
     }
@@ -11430,7 +11432,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             '<span style="color:var(--border-strong);">·</span>' +
             priceFormatted +
             '<span style="color:var(--border-strong);">·</span>' +
-            '<span class="badge-tag" style="font-size:0.75rem;">🏷️ ' + escapeHtml(p.category || 'dj_tardeo') + '</span>' +
+            '<span class="badge-tag" style="font-size:0.75rem;">🏷️ ' + escapeHtml(formatCategory(p.category || 'dj_tardeo')) + '</span>' +
             confBadge +
           '</div>' +
           matchAlertHtml +
@@ -12099,7 +12101,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
             '<div><strong>📅 Fecha:</strong> ' + (prop.proposed_date || 'Sin fecha') + '</div>' +
             '<div><strong>⏰ Hora:</strong> ' + (prop.proposed_time ? escapeHtml(prop.proposed_time) + ' h' : 'Sin hora') + '</div>' +
             '<div><strong>💶 Precio:</strong> ' + priceFormatted + '</div>' +
-            '<div><strong>🏷️ Categoría:</strong> ' + escapeHtml(prop.category || 'dj_tardeo') + '</div>' +
+            '<div><strong>🏷️ Categoría:</strong> ' + escapeHtml(formatCategory(prop.category || 'dj_tardeo')) + '</div>' +
             '<div><strong>⭐ Confianza:</strong> ' + escapeHtml(prop.confidence || 'MEDIA') + '</div>' +
           '</div>' +
           '<div style="font-size:0.8125rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;">' +
@@ -12206,7 +12208,12 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       const catSelect = document.getElementById('edit-prop-category-select');
       if (catSelect) {
-        const targetCat = prop.category || 'dj_tardeo';
+        const targetCat = (prop.category || '').trim();
+        const validCats = [
+          'musica_directo', 'dj_tardeo', 'monologo', 'cine', 'teatro',
+          'exposicion', 'cultura', 'gastronomia', 'baloncesto', 'futbol',
+          'rugby', 'conferencia'
+        ];
         let foundCat = false;
         for (let i = 0; i < catSelect.options.length; i++) {
           if (catSelect.options[i].value === targetCat) {
@@ -12217,7 +12224,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
         if (!foundCat && targetCat) {
           const catOpt = document.createElement('option');
           catOpt.value = targetCat;
-          catOpt.text = targetCat + ' (Actual)';
+          catOpt.text = targetCat + ' (requiere seleccionar categoría válida)';
           catSelect.appendChild(catOpt);
         }
         catSelect.value = targetCat;
@@ -12988,7 +12995,7 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const timeVal = (document.getElementById('edit-prop-time-input')?.value || '').trim();
       const endTimeVal = (document.getElementById('edit-prop-end-time-input')?.value || '').trim();
       const venueVal = document.getElementById('edit-prop-venue-select')?.value;
-      const category = document.getElementById('edit-prop-category-select')?.value || prop.category || 'dj_tardeo';
+      const category = (document.getElementById('edit-prop-category-select')?.value || prop.category || '').trim();
       const priceStatus = document.getElementById('edit-prop-price-status-select')?.value || 'NOT_INFORMED';
       const priceNote = (document.getElementById('edit-prop-price-note-input')?.value || '').trim();
       const priceRaw = (document.getElementById('edit-prop-price-input')?.value || '').trim();
@@ -13068,6 +13075,19 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
           return;
         }
         priceToSend = num.toFixed(2);
+      }
+
+      const validPublishableCats = [
+        'musica_directo', 'dj_tardeo', 'monologo', 'cine', 'teatro',
+        'exposicion', 'cultura', 'gastronomia', 'baloncesto', 'futbol',
+        'rugby', 'conferencia'
+      ];
+      if (!category || !validPublishableCats.includes(category)) {
+        if (errBox) {
+          errBox.innerText = 'Debes seleccionar una categoría válida antes de aprobar la propuesta (la categoría "' + (category || 'sin definir') + '" requiere selección para ser publicada en la agenda).';
+          errBox.style.display = 'block';
+        }
+        return;
       }
 
       // Proteger contra doble envío

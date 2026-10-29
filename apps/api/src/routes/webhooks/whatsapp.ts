@@ -31,6 +31,9 @@ function inferCategory(text: string): EventCategory {
   if (lower.includes('exposición') || lower.includes('exposicion') || lower.includes('galería') || lower.includes('cuadros')) {
     return 'exposicion';
   }
+  if (lower.includes('cata') || lower.includes('maridaje') || lower.includes('degustación') || lower.includes('degustacion') || lower.includes('gastronom')) {
+    return 'gastronomia';
+  }
   return 'cultura';
 }
 

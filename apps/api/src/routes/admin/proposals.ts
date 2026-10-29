@@ -457,7 +457,19 @@ adminProposalsRoutes.post('/proposals/:id/approve', async (c) => {
       : proposal.proposed_time;
   const effectiveVenueId =
     body.venue_id !== undefined ? parseInt(body.venue_id, 10) : proposal.venue_id;
-  const effectiveCategory = (body.category || proposal.category || 'dj_tardeo').trim();
+  const effectiveCategory = (body.category || proposal.category || '').trim();
+  if (!effectiveCategory) {
+    return c.json({
+      error: 'missing_category',
+      message: 'La categoría del evento es obligatoria para aprobar la propuesta.',
+    }, 400);
+  }
+  if (!VALID_EVENT_CATEGORIES.includes(effectiveCategory as any)) {
+    return c.json({
+      error: 'invalid_event_category',
+      message: `La categoría '${effectiveCategory}' no es válida para publicar en la agenda. Selecciona una categoría válida (${VALID_EVENT_CATEGORIES.join(', ')}) antes de aprobar.`,
+    }, 400);
+  }
 
   // Soporte de eventos continuos / exposiciones
   const isContinuous =
@@ -1047,7 +1059,7 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
     return c.json({ error: 'invalid_id', message: 'ID de propuesta no válido' }, 400);
   }
 
-  const check = await query(`SELECT id, review_status FROM curation_proposals WHERE id = $1;`, [id]);
+  const check = await query(`SELECT id, review_status, category FROM curation_proposals WHERE id = $1;`, [id]);
   if (check.rows.length === 0) {
     return c.json({ error: 'not_found', message: 'Propuesta no encontrada' }, 404);
   }
@@ -1157,7 +1169,17 @@ adminProposalsRoutes.patch('/proposals/:id', async (c) => {
 
   if (body.category !== undefined) {
     const cat = String(body.category).trim();
-    params.push(cat);
+    const existingPropCategory = (check.rows[0].category || '').trim();
+    // Si la categoría no es de catálogo pero coincide exactamente con la categoría ya existente en la propuesta
+    // (p. ej. histórica 'ocio'), se permite conservar para no bloquear la edición de otros campos (título, precio, etc.).
+    // Si se intenta modificar hacia una nueva categoría no válida, se rechaza con 400.
+    if (cat && !VALID_EVENT_CATEGORIES.includes(cat as any) && cat !== existingPropCategory) {
+      return c.json({
+        error: 'invalid_category',
+        message: `Categoría no válida: '${cat}'. Valores admitidos: ${VALID_EVENT_CATEGORIES.join(', ')}`,
+      }, 400);
+    }
+    params.push(cat || null);
     fields.push(`category = $${params.length}`);
   }
 
@@ -1441,7 +1463,7 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
   // 6. Validar categoría
   let category = body.category ? String(body.category).trim() : 'cultura';
   if (!VALID_EVENT_CATEGORIES.includes(category as any)) {
-    category = 'otros';
+    category = 'cultura';
   }
 
   // 7. Validar clasificación

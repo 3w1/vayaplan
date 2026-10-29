@@ -1102,7 +1102,7 @@ export async function importSingleInstagramPost(
       effectiveDate,
       effectiveTime,
       venueId || null,
-      classificationResult.candidateCategory || 'dj_tardeo',
+      classificationResult.candidateCategory || classificationResult.provisionalCategory || (classificationResult as any).category || null,
       classificationResult.estimatedPriceCents !== null && classificationResult.estimatedPriceCents !== undefined
         ? Number((classificationResult.estimatedPriceCents / 100).toFixed(2))
         : null,

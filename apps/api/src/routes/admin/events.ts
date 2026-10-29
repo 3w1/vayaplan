@@ -154,7 +154,7 @@ adminEventsRoutes.get('/events', async (c) => {
     } else if (categoryFilter === 'ocio') {
       whereClauses.push(`e.category IN ('ocio', 'dj_tardeo')`);
     } else if (categoryFilter === 'otros') {
-      whereClauses.push(`e.category NOT IN ('musica_directo', 'dj_tardeo', 'baloncesto', 'futbol', 'rugby', 'deporte', 'cultura', 'teatro', 'exposicion', 'monologo', 'cine', 'conferencia')`);
+      whereClauses.push(`e.category NOT IN ('musica_directo', 'dj_tardeo', 'baloncesto', 'futbol', 'rugby', 'deporte', 'cultura', 'teatro', 'exposicion', 'monologo', 'cine', 'conferencia', 'gastronomia')`);
     } else if (VALID_EVENT_CATEGORIES.includes(categoryFilter as EventCategory)) {
       queryParams.push(categoryFilter);
       whereClauses.push(`e.category = $${queryParams.length}`);
@@ -705,6 +705,13 @@ adminEventsRoutes.patch('/events/:id', async (c) => {
   const existing = check.rows[0];
   const targetStatus = body.status !== undefined ? body.status : existing.status;
   const targetVenueId = body.venue_id !== undefined ? body.venue_id : existing.venue_id;
+
+  if (body.category !== undefined && !VALID_EVENT_CATEGORIES.includes(body.category)) {
+    return c.json({
+      error: 'invalid_parameter',
+      message: `Categoría inválida: '${body.category}'. Valores permitidos: ${VALID_EVENT_CATEGORIES.join(', ')}`,
+    }, 400);
+  }
 
   if (targetStatus === 'published' && (!targetVenueId || Number(targetVenueId) === 9999)) {
     return c.json({
