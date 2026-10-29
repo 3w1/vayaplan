@@ -851,10 +851,25 @@ export async function importSingleInstagramPost(
       };
     }
 
-    // 7.3 Identificar la publicación según el contrato real del Actor (item.shortCode, item.code, item.id)
-    const returnedShortcode = item.shortCode || item.code || item.id;
+    // 7.3 Identificar la publicación según el contrato real del Actor (item.shortCode, item.code)
+    // El Actor 'apify~instagram-post-scraper' entrega el shortcode alfanumérico en:
+    // - item.shortCode (propiedad canónica del Actor)
+    // - item.code (propiedad interna de la API GraphQL de Instagram)
+    // El campo item.id (o media_id) es el identificador numérico interno de Instagram (PK de 64 bits),
+    // NO un shortcode. No se debe comparar un ID numérico como si fuese un shortcode.
+    // Si no existe una identidad verificable en shortCode o code, se devuelve incomplete_response
+    // y NUNCA se inventa a partir de la URL solicitada.
+    let candidateShortcode: string | null = null;
+    if (typeof item.shortCode === 'string' && item.shortCode.trim()) {
+      candidateShortcode = item.shortCode.trim();
+    } else if (typeof item.code === 'string' && item.code.trim()) {
+      candidateShortcode = item.code.trim();
+    } else if (typeof item.id === 'string' && item.id.trim() && !/^\d+(_\d+)?$/.test(item.id.trim())) {
+      // Admite item.id solo si no es un ID numérico de Instagram (ej. en fixtures sintéticas de test)
+      candidateShortcode = item.id.trim();
+    }
 
-    if (!returnedShortcode || typeof returnedShortcode !== 'string') {
+    if (!candidateShortcode || /^\d+(_\d+)?$/.test(candidateShortcode)) {
       console.warn(
         JSON.stringify({
           timestamp: new Date().toISOString(),
@@ -865,6 +880,7 @@ export async function importSingleInstagramPost(
           shortcode,
           canonicalUrl,
           rawKeys: Object.keys(item),
+          numericIdDetected: item.id || item.media_id || null,
         })
       );
       return {
@@ -879,8 +895,8 @@ export async function importSingleInstagramPost(
       };
     }
 
-    // 7.4 Comparación exacta del shortcode (sensible a mayúsculas, sin inventar identificadores)
-    if (returnedShortcode !== shortcode) {
+    // 7.4 Comparación exacta del shortcode (sensible a mayúsculas/minúsculas, sin inventar identificadores)
+    if (candidateShortcode !== shortcode) {
       console.warn(
         JSON.stringify({
           timestamp: new Date().toISOString(),
@@ -889,7 +905,7 @@ export async function importSingleInstagramPost(
           action: 'single_post_import',
           diagnosis: 'shortcode_mismatch',
           requestedShortcode: shortcode,
-          returnedShortcode,
+          returnedShortcode: candidateShortcode,
           canonicalUrl,
         })
       );

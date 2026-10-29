@@ -1119,4 +1119,105 @@ describe('POST /api/v1/admin/proposals/import-instagram-post — Importación Pu
     expect(dupData.error).toBe('duplicate_proposal');
     expect(dupData.message).toContain('ya existe como propuesta');
   });
+
+  test('28. Item con ID numérico de Instagram sin shortCode verificable nunca se compara como shortcode y devuelve incomplete_response', async () => {
+    const shortcode = 'De_jb4yFX_T';
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    // Simula una respuesta donde el scraper devuelve el ID numérico interno de Instagram
+    // pero ningún campo shortCode ni code
+    setTestPostFetcherOverride(async () => [
+      {
+        id: '4017085240661344211',
+        media_id: '4017085240661344211',
+        url: canonicalUrl,
+        displayUrl: 'https://cdn.instagram.com/v/test_numeric_id.jpg',
+        caption: 'Publicación con ID numérico de Instagram sin shortCode alfanumérico',
+      },
+    ]);
+
+    const res = await app.request('/api/v1/admin/proposals/import-instagram-post', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        venue_id: testVenueId,
+      }),
+    });
+
+    expect(res.status).toBe(422);
+    const data = await res.json();
+    // No debe caer en shortcode_mismatch ("4017085240661344211" !== "De_jb4yFX_T")
+    // sino en incomplete_response
+    expect(data.error).toBe('incomplete_response');
+    expect(data.message).toBe(
+      'El proveedor no ha devuelto una publicación válida. No se ha creado ninguna propuesta.'
+    );
+    expect(data.canCompleteManually).toBe(true);
+    expect(JSON.stringify(data)).not.toContain('undefined');
+    expect(JSON.stringify(data)).not.toContain('4017085240661344211');
+  });
+
+  test('29. Concurrencia atómica y prevención de doble envío en POST /api/v1/admin/proposals/manual', async () => {
+    const shortcode = `TEST_CONCURRENT_${Date.now()}`;
+    const canonicalUrl = `https://www.instagram.com/p/${shortcode}/`;
+
+    // Lanzar dos peticiones concurrentes idénticas en paralelo con Promise.all
+    const req1 = app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        title: 'Evento Concurrente de Prueba',
+        image_url: 'https://images.vayaplan.com/proposals/concurrent.jpg',
+        venue_id: testVenueId,
+      }),
+    });
+
+    const req2 = app.request('/api/v1/admin/proposals/manual', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: canonicalUrl,
+        title: 'Evento Concurrente de Prueba',
+        image_url: 'https://images.vayaplan.com/proposals/concurrent.jpg',
+        venue_id: testVenueId,
+      }),
+    });
+
+    const [res1, res2] = await Promise.all([req1, req2]);
+    const statuses = [res1.status, res2.status].sort();
+
+    // Exactamente una debe ganar (201) y la otra debe ser rechazada por duplicado (409)
+    expect(statuses).toEqual([201, 409]);
+
+    const res201 = res1.status === 201 ? res1 : res2;
+    const res409 = res1.status === 409 ? res1 : res2;
+
+    const data201 = await res201.json();
+    const data409 = await res409.json();
+
+    expect(data201.success).toBe(true);
+    createdProposalIds.push(data201.proposal.id);
+
+    expect(data409.error).toBe('duplicate_proposal');
+    expect(data409.message).toContain('ya existe como propuesta');
+    expect(data409.proposal.id).toBe(data201.proposal.id);
+
+    // Verificar en la base de datos que solo existe 1 registro para esta dedupe_key
+    const countRes = await testPool.query(
+      `SELECT COUNT(*) as count FROM curation_proposals WHERE dedupe_key = $1;`,
+      [`instagram_${shortcode}`]
+    );
+    expect(Number(countRes.rows[0].count)).toBe(1);
+  });
 });

@@ -1397,38 +1397,9 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
   const priceNote = body.price_note ? String(body.price_note).trim().slice(0, 255) : null;
   const caption = body.caption ? String(body.caption).trim() : '';
 
-  // 9. Comprobar duplicados por shortcode y URL en curation_proposals y events
-  const dupProp = await query(
-    `SELECT id, review_status FROM curation_proposals WHERE instagram_post_shortcode = $1 OR source_url = $2 LIMIT 1;`,
-    [shortcode, canonicalUrl]
-  );
-  if (dupProp.rows.length > 0) {
-    return c.json(
-      {
-        error: 'duplicate_proposal',
-        message: `Esta publicación ya existe como propuesta (#${dupProp.rows[0].id}, estado: ${dupProp.rows[0].review_status}).`,
-        proposal: dupProp.rows[0],
-      },
-      409
-    );
-  }
-
-  const dupEvent = await query(
-    `SELECT id FROM events WHERE source_url = $1 OR source_url = $2 LIMIT 1;`,
-    [canonicalUrl, canonicalUrl.replace(/\/$/, '')]
-  );
-  if (dupEvent.rows.length > 0) {
-    return c.json(
-      {
-        error: 'event_already_exists',
-        message: `Esta publicación ya tiene un evento en catálogo (#${dupEvent.rows[0].id}).`,
-        event: dupEvent.rows[0],
-      },
-      409
-    );
-  }
-
-  // 10. Inserción como propuesta pendiente
+  // 9. Concurrencia atómica: transacción dedicada y pg_advisory_xact_lock sobre el hash de dedupeKey.
+  // Impide dos altas simultáneas con la misma dedupe_key (ej. doble clic o peticiones concurrentes)
+  // sin bloquear altas de publicaciones diferentes y sin requerir cambios de esquema de BD.
   const r2Key = extractR2Key(imageUrl);
   const dedupeKey = 'instagram_' + shortcode;
 
@@ -1491,8 +1462,62 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
     priceNote,
   ];
 
-  const insertRes = await query(insertSql, insertParams);
-  const createdProposal = insertRes.rows[0];
+  const client = await getClient();
+  let createdProposal: any;
+
+  try {
+    await client.query('BEGIN');
+
+    // Bloqueo consultivo a nivel de transacción sobre el hash de dedupeKey
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1));`, [dedupeKey]);
+
+    // Comprobar duplicados por dedupe_key, shortcode y URL dentro de la transacción serializada
+    const dupProp = await client.query(
+      `SELECT id, review_status FROM curation_proposals 
+       WHERE dedupe_key = $1 OR instagram_post_shortcode = $2 OR source_url = $3 OR source_url = $4 
+       LIMIT 1;`,
+      [dedupeKey, shortcode, canonicalUrl, canonicalUrl.replace(/\/$/, '')]
+    );
+
+    if (dupProp.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return c.json(
+        {
+          error: 'duplicate_proposal',
+          message: `Esta publicación ya existe como propuesta (#${dupProp.rows[0].id}, estado: ${dupProp.rows[0].review_status}).`,
+          proposal: dupProp.rows[0],
+        },
+        409
+      );
+    }
+
+    const dupEvent = await client.query(
+      `SELECT id FROM events WHERE source_url = $1 OR source_url = $2 LIMIT 1;`,
+      [canonicalUrl, canonicalUrl.replace(/\/$/, '')]
+    );
+
+    if (dupEvent.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return c.json(
+        {
+          error: 'event_already_exists',
+          message: `Esta publicación ya tiene un evento en catálogo (#${dupEvent.rows[0].id}).`,
+          event: dupEvent.rows[0],
+        },
+        409
+      );
+    }
+
+    const insertRes = await client.query(insertSql, insertParams);
+    createdProposal = insertRes.rows[0];
+
+    await client.query('COMMIT');
+  } catch (dbErr) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw dbErr;
+  } finally {
+    client.release();
+  }
 
   console.log(
     JSON.stringify({
