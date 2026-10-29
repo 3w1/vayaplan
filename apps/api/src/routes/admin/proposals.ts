@@ -1817,19 +1817,46 @@ adminProposalsRoutes.post('/proposals/story-retention/execute', async (c) => {
     );
   }
 
+  if (!body.previewToken || typeof body.previewToken !== 'string' || !body.previewToken.trim()) {
+    return c.json(
+      {
+        error: 'preview_token_required',
+        code: 'preview_token_required',
+        message: 'Para ejecutar la purga debes enviar el previewToken obtenido en la vista previa (/preview). Esto garantiza que no se borre un lote distinto al revisado.',
+        canPreview: true,
+        previewUrl: '/api/v1/admin/proposals/story-retention/preview',
+      },
+      400
+    );
+  }
+
   const targetProposalId = body.targetProposalId ? parseInt(String(body.targetProposalId), 10) : undefined;
   const result = await executeStoryRetentionPolicy({
     dryRun: false,
+    previewToken: body.previewToken.trim(),
     targetProposalId: isNaN(targetProposalId as any) ? undefined : targetProposalId,
     operatorEmail: user.email,
   });
 
+  if (!result.success && result.code === 'preview_state_conflict') {
+    return c.json(
+      {
+        error: result.code,
+        code: result.code,
+        message: result.error,
+        canPreview: true,
+        previewUrl: '/api/v1/admin/proposals/story-retention/preview',
+      },
+      409
+    );
+  }
+
   return c.json(
     {
-      success: true,
+      success: result.success,
       message: 'Política de retención ejecutada con éxito.',
       result,
     },
-    200
+    result.success ? 200 : 500
   );
 });

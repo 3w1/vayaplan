@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { query } from '@vayaplan/db';
 import { deleteR2Object } from '../r2-client';
 
@@ -7,7 +8,7 @@ import { deleteR2Object } from '../r2-client';
  */
 export const STORY_PENDING_RETENTION_DAYS = 7;
 export const STORY_REJECTED_RETENTION_DAYS = 7;
-export const STORY_EVENT_MEDIA_GRACE_DAYS = 2; // 48h tras la celebración del evento
+export const STORY_EVENT_MEDIA_GRACE_DAYS = 2; // 48h tras el término real del evento
 export const STORY_MAX_ACQUISITION_RETENTION_DAYS = 30; // Límite general máximo desde adquisición
 export const STORY_AUDIT_LOGS_RETENTION_DAYS = 365; // 1 año para auditoría contable de costes
 
@@ -17,6 +18,13 @@ export type StoryRetentionActionType =
   | 'purge_proposal_r2_image'
   | 'archive_proposal_metadata'
   | 'detach_event_story_image';
+
+export interface StorySharedReferenceTarget {
+  targetType: 'proposal' | 'event' | 'image_decision';
+  targetId: number;
+  targetTitle: string;
+  field: string;
+}
 
 export interface StoryRetentionItemEvaluation {
   proposalId: number;
@@ -28,6 +36,9 @@ export interface StoryRetentionItemEvaluation {
   isExpired: boolean;
   eventId: number | null;
   eventDate: string | null;
+  eventEndDate: string | null;
+  eventCalculatedEndUtc: string | null;
+  cityTimezone: string;
   r2Key: string | null;
   imageUrl: string | null;
   isImageSubstituted: boolean;
@@ -36,16 +47,13 @@ export interface StoryRetentionItemEvaluation {
   recommendedAction: StoryRetentionActionType;
   reason: string;
   crossReferenceCount: number;
-  sharedReferenceDetails?: Array<{
-    proposalId: number;
-    title: string;
-    reviewStatus: string;
-  }>;
+  sharedReferenceDetails?: StorySharedReferenceTarget[];
   mediaPhysicalPurgeBlockedBySharedReferences?: boolean;
 }
 
 export interface StoryRetentionReport {
   evaluatedAt: string;
+  previewToken: string;
   dryRun: boolean;
   summary: {
     totalEvaluated: number;
@@ -61,7 +69,11 @@ export interface StoryRetentionReport {
 }
 
 export interface StoryRetentionExecutionResult {
+  success: boolean;
+  code?: string;
+  error?: string;
   executedAt: string;
+  previewTokenUsed?: string;
   dryRun: boolean;
   purgedR2ObjectsCount: number;
   deferredR2PurgesCount: number;
@@ -80,6 +92,65 @@ export interface StoryRetentionExecutionResult {
 }
 
 /**
+ * Comprueba si existen columnas añadidas por la migración 021 para garantizar
+ * compatibilidad tanto antes como después de su ejecución en base de datos.
+ */
+async function checkSchemaProvenanceSupport(): Promise<{
+  hasEventImageProvenance: boolean;
+  hasProposalMediaSourceProvenance: boolean;
+  hasMediaPurgedAt: boolean;
+  hasStoryMediaDetachedAt: boolean;
+}> {
+  try {
+    const res = await query(`
+      SELECT table_name, column_name 
+      FROM information_schema.columns 
+      WHERE table_name IN ('curation_proposals', 'events') 
+        AND column_name IN (
+          'image_provenance', 
+          'media_source_provenance', 
+          'media_purged_at', 
+          'story_media_detached_at'
+        );
+    `);
+    const found = new Set(res.rows.map((r: any) => `${r.table_name}.${r.column_name}`));
+    return {
+      hasEventImageProvenance: found.has('events.image_provenance'),
+      hasProposalMediaSourceProvenance: found.has('curation_proposals.media_source_provenance'),
+      hasMediaPurgedAt: found.has('curation_proposals.media_purged_at'),
+      hasStoryMediaDetachedAt: found.has('events.story_media_detached_at'),
+    };
+  } catch {
+    return {
+      hasEventImageProvenance: false,
+      hasProposalMediaSourceProvenance: false,
+      hasMediaPurgedAt: false,
+      hasStoryMediaDetachedAt: false,
+    };
+  }
+}
+
+/**
+ * Genera un token criptográfico determinista vinculado al lote exacto evaluado.
+ * Si cualquier registro, fecha, acción o referencia cambia entre la vista previa
+ * y la ejecución, el token cambiará y el control optimista abortará la purga.
+ */
+function computePreviewToken(items: StoryRetentionItemEvaluation[]): string {
+  const tokenItems = items
+    .filter((i) => i.recommendedAction !== 'keep_active')
+    .map(
+      (i) =>
+        `${i.proposalId}:${i.reviewStatus}:${i.expiresAt}:${i.r2Key || ''}:${i.recommendedAction}:${
+          i.crossReferenceCount
+        }:${i.eventId || ''}:${i.isImageSubstituted ? 'sub' : 'orig'}`
+    )
+    .sort()
+    .join('||');
+
+  return 'prv_' + crypto.createHash('sha256').update(tokenItems || 'empty_batch').digest('hex').slice(0, 32);
+}
+
+/**
  * Evalúa en modo SOLO LECTURA (dry-run) el inventario de historias de Instagram
  * y determina qué elementos han alcanzado su vencimiento según las obligaciones aplicables.
  */
@@ -89,6 +160,15 @@ export async function evaluateStoryRetentionDryRun(options: {
 } = {}): Promise<StoryRetentionReport> {
   const now = options.now || new Date();
   const nowMs = now.getTime();
+  const schemaSupport = await checkSchemaProvenanceSupport();
+
+  const eventProvCol = schemaSupport.hasEventImageProvenance
+    ? 'e.image_provenance AS event_image_provenance'
+    : 'NULL::varchar AS event_image_provenance';
+
+  const propProvCol = schemaSupport.hasProposalMediaSourceProvenance
+    ? 'cp.media_source_provenance'
+    : 'NULL::varchar AS media_source_provenance';
 
   let sql = `
     SELECT 
@@ -103,11 +183,28 @@ export async function evaluateStoryRetentionDryRun(options: {
       cp.created_at,
       cp.updated_at,
       cp.reviewed_at,
+      ${propProvCol},
       e.id AS event_id,
+      e.title AS event_title,
       e.editorial_date AS event_editorial_date,
-      e.image_url AS event_image_url
+      e.end_date AS event_end_date,
+      e.start_time AS event_start_time,
+      e.end_time AS event_end_time,
+      e.time_status AS event_time_status,
+      e.image_url AS event_image_url,
+      ${eventProvCol},
+      COALESCE(c.timezone, 'Europe/Madrid') AS city_timezone,
+      CASE
+        WHEN e.end_time IS NOT NULL THEN e.end_time
+        WHEN e.end_date IS NOT NULL THEN (e.end_date || ' 23:59:59.999')::timestamp AT TIME ZONE COALESCE(c.timezone, 'Europe/Madrid')
+        WHEN e.start_time IS NOT NULL AND e.start_time + INTERVAL '6 hours' > (e.editorial_date || ' 23:59:59.999')::timestamp AT TIME ZONE COALESCE(c.timezone, 'Europe/Madrid') 
+          THEN e.start_time + INTERVAL '6 hours'
+        WHEN e.editorial_date IS NOT NULL THEN (e.editorial_date || ' 23:59:59.999')::timestamp AT TIME ZONE COALESCE(c.timezone, 'Europe/Madrid')
+        ELSE NULL
+      END AS calculated_event_end_utc
     FROM curation_proposals cp
     LEFT JOIN events e ON cp.created_event_id = e.id
+    LEFT JOIN cities c ON e.city_id = c.id
     WHERE (cp.dedupe_key LIKE 'instagram_story_%' 
        OR cp.source_url LIKE '%/stories/%')
   `;
@@ -142,6 +239,9 @@ export async function evaluateStoryRetentionDryRun(options: {
     const imageUrl = row.image_url || null;
     const eventId = row.event_id ? parseInt(String(row.event_id), 10) : null;
     const eventDate = row.event_editorial_date ? String(row.event_editorial_date).slice(0, 10) : null;
+    const eventEndDate = row.event_end_date ? String(row.event_end_date).slice(0, 10) : null;
+    const eventCalculatedEndUtc = row.calculated_event_end_utc ? new Date(row.calculated_event_end_utc).toISOString() : null;
+    const cityTimezone = row.city_timezone || 'Europe/Madrid';
     const eventImageUrl = row.event_image_url || null;
 
     let expiresAtDate: Date;
@@ -157,43 +257,82 @@ export async function evaluateStoryRetentionDryRun(options: {
       acquiredAtDate.getTime() + STORY_MAX_ACQUISITION_RETENTION_DAYS * 24 * 60 * 60 * 1000
     );
 
-    // Comprobar referencias cruzadas al mismo r2_key
+    // Comprobación exhaustiva de referencias cruzadas (propuestas, eventos y decisiones de imagen)
     let crossReferenceCount = 0;
-    let sharedReferenceDetails: Array<{ proposalId: number; title: string; reviewStatus: string }> = [];
-    if (r2Key) {
-      const refCheck = await query(
-        `SELECT id, title, review_status
+    const sharedReferenceDetails: StorySharedReferenceTarget[] = [];
+
+    if (r2Key || imageUrl) {
+      // 1. Otras propuestas que usen el mismo r2_key o image_url
+      const propRefs = await query(
+        `SELECT id, title, review_status 
          FROM curation_proposals 
-         WHERE r2_key = $1 AND id <> $2;`,
-        [r2Key, proposalId]
+         WHERE (r2_key = $1 OR (image_url = $2 AND $2 IS NOT NULL)) 
+           AND id <> $3;`,
+        [r2Key, imageUrl, proposalId]
       );
-      crossReferenceCount = refCheck.rows.length;
-      sharedReferenceDetails = refCheck.rows.map((r: any) => ({
-        proposalId: r.id,
-        title: r.title,
-        reviewStatus: r.review_status,
-      }));
+      for (const p of propRefs.rows) {
+        sharedReferenceDetails.push({
+          targetType: 'proposal',
+          targetId: p.id,
+          targetTitle: p.title,
+          field: 'curation_proposals.r2_key/image_url',
+        });
+      }
+
+      // 2. Otros eventos que usen el mismo image_url
+      const evRefs = await query(
+        `SELECT id, title, status 
+         FROM events 
+         WHERE (image_url = $1 OR image_thumb_url = $1 OR image_original_url = $1)
+           AND id <> COALESCE($2, -1);`,
+        [imageUrl, eventId]
+      );
+      for (const ev of evRefs.rows) {
+        sharedReferenceDetails.push({
+          targetType: 'event',
+          targetId: ev.id,
+          targetTitle: ev.title,
+          field: 'events.image_url',
+        });
+      }
+
+      // 3. Decisiones de imágenes adoptadas o archivadas
+      try {
+        const decRefs = await query(
+          `SELECT id, event_id, action, notes 
+           FROM event_image_decisions 
+           WHERE (candidate_key = $1 OR candidate_url = $2)
+             AND action IN ('adopt', 'keep_current');`,
+          [r2Key, imageUrl]
+        );
+        for (const dec of decRefs.rows) {
+          sharedReferenceDetails.push({
+            targetType: 'image_decision',
+            targetId: dec.id,
+            targetTitle: `Decisión para evento #${dec.event_id}`,
+            field: 'event_image_decisions.candidate_key',
+          });
+        }
+      } catch {
+        // Tabla opcional en entornos reducidos
+      }
+
+      crossReferenceCount = sharedReferenceDetails.length;
     }
 
-    if (eventId && eventDate) {
+    if (eventId && row.calculated_event_end_utc) {
       // Caso 1: Propuesta aprobada y convertida en evento
-      // Vencimiento en la fecha más temprana entre:
-      // a) finalización del evento + 48h
-      // b) adquisición + 30 días
-      const eventDateTime = new Date(`${eventDate}T23:59:59.999Z`);
-      const eventGraceDate = new Date(
-        eventDateTime.getTime() + STORY_EVENT_MEDIA_GRACE_DAYS * 24 * 60 * 60 * 1000
-      );
+      // Vencimiento calculado respecto al fin real del evento + 48h (topado a adquisición + 30d)
+      const eventEndMs = new Date(row.calculated_event_end_utc).getTime();
+      const eventGraceDate = new Date(eventEndMs + STORY_EVENT_MEDIA_GRACE_DAYS * 24 * 60 * 60 * 1000);
       expiresAtDate = new Date(Math.min(eventGraceDate.getTime(), maxAcquisitionCapDate.getTime()));
 
-      // Comprobar si el evento ya sustituyó la imagen por material oficial del local
+      // Comprobar si el evento ya sustituyó la imagen
       if (eventImageUrl && imageUrl && eventImageUrl !== imageUrl) {
         isImageSubstituted = true;
         substitutedImageUrl = eventImageUrl;
-        substitutedImageProvenance =
-          eventImageUrl.startsWith('https://r2.vayaplan.com/official_') || eventImageUrl.includes('/official_')
-            ? 'venue_official'
-            : 'independent_source';
+        // No deducir procedencia por la URL: usar procedencia explícita o 'unknown' si no hay evidencia
+        substitutedImageProvenance = row.event_image_provenance || row.media_source_provenance || 'unknown';
         substitutedMediaCount++;
         recommendedAction = 'already_substituted';
 
@@ -201,27 +340,31 @@ export async function evaluateStoryRetentionDryRun(options: {
         if (crossReferenceCount > 0) {
           sharedReferenceConflictCount++;
           mediaPhysicalPurgeBlockedBySharedReferences = true;
-          purgeNotice = `El asset efímero original (${r2Key}) NO se puede purgar físicamente aún de R2 porque tiene ${crossReferenceCount} referencias compartidas (#${sharedReferenceDetails.map((s) => s.proposalId).join(', #')}). El nuevo archivo del evento (${eventImageUrl}) permanece intacto.`;
+          purgeNotice = `El asset efímero original (${r2Key}) NO se puede purgar físicamente aún de R2 porque tiene ${crossReferenceCount} referencias compartidas (#${sharedReferenceDetails
+            .map((s) => s.targetId)
+            .join(', #')}). El nuevo archivo del evento (${eventImageUrl}) permanece intacto.`;
         } else {
-          purgeNotice = `El asset efímero original (${r2Key}) puede purgarse de R2 sin afectar a la nueva imagen del evento (${eventImageUrl}), cuya procedencia identificada es '${substitutedImageProvenance}'.`;
+          purgeNotice = `El asset efímero original (${r2Key}) puede purgarse de R2 sin afectar a la nueva imagen del evento (${eventImageUrl}), cuya procedencia explícitamente registrada es '${substitutedImageProvenance}'.`;
         }
-        reason = `El evento (#${eventId}) ya cuenta con una imagen independiente aportada para el local. ${purgeNotice}`;
+        reason = `El evento (#${eventId}) cuenta con una imagen independiente. ${purgeNotice}`;
       } else if (nowMs > expiresAtDate.getTime()) {
         expiredEventMediaCount++;
         recommendedAction = 'detach_event_story_image';
-        let detailNotice = `El evento (#${eventId}) se celebró el ${eventDate} y ha alcanzado su límite de conservación (${expiresAtDate.toISOString().slice(0, 10)}). Procede desacoplar la imagen efímera del evento, conservando los datos factuales intactos.`;
+        let detailNotice = `El evento (#${eventId}) finalizó (fin calculado: ${row.calculated_event_end_utc}) y ha alcanzado su límite de conservación (${expiresAtDate.toISOString().slice(0, 10)}). Procede desacoplar la imagen efímera del evento en base de datos.`;
         if (crossReferenceCount > 0) {
           sharedReferenceConflictCount++;
           mediaPhysicalPurgeBlockedBySharedReferences = true;
-          detailNotice += ` ATENCIÓN: El archivo físico en R2 (${r2Key}) NO se purgará de inmediato porque está compartido por otras ${crossReferenceCount} propuestas activas (#${sharedReferenceDetails.map((s) => s.proposalId).join(', #')}).`;
+          detailNotice += ` ATENCIÓN: La purga física en R2 (${r2Key}) se bloquea temporalmente por ${crossReferenceCount} referencias compartidas activas (#${sharedReferenceDetails
+            .map((s) => s.targetId)
+            .join(', #')}).`;
         } else {
-          detailNotice += ` Procede la purga física del archivo efímero R2.`;
+          detailNotice += ` Procede la purga física del archivo efímero en R2.`;
         }
         reason = detailNotice;
       } else {
         activeCount++;
         recommendedAction = 'keep_active';
-        reason = `Evento futuro o en curso (#${eventId}, fecha: ${eventDate}). El cartel efímero permanece activo hasta ${expiresAtDate.toISOString().slice(0, 10)} (mínimo entre celebración + 48h y adquisición + 30 días).`;
+        reason = `Evento futuro o en curso (#${eventId}, fin calculado: ${row.calculated_event_end_utc} en ${cityTimezone}). El cartel efímero permanece activo hasta ${expiresAtDate.toISOString().slice(0, 10)}.`;
       }
     } else if (reviewStatus === 'rejected') {
       // Caso 2: Propuesta rechazada
@@ -239,7 +382,9 @@ export async function evaluateStoryRetentionDryRun(options: {
         if (crossReferenceCount > 0) {
           sharedReferenceConflictCount++;
           mediaPhysicalPurgeBlockedBySharedReferences = true;
-          detailNotice += ` ATENCIÓN: El archivo en R2 se preserva temporalmente por ${crossReferenceCount} referencias compartidas (#${sharedReferenceDetails.map((s) => s.proposalId).join(', #')}).`;
+          detailNotice += ` ATENCIÓN: El archivo en R2 se preserva temporalmente por ${crossReferenceCount} referencias compartidas (#${sharedReferenceDetails
+            .map((s) => s.targetId)
+            .join(', #')}).`;
         }
         reason = detailNotice;
       } else {
@@ -286,6 +431,9 @@ export async function evaluateStoryRetentionDryRun(options: {
       isExpired,
       eventId,
       eventDate,
+      eventEndDate,
+      eventCalculatedEndUtc,
+      cityTimezone,
       r2Key,
       imageUrl,
       isImageSubstituted,
@@ -299,8 +447,11 @@ export async function evaluateStoryRetentionDryRun(options: {
     });
   }
 
+  const previewToken = computePreviewToken(items);
+
   return {
     evaluatedAt: now.toISOString(),
+    previewToken,
     dryRun: true,
     summary: {
       totalEvaluated: items.length,
@@ -317,21 +468,48 @@ export async function evaluateStoryRetentionDryRun(options: {
 }
 
 /**
+ * Cuenta los elementos vencidos pendientes de purga o desacoplamiento.
+ * Utilizado por el coordinador para bloquear nuevas importaciones si hay backlog acumulado.
+ */
+export async function countPendingExpiredStoryItems(options: { now?: Date } = {}): Promise<{
+  totalExpired: number;
+  expiredPending: number;
+  expiredRejected: number;
+  expiredEventMedia: number;
+}> {
+  const report = await evaluateStoryRetentionDryRun(options);
+  const totalExpired =
+    report.summary.expiredPendingCount +
+    report.summary.expiredRejectedCount +
+    report.summary.expiredEventMediaCount;
+
+  return {
+    totalExpired,
+    expiredPending: report.summary.expiredPendingCount,
+    expiredRejected: report.summary.expiredRejectedCount,
+    expiredEventMedia: report.summary.expiredEventMediaCount,
+  };
+}
+
+/**
  * Ejecución de la política de retención.
  * Por defecto opera estrictamente en MODO DRY-RUN sin alterar la base de datos ni R2.
- * Requiere options.dryRun === false para ejecutar purgas y desacoplamientos reales.
+ * Cuando dryRun === false, EXIGE confirmación explícita vinculada al previewToken revisado.
  */
 export async function executeStoryRetentionPolicy(options: {
   dryRun?: boolean;
   now?: Date;
   targetProposalId?: number;
   operatorEmail?: string;
+  previewToken?: string;
 } = {}): Promise<StoryRetentionExecutionResult> {
   const isDryRun = options.dryRun !== false; // Default true
   const evaluation = await evaluateStoryRetentionDryRun({
     now: options.now,
     targetProposalId: options.targetProposalId,
   });
+
+  const schemaSupport = await checkSchemaProvenanceSupport();
 
   const auditLog: Array<{
     targetType: 'proposal' | 'event';
@@ -391,7 +569,9 @@ export async function executeStoryRetentionPolicy(options: {
     }
 
     return {
+      success: true,
       executedAt: evaluation.evaluatedAt,
+      previewTokenUsed: evaluation.previewToken,
       dryRun: true,
       purgedR2ObjectsCount,
       deferredR2PurgesCount,
@@ -402,7 +582,40 @@ export async function executeStoryRetentionPolicy(options: {
     };
   }
 
-  // Ejecución real autorizada (cuando dryRun === false)
+  // Validación de Control Optimista vinculada a previewToken (Requisito 4)
+  if (!options.previewToken) {
+    return {
+      success: false,
+      code: 'preview_token_required',
+      error: 'Se requiere el previewToken obtenido en la vista previa (/preview) para confirmar la ejecución vinculada al lote revisado.',
+      executedAt: evaluation.evaluatedAt,
+      dryRun: false,
+      purgedR2ObjectsCount: 0,
+      deferredR2PurgesCount: 0,
+      detachedEventImagesCount: 0,
+      archivedProposalsCount: 0,
+      errors: [],
+      auditLog: [],
+    };
+  }
+
+  if (options.previewToken !== evaluation.previewToken) {
+    return {
+      success: false,
+      code: 'preview_state_conflict',
+      error: 'El estado del catálogo, vencimientos o referencias cambió desde que se generó la vista previa (el previewToken no coincide). Genera una nueva vista previa antes de ejecutar.',
+      executedAt: evaluation.evaluatedAt,
+      dryRun: false,
+      purgedR2ObjectsCount: 0,
+      deferredR2PurgesCount: 0,
+      detachedEventImagesCount: 0,
+      archivedProposalsCount: 0,
+      errors: [],
+      auditLog: [],
+    };
+  }
+
+  // Ejecución real autorizada (cuando dryRun === false y previewToken coincide)
   const nowIso = (options.now || new Date()).toISOString();
   const operator = options.operatorEmail || 'admin_manual_execution';
 
@@ -412,15 +625,19 @@ export async function executeStoryRetentionPolicy(options: {
     try {
       // 1. Desacoplamiento seguro de imagen en el evento (NUNCA elimina el evento)
       if (item.recommendedAction === 'detach_event_story_image' && item.eventId) {
-        await query(
-          `UPDATE events 
-           SET image_url = NULL, 
-               image_thumb_url = NULL, 
-               image_original_url = NULL,
-               updated_at = NOW() 
-           WHERE id = $1;`,
-          [item.eventId]
-        );
+        let updateEvSql = `
+          UPDATE events 
+          SET image_url = NULL, 
+              image_thumb_url = NULL, 
+              image_original_url = NULL,
+              updated_at = NOW()
+        `;
+        if (schemaSupport.hasStoryMediaDetachedAt) {
+          updateEvSql += `, story_media_detached_at = NOW()`;
+        }
+        updateEvSql += ` WHERE id = $1;`;
+
+        await query(updateEvSql, [item.eventId]);
         detachedEventImagesCount++;
         auditLog.push({
           targetType: 'event',
@@ -433,11 +650,13 @@ export async function executeStoryRetentionPolicy(options: {
       }
 
       // 2. Eliminación física en Cloudflare R2 solo si NO tiene referencias compartidas
+      let r2PhysicallyPurged = false;
       if (item.r2Key) {
         if (item.crossReferenceCount === 0) {
           try {
             await deleteR2Object(item.r2Key);
             purgedR2ObjectsCount++;
+            r2PhysicallyPurged = true;
             auditLog.push({
               targetType: 'proposal',
               targetId: item.proposalId,
@@ -452,6 +671,7 @@ export async function executeStoryRetentionPolicy(options: {
             if (!r2Err.message?.includes('NotFound') && !r2Err.message?.includes('NoSuchKey')) {
               throw r2Err;
             }
+            r2PhysicallyPurged = true; // Objeto ya no existe físicamente
           }
         } else {
           deferredR2PurgesCount++;
@@ -462,25 +682,34 @@ export async function executeStoryRetentionPolicy(options: {
             r2KeyHash: `hash_${item.r2Key.slice(-16)}`,
             timestamp: nowIso,
             operatorEmail: operator,
-            details: `Purga física en R2 aplazada porque el asset está compartido con ${item.crossReferenceCount} propuestas activas.`,
+            details: `Purga física en R2 aplazada porque el asset está compartido con ${item.crossReferenceCount} entidades activas.`,
           });
         }
+      } else {
+        r2PhysicallyPurged = true; // No había r2Key que purgar
       }
 
       // 3. Purga y anonimización de propuesta en PostgreSQL (eliminando el caption completo)
-      await query(
-        `UPDATE curation_proposals 
-         SET r2_key = NULL,
-             image_url = 'placeholder://category/' || COALESCE(category, 'gastronomia'),
-             caption = NULL,
-             review_status = CASE 
-               WHEN review_status = 'pending' THEN 'archived' 
-               ELSE review_status 
-             END,
-             updated_at = NOW()
-         WHERE id = $1;`,
-        [item.proposalId]
-      );
+      // media_purged_at SOLO se marca si la purga física en R2 se completó sin bloqueos
+      let updatePropSql = `
+        UPDATE curation_proposals 
+        SET r2_key = NULL,
+            image_url = 'placeholder://category/' || COALESCE(category, 'gastronomia'),
+            caption = NULL,
+            review_status = CASE 
+              WHEN review_status = 'pending' THEN 'archived' 
+              ELSE review_status 
+            END,
+            updated_at = NOW()
+      `;
+
+      if (schemaSupport.hasMediaPurgedAt && r2PhysicallyPurged) {
+        updatePropSql += `, media_purged_at = NOW()`;
+      }
+
+      updatePropSql += ` WHERE id = $1;`;
+
+      await query(updatePropSql, [item.proposalId]);
       archivedProposalsCount++;
 
       auditLog.push({
@@ -489,7 +718,9 @@ export async function executeStoryRetentionPolicy(options: {
         action: 'proposal_metadata_and_caption_purged',
         timestamp: nowIso,
         operatorEmail: operator,
-        details: `Caption completo eliminado y propuesta marcada como purgada conservando dedupe_key para evitar reimportaciones.`,
+        details: `Caption completo eliminado. media_purged_at: ${
+          r2PhysicallyPurged ? 'marcado' : 'pendiente_por_referencias_compartidas'
+        }. dedupe_key preservada.`,
       });
     } catch (itemErr: any) {
       errors.push({
@@ -500,7 +731,9 @@ export async function executeStoryRetentionPolicy(options: {
   }
 
   return {
+    success: errors.length === 0,
     executedAt: nowIso,
+    previewTokenUsed: options.previewToken,
     dryRun: false,
     purgedR2ObjectsCount,
     deferredR2PurgesCount,

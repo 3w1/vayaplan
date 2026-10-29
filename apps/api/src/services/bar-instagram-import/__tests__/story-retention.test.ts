@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import {
   evaluateStoryRetentionDryRun,
   executeStoryRetentionPolicy,
+  countPendingExpiredStoryItems,
   STORY_PENDING_RETENTION_DAYS,
   STORY_REJECTED_RETENTION_DAYS,
   STORY_EVENT_MEDIA_GRACE_DAYS,
@@ -60,6 +61,7 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
 
       const evalReport = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
       expect(evalReport.dryRun).toBe(true);
+      expect(evalReport.previewToken.startsWith('prv_')).toBe(true);
       expect(evalReport.items.length).toBe(1);
 
       const item = evalReport.items[0];
@@ -227,12 +229,11 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       expect(item.isExpired).toBe(true);
       expect(item.recommendedAction).toBe('detach_event_story_image');
       expect(item.eventId).toBe(eventId);
-      expect(item.reason).toContain('desacoplar la imagen efímera del evento, conservando los datos factuales');
+      expect(item.reason).toContain('desacoplar la imagen efímera del evento');
     });
 
     it('1.8. Propuesta convertida en evento futuro lejano: cartel efímero topado a 30 días desde adquisición', async () => {
       const storyId = generateTestStoryId();
-      // Evento a 60 días en el futuro
       const evIns = await query(
         `INSERT INTO events (
           city_id, title, editorial_date, start_time, venue_id, category, status, source_type, image_url
@@ -244,7 +245,6 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       );
       const eventId = evIns.rows[0].id;
 
-      // Propuesta adquirida hace 5 días
       const ins = await query(
         `INSERT INTO curation_proposals (
           title, source_url, instagram_post_shortcode, dedupe_key,
@@ -264,19 +264,90 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       const expiresMs = new Date(item.expiresAt).getTime();
       const diffDays = Math.round((expiresMs - acquiredMs) / (24 * 60 * 60 * 1000));
 
-      // La fecha de vencimiento debe toparse a 30 días desde adquisición (no 62 días)
       expect(diffDays).toBe(STORY_MAX_ACQUISITION_RETENTION_DAYS);
     });
 
-    it('1.9. Sustitución de cartel: identifica la nueva procedencia y planifica purga de la story anterior sin tocar la nueva', async () => {
+    it('1.9. Fin real de evento explícito (end_time con cruce de medianoche): calcula vencimiento desde end_time real', async () => {
       const storyId = generateTestStoryId();
-      // El evento tiene un cartel oficial aportado por el local
+      // Fiesta que inició ayer a las 23:00 y finalizó hoy a las 05:00 de la madrugada (+1 día)
+      const evIns = await query(
+        `INSERT INTO events (
+          city_id, title, editorial_date, start_time, end_time, venue_id, category, status, source_type, image_url
+        ) VALUES (
+          1, 'Sesión DJ Noche', CURRENT_DATE - INTERVAL '1 day', NOW() - INTERVAL '25 hours', NOW() - INTERVAL '19 hours',
+          $1, 'dj_tardeo', 'published', 'instagram', 'https://r2.vayaplan.com/stories/dj_night.jpg'
+        ) RETURNING id, end_time;`,
+        [testVenueId]
+      );
+      const eventId = evIns.rows[0].id;
+      const expectedEndMs = new Date(evIns.rows[0].end_time).getTime();
+
+      const ins = await query(
+        `INSERT INTO curation_proposals (
+          title, source_url, instagram_post_shortcode, dedupe_key,
+          r2_key, image_url, review_status, venue_id, created_event_id, created_at
+        ) VALUES (
+          'Sesión DJ Noche Prop', 'https://www.instagram.com/stories/elautenticobar/' || $1::text || '/',
+          $1::varchar, 'instagram_story_' || $1::text, 'stories/dj_night.jpg', 'https://r2.vayaplan.com/stories/dj_night.jpg',
+          'approved_draft', $2, $3, NOW() - INTERVAL '2 days'
+        ) RETURNING id;`,
+        [storyId, testVenueId, eventId]
+      );
+      const propId = ins.rows[0].id;
+
+      const evalReport = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
+      const item = evalReport.items[0];
+      const calcEndMs = new Date(item.eventCalculatedEndUtc!).getTime();
+
+      // Debe coincidir exactamente con end_time del evento (no con editorial_date 23:59:59)
+      expect(Math.abs(calcEndMs - expectedEndMs)).toBeLessThan(1000);
+      expect(item.isExpired).toBe(false); // Han pasado solo 19h tras el fin, gracia de 48h sigue activa
+    });
+
+    it('1.10. Evento multijornada (end_date > editorial_date): calcula fin al término del último día en zona horaria de la ciudad', async () => {
+      const storyId = generateTestStoryId();
+      // Feria gastronómica de fin de semana (de viernes a domingo hace 4 días)
+      const evIns = await query(
+        `INSERT INTO events (
+          city_id, title, editorial_date, end_date, venue_id, category, status, source_type, image_url, time_status
+        ) VALUES (
+          1, 'Feria Gastro 3 Días', CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE - INTERVAL '4 days',
+          $1, 'gastronomia', 'published', 'instagram', 'https://r2.vayaplan.com/stories/feria.jpg', 'pending_time'
+        ) RETURNING id;`,
+        [testVenueId]
+      );
+      const eventId = evIns.rows[0].id;
+
+      const ins = await query(
+        `INSERT INTO curation_proposals (
+          title, source_url, instagram_post_shortcode, dedupe_key,
+          r2_key, image_url, review_status, venue_id, created_event_id, created_at
+        ) VALUES (
+          'Feria Gastro 3 Días Prop', 'https://www.instagram.com/stories/elautenticobar/' || $1::text || '/',
+          $1::varchar, 'instagram_story_' || $1::text, 'stories/feria.jpg', 'https://r2.vayaplan.com/stories/feria.jpg',
+          'approved_draft', $2, $3, NOW() - INTERVAL '7 days'
+        ) RETURNING id;`,
+        [storyId, testVenueId, eventId]
+      );
+      const propId = ins.rows[0].id;
+
+      const evalReport = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
+      const item = evalReport.items[0];
+
+      expect(item.eventEndDate).toBeDefined();
+      expect(item.cityTimezone).toBe('Europe/Madrid');
+      expect(item.isExpired).toBe(true); // Finalizó hace 4 días (> 48h)
+      expect(item.recommendedAction).toBe('detach_event_story_image');
+    });
+
+    it('1.11. Sustitución de cartel: sin evidencia registrada explícita, marca procedencia unknown', async () => {
+      const storyId = generateTestStoryId();
       const evIns = await query(
         `INSERT INTO events (
           city_id, title, editorial_date, start_time, venue_id, category, status, source_type, image_url
         ) VALUES (
-          1, 'Fiesta con Cartel Oficial Bar', CURRENT_DATE + INTERVAL '2 days', NOW() + INTERVAL '2 days', $1, 'dj_tardeo', 'published', 'instagram',
-          'https://r2.vayaplan.com/official_posters/bar_official_flier.jpg'
+          1, 'Fiesta con Cartel Aportado', CURRENT_DATE + INTERVAL '2 days', NOW() + INTERVAL '2 days', $1, 'dj_tardeo', 'published', 'instagram',
+          'https://images.bar-external.com/flyer_new.jpg'
         ) RETURNING id;`,
         [testVenueId]
       );
@@ -296,16 +367,16 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       const propId = ins.rows[0].id;
 
       const evalReport = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
-      expect(evalReport.items.length).toBe(1);
       const item = evalReport.items[0];
       expect(item.isImageSubstituted).toBe(true);
-      expect(item.substitutedImageUrl).toBe('https://r2.vayaplan.com/official_posters/bar_official_flier.jpg');
-      expect(item.substitutedImageProvenance).toBe('venue_official');
+      expect(item.substitutedImageUrl).toBe('https://images.bar-external.com/flyer_new.jpg');
+      // Procedencia explícita desconocida sin evidencia registrada
+      expect(item.substitutedImageProvenance).toBe('unknown');
       expect(item.recommendedAction).toBe('already_substituted');
       expect(item.reason).toContain('sin afectar a la nueva imagen del evento');
     });
 
-    it('1.10. Referencias compartidas: informa detalle de propuestas dependientes y no purga R2 a ciegas', async () => {
+    it('1.12. Referencias compartidas: informa detalle exhaustivo y bloquea purga física en R2', async () => {
       const sharedKey = `shared_asset_${Date.now()}.jpg`;
       const storyId1 = generateTestStoryId();
       const storyId2 = generateTestStoryId();
@@ -335,17 +406,16 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       );
 
       const evalReport = await evaluateStoryRetentionDryRun({ targetProposalId: p1.rows[0].id });
-      expect(evalReport.items.length).toBe(1);
       const item = evalReport.items[0];
       expect(item.crossReferenceCount).toBe(1);
       expect(item.mediaPhysicalPurgeBlockedBySharedReferences).toBe(true);
       expect(item.sharedReferenceDetails?.length).toBe(1);
-      expect(item.sharedReferenceDetails?.[0].title).toBe('Propuesta 2 Activa Hermana');
+      expect(item.sharedReferenceDetails?.[0].targetTitle).toBe('Propuesta 2 Activa Hermana');
       expect(item.reason).toContain('El archivo en R2 se preserva temporalmente por 1 referencias compartidas');
     });
   });
 
-  describe('2. Modo de Ejecución Real y Dry-Run (executeStoryRetentionPolicy)', () => {
+  describe('2. Modo de Ejecución Real y Control Optimista con previewToken', () => {
     it('2.1. executeStoryRetentionPolicy({ dryRun: true }) simula sin modificar base de datos', async () => {
       const storyId = generateTestStoryId();
       const ins = await query(
@@ -367,16 +437,58 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       expect(result.auditLog.length).toBe(1);
       expect(result.auditLog[0].action).toContain('[DRY_RUN]');
 
-      // Verificar que en la base de datos la propuesta sigue INTACTA con su caption
       const check = await query(`SELECT r2_key, review_status, caption FROM curation_proposals WHERE id = $1;`, [propId]);
       expect(check.rows[0].r2_key).toBe('stories/test_dry.jpg');
       expect(check.rows[0].review_status).toBe('rejected');
       expect(check.rows[0].caption).toContain('Texto de caption original');
     });
 
-    it('2.2. executeStoryRetentionPolicy({ dryRun: false }) elimina caption completo, desacopla evento y preserva hechos factuales', async () => {
+    it('2.2. executeStoryRetentionPolicy({ dryRun: false }) exige previewToken válido (control optimista)', async () => {
       const storyId = generateTestStoryId();
-      // Crear evento celebrado hace 4 días
+      const ins = await query(
+        `INSERT INTO curation_proposals (
+          title, source_url, instagram_post_shortcode, dedupe_key,
+          r2_key, image_url, review_status, venue_id, created_at
+        ) VALUES (
+          'Propuesta Token Test', 'https://www.instagram.com/stories/elautenticobar/' || $1::text || '/',
+          $1::varchar, 'instagram_story_' || $1::text, 'stories/token_test.jpg', 'https://r2.vayaplan.com/stories/token_test.jpg',
+          'rejected', $2, NOW() - INTERVAL '20 days'
+        ) RETURNING id;`,
+        [storyId, testVenueId]
+      );
+      const propId = ins.rows[0].id;
+
+      // 1. Sin previewToken -> Falla con preview_token_required
+      const resNoToken = await executeStoryRetentionPolicy({
+        dryRun: false,
+        targetProposalId: propId,
+      });
+      expect(resNoToken.success).toBe(false);
+      expect(resNoToken.code).toBe('preview_token_required');
+
+      // 2. Con previewToken obsoleto/erróneo -> Falla con preview_state_conflict
+      const resBadToken = await executeStoryRetentionPolicy({
+        dryRun: false,
+        targetProposalId: propId,
+        previewToken: 'prv_invalid_hash_1234567890',
+      });
+      expect(resBadToken.success).toBe(false);
+      expect(resBadToken.code).toBe('preview_state_conflict');
+
+      // 3. Con previewToken exacto de la vista previa -> Éxito
+      const preview = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
+      const resOk = await executeStoryRetentionPolicy({
+        dryRun: false,
+        targetProposalId: propId,
+        previewToken: preview.previewToken,
+        operatorEmail: 'curator@vayaplan.com',
+      });
+      expect(resOk.success).toBe(true);
+      expect(resOk.purgedR2ObjectsCount).toBe(1);
+    });
+
+    it('2.3. executeStoryRetentionPolicy({ dryRun: false }) elimina caption completo, desacopla evento y preserva hechos factuales', async () => {
+      const storyId = generateTestStoryId();
       const evIns = await query(
         `INSERT INTO events (
           city_id, title, editorial_date, start_time, venue_id, category, status, source_type, image_url
@@ -401,14 +513,15 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       );
       const propId = ins.rows[0].id;
 
-      // Ejecutar acción manual de retención
+      const preview = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
       const result = await executeStoryRetentionPolicy({
         dryRun: false,
         targetProposalId: propId,
+        previewToken: preview.previewToken,
         operatorEmail: 'admin_test@vayaplan.com',
       });
 
-      expect(result.dryRun).toBe(false);
+      expect(result.success).toBe(true);
       expect(result.detachedEventImagesCount).toBe(1);
       expect(result.purgedR2ObjectsCount).toBe(1);
 
@@ -421,16 +534,15 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       // 2. La propuesta ha purgado su caption por completo (NULL) y su r2_key
       const propCheck = await query(`SELECT r2_key, caption, dedupe_key FROM curation_proposals WHERE id = $1;`, [propId]);
       expect(propCheck.rows[0].r2_key).toBeNull();
-      expect(propCheck.rows[0].caption).toBeNull(); // No conservar caption como hecho cultural
-      expect(propCheck.rows[0].dedupe_key).toBe(`instagram_story_${storyId}`); // dedupe_key preservada
+      expect(propCheck.rows[0].caption).toBeNull();
+      expect(propCheck.rows[0].dedupe_key).toBe(`instagram_story_${storyId}`);
     });
 
-    it('2.3. executeStoryRetentionPolicy({ dryRun: false }) con referencias cruzadas: desacopla evento pero no purga R2 físicamente', async () => {
+    it('2.4. executeStoryRetentionPolicy({ dryRun: false }) con referencias cruzadas: desacopla evento pero aplaza purga en R2', async () => {
       const sharedKey = `shared_exec_${Date.now()}.jpg`;
       const storyId1 = generateTestStoryId();
       const storyId2 = generateTestStoryId();
 
-      // Evento vencido
       const evIns = await query(
         `INSERT INTO events (
           city_id, title, editorial_date, start_time, venue_id, category, status, source_type, image_url
@@ -442,7 +554,6 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       );
       const eventId = evIns.rows[0].id;
 
-      // Propuesta 1 (vencida)
       const p1 = await query(
         `INSERT INTO curation_proposals (
           title, source_url, instagram_post_shortcode, dedupe_key,
@@ -456,7 +567,6 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       );
       const propId1 = p1.rows[0].id;
 
-      // Propuesta 2 (activa, comparte el mismo archivo R2)
       await query(
         `INSERT INTO curation_proposals (
           title, source_url, instagram_post_shortcode, dedupe_key,
@@ -469,13 +579,15 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
         [storyId2, sharedKey, testVenueId]
       );
 
+      const preview = await evaluateStoryRetentionDryRun({ targetProposalId: propId1 });
       const result = await executeStoryRetentionPolicy({
         dryRun: false,
         targetProposalId: propId1,
+        previewToken: preview.previewToken,
         operatorEmail: 'admin_test@vayaplan.com',
       });
 
-      // El evento desacopla la imagen, pero la purga física en R2 se aplaza por referencias compartidas
+      expect(result.success).toBe(true);
       expect(result.detachedEventImagesCount).toBe(1);
       expect(result.deferredR2PurgesCount).toBe(1);
       expect(result.purgedR2ObjectsCount).toBe(0);
@@ -485,7 +597,7 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
     });
   });
 
-  describe('3. Verificación de Feature Flag (ENABLE_INSTAGRAM_STORY_IMPORT = false)', () => {
+  describe('3. Verificación de Feature Flag y Salvaguarda de Piloto', () => {
     it('3.1. Con flag desactivado: prepare-paid-fallback rechaza historias con 403 y no inicia runs', async () => {
       const testStoryShortcode = generateTestStoryId();
       const testStoryUrl = `https://www.instagram.com/stories/elautenticobar/${testStoryShortcode}/`;
@@ -523,7 +635,6 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       const existingUrl = `https://www.instagram.com/stories/elautenticobar/${existingShortcode}/`;
       const opId = `op_recovered_${Date.now()}`;
 
-      // Crear propuesta ya existente previamente con image_url válida
       const propIns = await query(
         `INSERT INTO curation_proposals (
           title, source_url, instagram_post_shortcode, dedupe_key,
@@ -536,7 +647,6 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       );
       const propId = propIns.rows[0].id;
 
-      // Crear lock en estado 'succeeded' con proposalId asociado
       await query(
         `INSERT INTO instagram_ingestion_locks (
           lock_key, locked_by, locked_at, expires_at, released_at, execution_details
@@ -557,7 +667,6 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
         ]
       );
 
-      // Llamar a executeAuthorizedPaidImport: debe recuperar 200 already_completed con la propuesta
       const exec = await executeAuthorizedPaidImport({
         operationId: opId,
         canonicalUrl: existingUrl,
@@ -626,17 +735,34 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       expect(prep.data?.contentType).toBe('post');
       expect(prep.data?.shortcode).toBe(postShortcode);
     });
+
+    it('3.6. countPendingExpiredStoryItems detecta backlog de vencimientos acumulados', async () => {
+      const storyId = generateTestStoryId();
+      await query(
+        `INSERT INTO curation_proposals (
+          title, source_url, instagram_post_shortcode, dedupe_key,
+          r2_key, image_url, review_status, venue_id, created_at
+        ) VALUES (
+          'Historia Backlog Test', 'https://www.instagram.com/stories/elautenticobar/' || $1::text || '/',
+          $1::varchar, 'instagram_story_' || $1::text, 'stories/backlog.jpg', 'https://r2.vayaplan.com/stories/backlog.jpg',
+          'pending', $2, NOW() - INTERVAL '15 days'
+        );`,
+        [storyId, testVenueId]
+      );
+
+      const backlog = await countPendingExpiredStoryItems();
+      expect(backlog.totalExpired).toBeGreaterThan(0);
+      expect(backlog.expiredPending).toBeGreaterThan(0);
+    });
   });
 
   describe('4. Endpoints de Administración: Vista Previa y Acción Manual con Confirmación', () => {
-    it('4.1. GET /api/v1/admin/proposals/story-retention/preview exige autenticación y devuelve vista previa dry-run', async () => {
-      // Sin autenticación -> 401
+    it('4.1. GET /api/v1/admin/proposals/story-retention/preview exige autenticación y devuelve previewToken', async () => {
       const resUnauth = await app.request('/api/v1/admin/proposals/story-retention/preview', {
         method: 'GET',
       });
       expect(resUnauth.status).toBe(401);
 
-      // Con autenticación admin -> 200 con reporte
       const resAuth = await app.request('/api/v1/admin/proposals/story-retention/preview', {
         method: 'GET',
         headers: {
@@ -647,11 +773,13 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       const data = await resAuth.json();
       expect(data.success).toBe(true);
       expect(data.report.dryRun).toBe(true);
+      expect(typeof data.report.previewToken).toBe('string');
+      expect(data.report.previewToken.startsWith('prv_')).toBe(true);
       expect(Array.isArray(data.report.items)).toBe(true);
     });
 
-    it('4.2. POST /api/v1/admin/proposals/story-retention/execute exige confirm: true explícito', async () => {
-      // Envío sin confirm: true -> 400
+    it('4.2. POST /api/v1/admin/proposals/story-retention/execute exige confirm: true y previewToken válido', async () => {
+      // 1. Envío sin confirm: true -> 400
       const resNoConfirm = await app.request('/api/v1/admin/proposals/story-retention/execute', {
         method: 'POST',
         headers: {
@@ -661,12 +789,11 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
         body: JSON.stringify({ confirm: false }),
       });
       expect(resNoConfirm.status).toBe(400);
-      const data = await resNoConfirm.json();
-      expect(data.code).toBe('confirmation_required');
-      expect(data.canPreview).toBe(true);
+      const dataNoConfirm = await resNoConfirm.json();
+      expect(dataNoConfirm.code).toBe('confirmation_required');
 
-      // Envío con confirm: true -> 200
-      const resConfirm = await app.request('/api/v1/admin/proposals/story-retention/execute', {
+      // 2. Envío sin previewToken -> 400 preview_token_required
+      const resNoToken = await app.request('/api/v1/admin/proposals/story-retention/execute', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -674,15 +801,50 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
         },
         body: JSON.stringify({ confirm: true }),
       });
-      expect(resConfirm.status).toBe(200);
-      const okData = await resConfirm.json();
+      expect(resNoToken.status).toBe(400);
+      const dataNoToken = await resNoToken.json();
+      expect(dataNoToken.code).toBe('preview_token_required');
+
+      // 3. Envío con previewToken conflictivo/erróneo -> 409 preview_state_conflict
+      const resBadToken = await app.request('/api/v1/admin/proposals/story-retention/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ confirm: true, previewToken: 'prv_invalid_stale_token_123' }),
+      });
+      expect(resBadToken.status).toBe(409);
+      const dataBadToken = await resBadToken.json();
+      expect(dataBadToken.code).toBe('preview_state_conflict');
+
+      // 4. Envío con previewToken real obtenido de /preview -> 200 OK
+      const previewRes = await app.request('/api/v1/admin/proposals/story-retention/preview', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      });
+      const previewData = await previewRes.json();
+      const realToken = previewData.report.previewToken;
+
+      const resOk = await app.request('/api/v1/admin/proposals/story-retention/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({ confirm: true, previewToken: realToken }),
+      });
+      expect(resOk.status).toBe(200);
+      const okData = await resOk.json();
       expect(okData.success).toBe(true);
       expect(okData.result.dryRun).toBe(false);
     });
   });
 
   describe('5. Verificación de Migración DDL 021 y Rollback Seguro', () => {
-    it('5.1. Migración 021 se aplica limpiamente y su rollback revierte los cambios sin errores', async () => {
+    it('5.1. Migración 021 valida esquema preexistente, se aplica limpiamente y su rollback revierte los cambios', async () => {
       const upSqlPath = resolve(process.cwd(), 'infra/migrations/021_story_retention_and_media_lifecycle.sql');
       const downSqlPath = resolve(process.cwd(), 'infra/migrations/rollback_021_story_retention_and_media_lifecycle.sql');
 

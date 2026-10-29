@@ -25,6 +25,7 @@ import {
 import { downloadAndUploadPostImageToR2 } from './single-post-importer';
 import { classifyBarPost } from './bar-classifier';
 import type { ApifyInstagramRawPost } from './bar-types';
+import { countPendingExpiredStoryItems } from './story-retention-service';
 
 export const AUTHORIZATION_TTL_MINUTES = 10;
 
@@ -111,16 +112,32 @@ export async function preparePaidImportAuthorization(
 
   // 1b. Si es historia, verificar si la funcionalidad está habilitada por configuración
   const isStory = urlValidation.contentType === 'story';
-  if (isStory && !isStoryImportFeatureEnabled()) {
-    return {
-      success: false,
-      status: 403,
-      code: 'story_import_disabled_retention_policy_required',
-      error: 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
-      canCompleteManually: true,
-      canonicalUrl,
-      shortcode,
-    };
+  if (isStory) {
+    if (!isStoryImportFeatureEnabled()) {
+      return {
+        success: false,
+        status: 403,
+        code: 'story_import_disabled_retention_policy_required',
+        error: 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+      };
+    }
+
+    // Protocolo operativo de piloto: bloqueo preventivo si existen vencimientos pendientes no resueltos
+    const backlog = await countPendingExpiredStoryItems();
+    if (backlog.totalExpired > 0) {
+      return {
+        success: false,
+        status: 409,
+        code: 'retention_backlog_pending_action',
+        error: `Existen ${backlog.totalExpired} historias vencidas pendientes de purga o desacoplamiento (${backlog.expiredEventMedia} carteles de eventos, ${backlog.expiredPending} propuestas pendientes, ${backlog.expiredRejected} rechazadas). Por salvaguarda operativa, no se permite autorizar nuevas importaciones hasta que el operador resuelva los vencimientos acumulados.`,
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+      };
+    }
   }
 
   // 2. Validar Venue (opcional)

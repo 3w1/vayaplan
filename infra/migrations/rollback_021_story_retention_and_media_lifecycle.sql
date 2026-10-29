@@ -1,4 +1,10 @@
 -- VayaPlan — Rollback Migración 021: Retención y Ciclo de Vida de Medios Efímeros (Stories)
+--
+-- ATENCIÓN OPERATIVA:
+-- Este script realiza DROP COLUMN y DROP INDEX. Solo debe utilizarse para desmantelar
+-- ordenadamente la migración en caso de rechazo del esquema, NUNCA como respuesta de emergencia
+-- a incidencias en producción (la respuesta en producción es rollback de código o flag off).
+-- ADVERTENCIA: La eliminación física de archivos en R2 y vaciado de captions en BD es irreversible.
 
 SET statement_timeout = '15s';
 SET lock_timeout = '5s';
