@@ -4856,10 +4856,11 @@ export function renderAdminHtml(): string {
             </div>
 
             <div style="border-top:1px solid var(--border); padding-top:0.5rem; flex:1; display:flex; flex-direction:column; gap:0.35rem;">
-              <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Texto del Post (Caption)</div>
-              <textarea id="edit-prop-caption-input" style="width:100%; font-size:0.75rem; color:var(--text-main); line-height:1.4; min-height:75px; max-height:120px; resize:vertical; padding:0.5rem; border-radius:4px; border:1px solid var(--border); box-sizing:border-box;" placeholder="Pegar aquí el texto o descripción del post..."></textarea>
-              <div id="edit-prop-original-caption" style="white-space:pre-wrap; font-size:0.72rem; color:var(--text-muted); line-height:1.3; max-height:80px; overflow-y:auto; background:#f8fafc; padding:0.4rem; border-radius:4px; border:1px solid var(--border);">
-              </div>
+              <div id="edit-prop-caption-label" style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Texto del Post (Caption)</div>
+              <!-- Modo Alta Manual: Único textarea editable para completar la descripción -->
+              <textarea id="edit-prop-caption-input" style="display:none; width:100%; font-size:0.75rem; color:var(--text-main); line-height:1.4; min-height:85px; max-height:140px; resize:vertical; padding:0.5rem; border-radius:4px; border:1px solid var(--border); box-sizing:border-box; white-space:pre-wrap; word-break:break-word; overflow-wrap:break-word; overflow-x:hidden;" placeholder="Pegar aquí el texto o descripción del post..."></textarea>
+              <!-- Modo Edición Propuesta Existente: Único visor de solo lectura con scroll vertical y sin desborde -->
+              <div id="edit-prop-original-caption" style="display:none; white-space:pre-wrap; word-break:break-word; overflow-wrap:break-word; overflow-x:hidden; overflow-y:auto; font-size:0.75rem; color:var(--text-main); line-height:1.4; max-height:130px; background:#f8fafc; padding:0.5rem; border-radius:4px; border:1px solid var(--border); box-sizing:border-box;"></div>
             </div>
           </div>
         </div>
@@ -12205,10 +12206,12 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
       const captionEl = document.getElementById('edit-prop-original-caption');
       if (captionEl) {
         captionEl.innerText = prop.caption || '(Sin texto disponible en el post original)';
+        if (captionEl.style) captionEl.style.display = 'block';
       }
       const captionInput = document.getElementById('edit-prop-caption-input');
       if (captionInput) {
         captionInput.value = prop.caption || '';
+        if (captionInput.style) captionInput.style.display = 'none';
       }
 
       const titleModalEl = document.getElementById('modal-edit-prop-title');
@@ -12368,11 +12371,13 @@ let modalSaveInProgress = false; // Bloqueo propio del modal de reasignación
 
       const captionEl = document.getElementById('edit-prop-original-caption');
       if (captionEl) {
-        captionEl.innerText = initialData.caption || '(Completar texto abajo)';
+        captionEl.innerText = '';
+        if (captionEl.style) captionEl.style.display = 'none';
       }
       const captionInput = document.getElementById('edit-prop-caption-input');
       if (captionInput) {
         captionInput.value = initialData.caption || '';
+        if (captionInput.style) captionInput.style.display = 'block';
       }
 
       openModal('modal-edit-proposal');

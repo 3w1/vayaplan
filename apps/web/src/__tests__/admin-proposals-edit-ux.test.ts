@@ -103,7 +103,9 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
       'edit-prop-meta-conf': { innerText: '', className: '' },
       'edit-prop-meta-reasons': { innerText: '' },
       'edit-prop-meta-link': { href: '#', style: { display: 'none' }, target: '', rel: '' },
-      'edit-prop-original-caption': { innerText: '' },
+      'edit-prop-original-caption': { innerText: '', style: { display: 'none' } },
+      'edit-prop-caption-input': { value: '', style: { display: 'none' } },
+      'edit-prop-caption-label': { innerText: '' },
       'btn-submit-edit-prop': { disabled: false, innerText: '' },
 
       // Modal de ver caption
@@ -586,5 +588,214 @@ describe('apps/web — UX de Edición Manual de Propuestas (admin.ts)', () => {
     const footerApproved = domElements['modal-caption-prop-footer'].innerHTML;
     expect(footerApproved).not.toContain('✏️ Editar Propuesta');
     expect(footerApproved).toContain('Cerrar');
+  });
+
+  test('10. Propuesta importada por Actor habitual: muestra único visor estático y oculta textarea', async () => {
+    const mockProposals = [
+      {
+        id: 75,
+        venue_id: 10119,
+        title: 'No será una más… 🪩 — P21 Pub',
+        caption: 'No será una más…. 🪩\n\nEste sábado 24 vuelvo a P21 para una tarde mágica.',
+        classification: 'EVENTO_POSIBLE',
+        review_status: 'pending',
+        source_type: 'instagram',
+        instagram_post_shortcode: 'Dez5FxJsume',
+        image_url: 'https://media.vayaplan.com/bars/p21/post75.jpg',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    ctx.window.openEditProposalModal(75);
+
+    // Exactamente 1 control visible: el visor de solo lectura
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('block');
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('none');
+
+    // Contenido preservado íntegro en el visor
+    expect(domElements['edit-prop-original-caption'].innerText).toContain('No será una más…. 🪩');
+    expect(domElements['edit-prop-original-caption'].innerText).toContain('Este sábado 24 vuelvo a P21');
+  });
+
+  test('11. Propuesta importada por proveedor alternativo (intropix): muestra único visor con caption largo y emojis', async () => {
+    const longCaption = '🍷✨ ¡Una noche para disfrutar del vino, la gastronomía y los pequeños grandes placeres!\n\n' +
+      'El próximo 29 de octubre a las 20:00 h, nos unimos a Bodega Corrales Espinosa para disfrutar de una cata vertical. 🍇🍽️\n\n' +
+      '📅 29 de octubre\n🕗 20:00 h\n📍 Restaurante La Traserilla · Palencia\n💶 45 € por persona\n\n⚠️ ¡Plazas limitadas!\n\n' +
+      '#LaTraserilla #Palencia #CorralesEspinosa #CataDeVinos #experienciasgastronomicas';
+
+    const mockProposals = [
+      {
+        id: 76,
+        venue_id: 10533,
+        title: 'Cata en Restaurante La Traserilla',
+        caption: longCaption,
+        classification: 'REQUIERE_REVISION',
+        review_status: 'pending',
+        source_type: 'instagram_intropix',
+        instagram_post_shortcode: 'De_jb4yFX_T',
+        image_url: 'https://media.vayaplan.com/bars/traserilla/post76.jpg',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    ctx.window.openEditProposalModal(76);
+
+    // Solo el visor está visible, textarea oculto
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('block');
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('none');
+
+    // Caption largo y emojis íntegros
+    expect(domElements['edit-prop-original-caption'].innerText).toBe(longCaption);
+    expect(domElements['edit-prop-original-caption'].innerText.length).toBe(longCaption.length);
+  });
+
+  test('12. Modo creación manual: muestra único textarea editable y oculta visor estático', async () => {
+    const { ctx, domElements } = setupTestContext([]);
+
+    ctx.window.openManualProposalModal({
+      url: 'https://www.instagram.com/p/De_jb4yFX_T/',
+      venue_id: 10533,
+      caption: 'Texto precargado o manual para la propuesta',
+    });
+
+    // En modo manual, el textarea es el único control visible
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('block');
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('none');
+    expect(domElements['edit-prop-caption-input'].value).toBe('Texto precargado o manual para la propuesta');
+    expect(domElements['edit-prop-original-caption'].innerText).toBe('');
+  });
+
+  test('13. Caption vacío o nulo en propuesta existente: visor muestra mensaje informativo y textarea oculto', async () => {
+    const mockProposals = [
+      {
+        id: 80,
+        venue_id: 10001,
+        title: 'Post sin texto',
+        caption: null,
+        classification: 'CONTENIDO_VENUE',
+        review_status: 'pending',
+        source_type: 'instagram',
+        image_url: 'https://media.vayaplan.com/bars/test/post80.jpg',
+      },
+      {
+        id: 81,
+        venue_id: 10001,
+        title: 'Post con cadena vacía',
+        caption: '',
+        classification: 'CONTENIDO_VENUE',
+        review_status: 'pending',
+        source_type: 'instagram',
+        image_url: 'https://media.vayaplan.com/bars/test/post81.jpg',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    // Propuesta con caption null
+    ctx.window.openEditProposalModal(80);
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('block');
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('none');
+    expect(domElements['edit-prop-original-caption'].innerText).toBe('(Sin texto disponible en el post original)');
+
+    // Propuesta con caption cadena vacía
+    ctx.window.openEditProposalModal(81);
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('block');
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('none');
+    expect(domElements['edit-prop-original-caption'].innerText).toBe('(Sin texto disponible en el post original)');
+  });
+
+  test('14. Protección XSS y formato seguro: caracteres HTML son tratados como texto y no como DOM', async () => {
+    const dangerousCaption = '<script>alert("xss")</script> & <img src=x onerror=alert(1)> <b>Negrita</b>\nLínea 2 con emojis: 🥂✨';
+
+    const mockProposals = [
+      {
+        id: 82,
+        venue_id: 10001,
+        title: 'Post con caracteres HTML',
+        caption: dangerousCaption,
+        classification: 'EVENTO_POSIBLE',
+        review_status: 'pending',
+        source_type: 'instagram',
+        image_url: 'https://media.vayaplan.com/bars/test/post82.jpg',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    ctx.window.openEditProposalModal(82);
+
+    // Se asigna vía innerText, garantizando escape de entidades y conservación de formato
+    expect(domElements['edit-prop-original-caption'].innerText).toBe(dangerousCaption);
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('block');
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('none');
+  });
+
+  test('15. Alternancia y limpieza entre aperturas sucesivas: nunca se muestran ambos controles', async () => {
+    const mockProposals = [
+      {
+        id: 91,
+        venue_id: 10001,
+        title: 'Propuesta A',
+        caption: 'Caption de la propuesta A',
+        review_status: 'pending',
+      },
+      {
+        id: 92,
+        venue_id: 10001,
+        title: 'Propuesta B',
+        caption: 'Caption de la propuesta B',
+        review_status: 'pending',
+      },
+    ];
+
+    const { ctx, domElements } = setupTestContext(mockProposals);
+    await ctx.window.loadAdminProposals();
+
+    // 1. Abrir Propuesta A existente (modo edición)
+    ctx.window.openEditProposalModal(91);
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('block');
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('none');
+    expect(domElements['edit-prop-original-caption'].innerText).toBe('Caption de la propuesta A');
+
+    // 2. Abrir creación manual (modo alta manual)
+    ctx.window.openManualProposalModal({ title: 'Manual C', caption: 'Caption manual C' });
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('block');
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('none');
+    expect(domElements['edit-prop-caption-input'].value).toBe('Caption manual C');
+    expect(domElements['edit-prop-original-caption'].innerText).toBe('');
+
+    // 3. Abrir Propuesta B existente (modo edición)
+    ctx.window.openEditProposalModal(92);
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('block');
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('none');
+    expect(domElements['edit-prop-original-caption'].innerText).toBe('Caption de la propuesta B');
+
+    // 4. Abrir creación manual vacía
+    ctx.window.openManualProposalModal({});
+    expect(domElements['edit-prop-caption-input'].style.display).toBe('block');
+    expect(domElements['edit-prop-original-caption'].style.display).toBe('none');
+    expect(domElements['edit-prop-caption-input'].value).toBe('');
+  });
+
+  test('16. Renderizado HTML: estilos anti-desborde horizontal y soporte de scroll vertical', () => {
+    const html = renderAdminHtml();
+
+    // Contiene los dos controles con display:none inicial para evitar flashes
+    expect(html).toContain('id="edit-prop-caption-input"');
+    expect(html).toContain('id="edit-prop-original-caption"');
+    expect(html).toContain('id="edit-prop-caption-label"');
+
+    // Estilos del visor: ajuste de ancho, rotura de palabras largas, scroll vertical
+    expect(html).toContain('white-space:pre-wrap');
+    expect(html).toContain('word-break:break-word');
+    expect(html).toContain('overflow-wrap:break-word');
+    expect(html).toContain('overflow-x:hidden');
+    expect(html).toContain('overflow-y:auto');
   });
 });
