@@ -349,20 +349,6 @@ export async function executeAuthorizedPaidImport(
   const { operationId, canonicalUrl, shortcode, userEmail } = params;
   const urlCheck = validateInstagramPostUrl(canonicalUrl);
   const isStory = urlCheck.valid && urlCheck.contentType === 'story';
-
-  if (isStory && !isStoryImportFeatureEnabled()) {
-    return {
-      success: false,
-      status: 403,
-      code: 'story_import_disabled_retention_policy_required',
-      error: 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
-      canCompleteManually: true,
-      canonicalUrl,
-      shortcode,
-      venueId: params.venueId ?? null,
-    };
-  }
-
   const lockKey = isStory ? `ig_paid_story:${shortcode}` : `ig_paid:${shortcode}`;
   const now = new Date();
 
@@ -384,6 +370,18 @@ export async function executeAuthorizedPaidImport(
 
     if (checkRes.rows.length === 0) {
       await client.query('ROLLBACK');
+      if (isStory && !isStoryImportFeatureEnabled()) {
+        return {
+          success: false,
+          status: 403,
+          code: 'story_import_disabled_retention_policy_required',
+          error: 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
+          canCompleteManually: true,
+          canonicalUrl,
+          shortcode,
+          venueId,
+        };
+      }
       return {
         success: false,
         status: 404,
@@ -443,7 +441,23 @@ export async function executeAuthorizedPaidImport(
       };
     }
 
-    // Una operación con resultado incierto (timeout al iniciar) nunca vuelve a un estado ejecutable
+    // Si la operación ya completó con éxito, podemos recuperarla directamente sin relanzar ningún run
+    if (executionDetails.status === 'succeeded' && executionDetails.proposalId) {
+      await client.query('ROLLBACK');
+      const propRes = await query(`SELECT * FROM curation_proposals WHERE id = $1;`, [executionDetails.proposalId]);
+      return {
+        success: true,
+        status: 200,
+        code: 'already_completed',
+        proposal: propRes.rows[0] || null,
+        operation: executionDetails,
+        canonicalUrl,
+        shortcode,
+        venueId,
+      };
+    }
+
+    // Una operación con resultado incierto (timeout al iniciar) nunca vuelve a un estado ejecutable ni relanza llamadas
     if (executionDetails.status === 'uncertain') {
       await client.query('ROLLBACK');
       return {
@@ -451,6 +465,35 @@ export async function executeAuthorizedPaidImport(
         status: 409,
         code: 'operation_uncertain',
         error: 'El estado del run en el proveedor es indeterminado (timeout de inicio). Por seguridad presupuestaria no se reintenta automáticamente.',
+        operation: executionDetails,
+        canCompleteManually: true,
+        canonicalUrl,
+        shortcode,
+        venueId,
+      };
+    }
+
+    // Si la funcionalidad de historias está deshabilitada y la operación no estaba ya completada:
+    if (isStory && !isStoryImportFeatureEnabled()) {
+      await client.query('ROLLBACK');
+      if (executionDetails.status === 'running') {
+        return {
+          success: false,
+          status: 409,
+          code: 'story_import_disabled_retention_policy_required',
+          error: 'La importación de historias está desactivada. Existe una extracción previa en curso, pero no se consultará al proveedor mientras la funcionalidad esté inactiva.',
+          operation: executionDetails,
+          canCompleteManually: true,
+          canonicalUrl,
+          shortcode,
+          venueId,
+        };
+      }
+      return {
+        success: false,
+        status: 403,
+        code: 'story_import_disabled_retention_policy_required',
+        error: 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
         canCompleteManually: true,
         canonicalUrl,
         shortcode,

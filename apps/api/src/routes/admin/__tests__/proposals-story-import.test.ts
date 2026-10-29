@@ -759,9 +759,11 @@ describe('Importación puntual de historias de Instagram (Caso de Referencia: el
 
   test('18. Garantía de curación humana: ninguna historia importada o manual se publica automáticamente', async () => {
     const check = await testPool.query(
-      `SELECT review_status, created_event_id FROM curation_proposals WHERE dedupe_key LIKE 'instagram_story_%';`
+      `SELECT review_status, created_event_id FROM curation_proposals WHERE id = ANY($1::int[]);`,
+      [createdProposalIds]
     );
 
+    expect(check.rows.length).toBeGreaterThan(0);
     for (const row of check.rows) {
       expect(row.review_status).toBe('pending');
       expect(row.created_event_id).toBeNull();
