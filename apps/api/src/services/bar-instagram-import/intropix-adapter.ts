@@ -14,7 +14,8 @@ export const INTROPIX_RESULT_ITEM_CHARGE_USD = 0.0019;
 // Coste estimado en caso de éxito para 1 enlace individual: 0.005 (inicio) + 0.002 (cuenta) + 0.0019 (post) = 0.0089 USD (~0.009 USD)
 export const INTROPIX_ESTIMATED_COST_USD = 0.0089;
 
-// Límite máximo efectivo de gasto impuesto al proveedor en el parámetro maxTotalChargeUsd de la URL: 0.015 USD
+// Límite máximo efectivo de facturación impuesto en el parámetro maxTotalChargeUsd de la URL de Apify: 0.015 USD
+// (Apify restringe el importe total cobrable del Actor de pago por evento a este techo presupuestario)
 export const INTROPIX_MAX_CHARGE_LIMIT_USD = 0.015;
 
 export interface IntropixMediaSlide {

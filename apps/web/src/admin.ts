@@ -4962,8 +4962,9 @@ export function renderAdminHtml(): string {
             <span>⚠️</span> Desglose de Facturación y Condiciones:
           </div>
           <ul style="margin:0; padding-left:1.2rem; display:flex; flex-direction:column; gap:0.25rem;">
-            <li>El proveedor factura <strong>0,005 USD</strong> al iniciar el contenedor, incluso si el post no existe o está bloqueado.</li>
-            <li>El evento <code>profile-scan</code> (<strong>0,002 USD</strong>) se devenga para identificar la cuenta de procedencia, sin recorrer su histórico.</li>
+            <li>Cargo inicial garantizado de <strong>0,005 USD</strong> por arranque del contenedor (no reembolsable si la extracción falla).</li>
+            <li>Pueden devengarse cargos adicionales (como <code>profile-scan</code> a <strong>0,002 USD</strong>) si el scraper resuelve la cuenta antes de finalizar.</li>
+            <li>El parámetro <code>maxTotalChargeUsd=0.015</code> limita el importe total facturable por Apify en esta ejecución.</li>
             <li><strong>El éxito no está garantizado:</strong> si Instagram restringe el acceso al post, el proveedor puede fallar.</li>
             <li><strong>Sin reintentos automáticos:</strong> esta autorización puntual cubre un único intento facturable.</li>
           </ul>
