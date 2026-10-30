@@ -12,6 +12,7 @@ import { DEFAULT_LOCK_KEY, acquirePersistentLock, releasePersistentLock } from '
 import { classifyBarPost } from './bar-classifier';
 import { matchPostWithPublishedEvents } from './event-matcher';
 import type { ApifyInstagramRawPost } from './bar-types';
+import { isStoryImportFeatureEnabled } from './intropix-story-adapter';
 
 export const MAX_SINGLE_POST_IMAGE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 export const MAX_IMAGE_INPUT_PIXELS = 40_000_000; // 40 MPx
@@ -545,6 +546,7 @@ export async function importSingleInstagramPost(
   }
 
   const { canonicalUrl, shortcode } = urlCheck;
+  const isStory = urlCheck.contentType === 'story';
 
   // 2. Si se proporciona venueId, comprobar que existe y está activo
   let venueName: string | null = null;
@@ -566,12 +568,13 @@ export async function importSingleInstagramPost(
 
   // Helper para comprobar duplicados unívocos en curation_proposals y events
   async function findDuplicateRecord(): Promise<{ recordType: 'proposal' | 'event'; record: any } | null> {
+    const dedupeKey = isStory ? `instagram_story_${shortcode}` : `instagram_${shortcode}`;
     const propRes = await query(
       `SELECT id, title, review_status, classification, venue_id, created_event_id, updated_at
        FROM curation_proposals
-       WHERE instagram_post_shortcode = $1 OR source_url = $2
+       WHERE dedupe_key = $1 OR instagram_post_shortcode = $2 OR source_url = $3 OR source_url = $4
        LIMIT 1;`,
-      [shortcode, canonicalUrl]
+      [dedupeKey, shortcode, canonicalUrl, canonicalUrl.replace(/\/$/, '')]
     );
 
     if (propRes.rows.length > 0) {
@@ -609,6 +612,23 @@ export async function importSingleInstagramPost(
       recordType: dupPre.recordType,
       proposal: dupPre.recordType === 'proposal' ? dupPre.record : undefined,
       event: dupPre.recordType === 'event' ? dupPre.record : undefined,
+    };
+  }
+
+  // 3b. Las historias de Instagram requieren el proveedor alternativo con confirmación de gasto
+  if (isStory) {
+    const isFeatureEnabled = isStoryImportFeatureEnabled();
+    return {
+      success: false,
+      status: isFeatureEnabled ? 400 : 403,
+      code: isFeatureEnabled ? 'story_requires_paid_fallback' : 'story_import_disabled_retention_policy_required',
+      error: isFeatureEnabled
+        ? 'Las historias de Instagram no admiten extracción anónima estándar y requieren el proveedor alternativo con confirmación de gasto.'
+        : 'La importación automatizada de historias de Instagram está desactivada temporalmente pendiente de definición y aprobación de la política de retención y ciclo de vida de historias efímeras no publicadas. Puedes registrar la historia completando la propuesta manualmente.',
+      canUsePaidFallback: isFeatureEnabled,
+      canCompleteManually: true,
+      canonicalUrl,
+      shortcode,
     };
   }
 

@@ -20,6 +20,10 @@ import {
   executeAuthorizedPaidImport,
   getPaidImportStatus,
 } from '../../services/bar-instagram-import/fallback-coordinator';
+import {
+  evaluateStoryRetentionDryRun,
+  executeStoryRetentionPolicy,
+} from '../../services/bar-instagram-import/story-retention-service';
 
 let cachedTaquillaEvents: TaquillaEventMetadata[] | null = null;
 let lastTaquillaFetch = 0;
@@ -1317,6 +1321,7 @@ adminProposalsRoutes.post('/proposals/import-instagram-post', async (c) => {
     return c.json(
       {
         error: result.code || 'import_failed',
+        code: result.code || 'import_failed',
         message: result.error,
         canCompleteManually: Boolean(result.canCompleteManually),
         canUsePaidFallback: Boolean(result.canUsePaidFallback),
@@ -1497,7 +1502,7 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
   // Impide dos altas simultáneas con la misma dedupe_key (ej. doble clic o peticiones concurrentes)
   // sin bloquear altas de publicaciones diferentes y sin requerir cambios de esquema de BD.
   const r2Key = extractR2Key(imageUrl);
-  const dedupeKey = 'instagram_' + shortcode;
+  const dedupeKey = urlValidation.contentType === 'story' ? 'instagram_story_' + shortcode : 'instagram_' + shortcode;
 
   const insertSql = `
     INSERT INTO curation_proposals (
@@ -1531,9 +1536,9 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
       updated_at
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-      'instagram', null, $11, $12, $13, 1080, 1080,
-      'BAJA', $14, $15, 'pending', true,
-      $16, $17, 'admin_manual', NOW(), NOW(), NOW()
+      'instagram', $11, $12, $13, $14, 1080, 1080,
+      'BAJA', $15, $16, 'pending', true,
+      $17, $18, 'admin_manual', NOW(), NOW(), NOW()
     )
     RETURNING *;
   `;
@@ -1549,6 +1554,7 @@ adminProposalsRoutes.post('/proposals/manual', async (c) => {
     price,
     caption,
     canonicalUrl,
+    urlValidation.username || null,
     shortcode,
     r2Key,
     imageUrl,
@@ -1665,7 +1671,7 @@ adminProposalsRoutes.post('/proposals/prepare-paid-fallback', async (c) => {
   });
 
   if (!result.success) {
-    return c.json({ error: result.code || 'prepare_failed', message: result.error }, result.status as any);
+    return c.json({ error: result.code || 'prepare_failed', code: result.code || 'prepare_failed', message: result.error, canCompleteManually: Boolean(result.canCompleteManually) }, result.status as any);
   }
 
   return c.json(result.data, 200);
@@ -1717,6 +1723,7 @@ adminProposalsRoutes.post('/proposals/execute-paid-fallback', async (c) => {
     return c.json(
       {
         error: result.code,
+        code: result.code,
         message: result.error,
         canCompleteManually: Boolean(result.canCompleteManually),
         canonicalUrl: result.canonicalUrl,
@@ -1765,4 +1772,91 @@ adminProposalsRoutes.get('/proposals/paid-fallback-status/:operationId', async (
   }
 
   return c.json({ success: true, operation: status }, 200);
+});
+
+/**
+ * GET /api/v1/admin/proposals/story-retention/preview
+ *
+ * Acción manual de vista previa (Dry-Run estricto de solo lectura).
+ * Proyecta qué historias han alcanzado su vencimiento y qué acciones
+ * de purga o desacoplamiento se ejecutarían, sin alterar la base de datos ni R2.
+ */
+adminProposalsRoutes.get('/proposals/story-retention/preview', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  const report = await evaluateStoryRetentionDryRun();
+  return c.json({ success: true, report }, 200);
+});
+
+/**
+ * POST /api/v1/admin/proposals/story-retention/execute
+ *
+ * Acción manual separada de ejecución de retención con confirmación explícita,
+ * permisos de administrador y auditoría duradera.
+ */
+adminProposalsRoutes.post('/proposals/story-retention/execute', async (c) => {
+  const user = c.get('user');
+  if (!user) {
+    return c.json({ error: 'unauthorized', message: 'Acceso restringido. Autenticación requerida.' }, 401);
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  if (body.confirm !== true) {
+    return c.json(
+      {
+        error: 'confirmation_required',
+        code: 'confirmation_required',
+        message: 'Para ejecutar la purga y desacoplamiento de historias debes enviar confirm: true tras revisar la vista previa.',
+        canPreview: true,
+        previewUrl: '/api/v1/admin/proposals/story-retention/preview',
+      },
+      400
+    );
+  }
+
+  if (!body.previewToken || typeof body.previewToken !== 'string' || !body.previewToken.trim()) {
+    return c.json(
+      {
+        error: 'preview_token_required',
+        code: 'preview_token_required',
+        message: 'Para ejecutar la purga debes enviar el previewToken obtenido en la vista previa (/preview). Esto garantiza que no se borre un lote distinto al revisado.',
+        canPreview: true,
+        previewUrl: '/api/v1/admin/proposals/story-retention/preview',
+      },
+      400
+    );
+  }
+
+  const targetProposalId = body.targetProposalId ? parseInt(String(body.targetProposalId), 10) : undefined;
+  const result = await executeStoryRetentionPolicy({
+    dryRun: false,
+    previewToken: body.previewToken.trim(),
+    targetProposalId: isNaN(targetProposalId as any) ? undefined : targetProposalId,
+    operatorEmail: user.email,
+  });
+
+  if (!result.success && result.code === 'preview_state_conflict') {
+    return c.json(
+      {
+        error: result.code,
+        code: result.code,
+        message: result.error,
+        canPreview: true,
+        previewUrl: '/api/v1/admin/proposals/story-retention/preview',
+      },
+      409
+    );
+  }
+
+  return c.json(
+    {
+      success: result.success,
+      message: 'Política de retención ejecutada con éxito.',
+      result,
+    },
+    result.success ? 200 : 500
+  );
 });
