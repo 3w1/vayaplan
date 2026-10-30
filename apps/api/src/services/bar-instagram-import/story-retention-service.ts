@@ -131,7 +131,82 @@ async function checkSchemaProvenanceSupport(): Promise<{
 }
 
 /**
+ * Consulta en tiempo real si un activo gráfico efímero de historia (por r2_key o image_url)
+ * está siendo utilizado por otras propuestas, eventos en catálogo o decisiones de imagen.
+ * Se ejecuta tanto en la evaluación previa como inmediatamente antes (JIT) de cualquier purga física en R2.
+ */
+export async function getLiveStoryAssetReferences(
+  r2Key: string | null,
+  imageUrl: string | null,
+  proposalId: number,
+  eventId: number | null
+): Promise<StorySharedReferenceTarget[]> {
+  const sharedReferenceDetails: StorySharedReferenceTarget[] = [];
+  if (!r2Key && !imageUrl) {
+    return sharedReferenceDetails;
+  }
+
+  // 1. Otras propuestas que usen el mismo r2_key o image_url
+  const propRefs = await query(
+    `SELECT id, title, review_status 
+     FROM curation_proposals 
+     WHERE (r2_key = $1 OR (image_url = $2 AND $2 IS NOT NULL)) 
+       AND id <> $3;`,
+    [r2Key, imageUrl, proposalId]
+  );
+  for (const p of propRefs.rows) {
+    sharedReferenceDetails.push({
+      targetType: 'proposal',
+      targetId: p.id,
+      targetTitle: p.title,
+      field: 'curation_proposals.r2_key/image_url',
+    });
+  }
+
+  // 2. Otros eventos que usen el mismo image_url
+  const evRefs = await query(
+    `SELECT id, title, status 
+     FROM events 
+     WHERE (image_url = $1 OR image_thumb_url = $1 OR image_original_url = $1)
+       AND id <> COALESCE($2, -1);`,
+    [imageUrl, eventId]
+  );
+  for (const ev of evRefs.rows) {
+    sharedReferenceDetails.push({
+      targetType: 'event',
+      targetId: ev.id,
+      targetTitle: ev.title,
+      field: 'events.image_url',
+    });
+  }
+
+  // 3. Decisiones de imágenes adoptadas o archivadas
+  try {
+    const decRefs = await query(
+      `SELECT id, event_id, action, notes 
+       FROM event_image_decisions 
+       WHERE (candidate_key = $1 OR candidate_url = $2)
+         AND action IN ('adopt', 'keep_current');`,
+      [r2Key, imageUrl]
+    );
+    for (const dec of decRefs.rows) {
+      sharedReferenceDetails.push({
+        targetType: 'image_decision',
+        targetId: dec.id,
+        targetTitle: `Decisión para evento #${dec.event_id}`,
+        field: 'event_image_decisions.candidate_key',
+      });
+    }
+  } catch {
+    // Tabla opcional en entornos reducidos
+  }
+
+  return sharedReferenceDetails;
+}
+
+/**
  * Genera un token criptográfico determinista vinculado al lote exacto evaluado.
+ * Actúa estrictamente como huella de control optimista (optimistic lock), NO como credencial de autorización.
  * Si cualquier registro, fecha, acción o referencia cambia entre la vista previa
  * y la ejecución, el token cambiará y el control optimista abortará la purga.
  */
@@ -258,67 +333,13 @@ export async function evaluateStoryRetentionDryRun(options: {
     );
 
     // Comprobación exhaustiva de referencias cruzadas (propuestas, eventos y decisiones de imagen)
-    let crossReferenceCount = 0;
-    const sharedReferenceDetails: StorySharedReferenceTarget[] = [];
-
-    if (r2Key || imageUrl) {
-      // 1. Otras propuestas que usen el mismo r2_key o image_url
-      const propRefs = await query(
-        `SELECT id, title, review_status 
-         FROM curation_proposals 
-         WHERE (r2_key = $1 OR (image_url = $2 AND $2 IS NOT NULL)) 
-           AND id <> $3;`,
-        [r2Key, imageUrl, proposalId]
-      );
-      for (const p of propRefs.rows) {
-        sharedReferenceDetails.push({
-          targetType: 'proposal',
-          targetId: p.id,
-          targetTitle: p.title,
-          field: 'curation_proposals.r2_key/image_url',
-        });
-      }
-
-      // 2. Otros eventos que usen el mismo image_url
-      const evRefs = await query(
-        `SELECT id, title, status 
-         FROM events 
-         WHERE (image_url = $1 OR image_thumb_url = $1 OR image_original_url = $1)
-           AND id <> COALESCE($2, -1);`,
-        [imageUrl, eventId]
-      );
-      for (const ev of evRefs.rows) {
-        sharedReferenceDetails.push({
-          targetType: 'event',
-          targetId: ev.id,
-          targetTitle: ev.title,
-          field: 'events.image_url',
-        });
-      }
-
-      // 3. Decisiones de imágenes adoptadas o archivadas
-      try {
-        const decRefs = await query(
-          `SELECT id, event_id, action, notes 
-           FROM event_image_decisions 
-           WHERE (candidate_key = $1 OR candidate_url = $2)
-             AND action IN ('adopt', 'keep_current');`,
-          [r2Key, imageUrl]
-        );
-        for (const dec of decRefs.rows) {
-          sharedReferenceDetails.push({
-            targetType: 'image_decision',
-            targetId: dec.id,
-            targetTitle: `Decisión para evento #${dec.event_id}`,
-            field: 'event_image_decisions.candidate_key',
-          });
-        }
-      } catch {
-        // Tabla opcional en entornos reducidos
-      }
-
-      crossReferenceCount = sharedReferenceDetails.length;
-    }
+    const sharedReferenceDetails = await getLiveStoryAssetReferences(
+      r2Key,
+      imageUrl,
+      proposalId,
+      eventId
+    );
+    const crossReferenceCount = sharedReferenceDetails.length;
 
     if (eventId && row.calculated_event_end_utc) {
       // Caso 1: Propuesta aprobada y convertida en evento
@@ -650,9 +671,19 @@ export async function executeStoryRetentionPolicy(options: {
       }
 
       // 2. Eliminación física en Cloudflare R2 solo si NO tiene referencias compartidas
+      // REQUISITO CRÍTICO DE CONCURRENCIA: Comprobación JIT en vivo de referencias en base de datos.
+      // Si el asset acaba de adquirir nuevas referencias (concurrencia tras la evaluación),
+      // se bloquea y aplaza inmediatamente la purga física en R2 sin eliminar el archivo.
       let r2PhysicallyPurged = false;
       if (item.r2Key) {
-        if (item.crossReferenceCount === 0) {
+        const liveReferences = await getLiveStoryAssetReferences(
+          item.r2Key,
+          item.imageUrl,
+          item.proposalId,
+          item.eventId
+        );
+
+        if (liveReferences.length === 0) {
           try {
             await deleteR2Object(item.r2Key);
             purgedR2ObjectsCount++;
@@ -682,7 +713,7 @@ export async function executeStoryRetentionPolicy(options: {
             r2KeyHash: `hash_${item.r2Key.slice(-16)}`,
             timestamp: nowIso,
             operatorEmail: operator,
-            details: `Purga física en R2 aplazada porque el asset está compartido con ${item.crossReferenceCount} entidades activas.`,
+            details: `Purga física en R2 aplazada porque el asset acaba de adquirir o mantiene ${liveReferences.length} referencias activas (#${liveReferences.map((s) => s.targetId).join(', #')}).`,
           });
         }
       } else {

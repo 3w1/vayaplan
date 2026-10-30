@@ -595,6 +595,84 @@ describe('Política de Retención y Ciclo de Vida de Historias de Instagram', ()
       const auditDeferred = result.auditLog.find((a) => a.action === 'r2_physical_purge_deferred_due_to_shared_references');
       expect(auditDeferred).toBeDefined();
     });
+
+    it('2.5. Cambio concurrente (JIT): si el asset adquiere una referencia nueva, el control optimista y la verificación JIT impiden el borrado en R2', async () => {
+      const storyId = generateTestStoryId();
+      const sharedKey = `jit_concurrent_${Date.now()}.jpg`;
+
+      const evIns = await query(
+        `INSERT INTO events (
+          city_id, title, editorial_date, start_time, venue_id, category, status, source_type, image_url
+        ) VALUES (
+          1, 'Evento Caducado JIT', CURRENT_DATE - INTERVAL '4 days', NOW() - INTERVAL '4 days', $1, 'musica', 'published', 'instagram',
+          'https://r2.vayaplan.com/' || $2
+        ) RETURNING id;`,
+        [testVenueId, sharedKey]
+      );
+      const eventId = evIns.rows[0].id;
+
+      const ins = await query(
+        `INSERT INTO curation_proposals (
+          title, source_url, instagram_post_shortcode, dedupe_key,
+          r2_key, image_url, review_status, venue_id, created_event_id, created_at
+        ) VALUES (
+          'Propuesta Caducada JIT', 'https://www.instagram.com/stories/elautenticobar/' || $1::text || '/',
+          $1::varchar, 'instagram_story_' || $1::text, $2, 'https://r2.vayaplan.com/' || $2,
+          'approved_draft', $3, $4, NOW() - INTERVAL '5 days'
+        ) RETURNING id;`,
+        [storyId, sharedKey, testVenueId, eventId]
+      );
+      const propId = ins.rows[0].id;
+
+      // 1. Generamos la vista previa inicial (en ese momento crossReferenceCount era 0)
+      const preview = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
+      expect(preview.items[0].crossReferenceCount).toBe(0);
+
+      // 2. Simulamos adquisición concurrente de referencia (otro evento adopta la imagen)
+      await query(
+        `INSERT INTO events (
+          city_id, title, editorial_date, start_time, venue_id, category, status, source_type, image_url
+        ) VALUES (
+          1, 'Evento Concurrente que adoptó la imagen', CURRENT_DATE + INTERVAL '10 days', NOW() + INTERVAL '10 days', $1, 'concierto', 'published', 'manual',
+          'https://r2.vayaplan.com/' || $2
+        );`,
+        [testVenueId, sharedKey]
+      );
+
+      // 3. Control optimista: intentar ejecutar con el token anterior detecta discrepancia (409)
+      const resOldToken = await executeStoryRetentionPolicy({
+        dryRun: false,
+        targetProposalId: propId,
+        previewToken: preview.previewToken,
+      });
+      expect(resOldToken.success).toBe(false);
+      expect(resOldToken.code).toBe('preview_state_conflict');
+
+      // 4. Nueva vista previa reconoce la referencia adquirida
+      const updatedPreview = await evaluateStoryRetentionDryRun({ targetProposalId: propId });
+      expect(updatedPreview.items[0].crossReferenceCount).toBe(1);
+
+      // 5. Al ejecutar con el token actualizado, la purga física en R2 se aplaza y media_purged_at queda NULL
+      const execResult = await executeStoryRetentionPolicy({
+        dryRun: false,
+        targetProposalId: propId,
+        previewToken: updatedPreview.previewToken,
+        operatorEmail: 'admin_test@vayaplan.com',
+      });
+
+      expect(execResult.success).toBe(true);
+      expect(execResult.deferredR2PurgesCount).toBe(1);
+      expect(execResult.purgedR2ObjectsCount).toBe(0);
+
+      const propCheck = await query(`SELECT r2_key, caption FROM curation_proposals WHERE id = $1;`, [propId]);
+      expect(propCheck.rows[0].caption).toBeNull();
+
+      const colCheck = await query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'curation_proposals' AND column_name = 'media_purged_at';`);
+      if (colCheck.rows.length > 0) {
+        const purgedCheck = await query(`SELECT media_purged_at FROM curation_proposals WHERE id = $1;`, [propId]);
+        expect(purgedCheck.rows[0].media_purged_at).toBeNull();
+      }
+    });
   });
 
   describe('3. Verificación de Feature Flag y Salvaguarda de Piloto', () => {
